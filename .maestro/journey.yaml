@@ -14,26 +14,26 @@ name: First run, workout, food, progress and cardio
 - tapOn: "Continue"
 - tapOn: "Continue"
 - takeScreenshot: 04-about
-- tapOn: "Build my program"
+- tapOn: ".*Build my program.*"
 - extendedWaitUntil:
-    visible: "Start workout"
+    visible: ".*Start workout.*"
     timeout: 15000
 - takeScreenshot: 05-today
-- tapOn: "Start workout"
+- tapOn: ".*Start workout.*"
 - extendedWaitUntil:
-    visible: "Complete set 1"
+    visible: ".*Complete set 1.*"
     timeout: 10000
 - takeScreenshot: 06-workout
 - scroll
 - takeScreenshot: 07-barbell
-- tapOn: "Complete set 1"
+- tapOn: ".*Complete set 1.*"
 - tapOn:
     text: "Allow"
     optional: true
 - takeScreenshot: 08-rest
 - tapOn: "Finish"
 - extendedWaitUntil:
-    visible: "Save workout"
+    visible: ".*Save workout.*"
     timeout: 10000
 - takeScreenshot: 09-card-front
 - swipe:
@@ -41,7 +41,7 @@ name: First run, workout, food, progress and cardio
     duration: 400
 - waitForAnimationToEnd
 - takeScreenshot: 10-card-back
-- tapOn: "Save workout"
+- tapOn: ".*Save workout.*"
 - tapOn: "Food"
 - takeScreenshot: 11-food
 - tapOn: "Progress"
@@ -52,7 +52,7 @@ name: First run, workout, food, progress and cardio
 - takeScreenshot: 14-train
 - tapOn: "Cardio"
 - takeScreenshot: 15-cardio-plan
-- tapOn: "Start ·.*"
+- tapOn: ".*Start ·.*"
 - waitForAnimationToEnd
 - takeScreenshot: 16-cardio-warmup
 - tapOn:
