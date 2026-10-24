@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -139,7 +139,7 @@ export default function Onboarding() {
       </Animated.View>
       <Row>
         {step > 0 && <Button kind="secondary" icon="chevron.left" onPress={() => setStep(step - 1)} />}
-        <Button style={{ flex: 1 }} title={last ? 'Build my program' : 'Continue'} kind={last ? 'lime' : 'primary'} onPress={() => (last ? finish() : setStep(step + 1))} />
+        <Button style={{ flex: 1 }} title={last ? 'Build my program' : 'Continue'} kind={last ? 'lime' : 'primary'} onPress={() => { Keyboard.dismiss(); last ? finish() : setStep(step + 1); }} />
       </Row>
     </KeyboardAvoidingView>
   );

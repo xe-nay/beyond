@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Icon } from '../src/components/Icon';
-import { Chip, Divider, Press, Row, Stepper, T } from '../src/components/ui';
+import { Chip, Divider, Press, Row, Stepper, T, Toggle } from '../src/components/ui';
 import { formatClock } from '../src/domain/intervals';
 import type { Cue } from '../src/domain/types';
 import { downloadPack, packReady, playCountdown, playVoice, prepareAudio } from '../src/sound';
@@ -19,7 +19,7 @@ export default function TimerSettings() {
   const toggle = (label: string, value: boolean, key: 'autoStart' | 'sound' | 'haptics') => (
     <Row style={{ justifyContent: 'space-between', paddingVertical: 4 }}>
       <T v="headline">{label}</T>
-      <Switch value={value} onValueChange={(v) => s.setTimer({ [key]: v })} trackColor={{ true: colors.cyan, false: colors.surface3 }} />
+      <Toggle value={value} onChange={(v) => s.setTimer({ [key]: v })} />
     </Row>
   );
 

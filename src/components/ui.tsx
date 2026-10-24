@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import Animated, { cubicBezier, Easing, useAnimatedProps, useSharedValue, withTiming, useReducedMotion } from 'react-native-reanimated';
+import Animated, { cubicBezier, Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withSpring, withTiming, useReducedMotion } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
 import { alpha, colors, radius, space, type } from '../theme';
@@ -111,24 +111,57 @@ export function Section({ title, action, children }: { title: string; action?: R
   );
 }
 
-/** Segmented control with a sliding pill: an absolute, childless view, so animating left/width is cheap. */
+/** Edges that chase a target at different speeds: the leading edge springs, the trailing one lags. */
+function useLiquid(target: number, size: number) {
+  const reduced = useReducedMotion();
+  const a = useSharedValue(target);
+  const b = useSharedValue(target + size);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current || reduced) {
+      first.current = false;
+      a.set(target);
+      b.set(target + size);
+      return;
+    }
+    const right = target > a.get();
+    const lead = { duration: 300, dampingRatio: 0.8 };
+    const trail = { duration: 520, dampingRatio: 0.92 };
+    a.set(withSpring(target, right ? trail : lead));
+    b.set(withSpring(target + size, right ? lead : trail));
+  }, [target, size]);
+  return useAnimatedStyle(() => ({ left: a.get(), width: Math.max(0, b.get() - a.get()) }));
+}
+
+/** Segmented control: a glass pill that stretches toward the new option, then settles. */
 export function Segmented<V extends string | number>({ options, value, onChange, style }: { options: { value: V; label: string }[]; value: V; onChange: (v: V) => void; style?: StyleProp<ViewStyle> }) {
   const [w, setW] = useState(0);
   const i = Math.max(0, options.findIndex((o) => o.value === value));
   const seg = w / options.length;
+  const pill = useLiquid(3 + seg * i, seg);
   return (
     <View style={[styles.segment, style]} onLayout={(e) => setW(e.nativeEvent.layout.width - 6)}>
-      {w > 0 && (
-        <Animated.View
-          style={[styles.pill, { width: seg, transform: [{ translateX: seg * i }], transitionProperty: 'transform', transitionDuration: 200, transitionTimingFunction: UI_EASE } as any]}
-        />
-      )}
+      {w > 0 && <Animated.View style={[styles.pill, pill]} />}
       {options.map((o) => (
         <Pressable key={String(o.value)} style={styles.segmentItem} onPress={() => { if (o.value !== value) { tap(); onChange(o.value); } }}>
-          <T v="label" color={o.value === value ? colors.text : colors.dim} style={{ fontWeight: '600' }}>{o.label}</T>
+          <Animated.Text numberOfLines={1} style={[type.footnote, { fontWeight: '600', color: o.value === value ? colors.text : colors.dim, transitionProperty: 'color', transitionDuration: 180 } as any]}>{o.label}</Animated.Text>
         </Pressable>
       ))}
     </View>
+  );
+}
+
+/** Toggle: glass track, a thumb that stretches as it travels, and a cyan fill that floods in. */
+export function Toggle({ value, onChange, tint = colors.cyan }: { value: boolean; onChange: (v: boolean) => void; tint?: string }) {
+  const W = 54, H = 32, T = 26, P = 3;
+  const thumb = useLiquid(value ? W - T - P : P, T);
+  return (
+    <Pressable onPress={() => { tap(); onChange(!value); }} hitSlop={8} accessibilityRole="switch" accessibilityState={{ checked: value }}>
+      <View style={{ width: W, height: H, borderRadius: H / 2, backgroundColor: colors.surface3, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)' }}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: tint, opacity: value ? 1 : 0, transitionProperty: 'opacity', transitionDuration: 220 } as any]} />
+        <Animated.View style={[{ position: 'absolute', top: P, height: T, borderRadius: T / 2, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }, thumb]} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -136,7 +169,7 @@ export function Chip({ label, active, onPress, icon }: { label: string; active?:
   return (
     <Press onPress={onPress} style={[styles.chip, active && { backgroundColor: colors.cyanSoft, borderColor: alpha(colors.cyan, 0.5) }]}>
       {icon && <Icon name={icon} size={13} color={active ? colors.cyan : colors.dim} />}
-      <T v="label" color={active ? colors.cyan : colors.dim}>{label}</T>
+      <T v="footnote" color={active ? colors.cyan : colors.dim} style={{ fontWeight: '500' }}>{label}</T>
     </Press>
   );
 }
@@ -213,7 +246,7 @@ export const styles = StyleSheet.create({
   button: { height: 52, borderRadius: radius.pill, paddingHorizontal: space.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
   small: { height: 40, paddingHorizontal: space.lg },
   segment: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: radius.pill, padding: 3, height: 38 },
-  pill: { position: 'absolute', top: 3, left: 3, bottom: 3, borderRadius: radius.pill, backgroundColor: colors.surface3, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairlineStrong },
+  pill: { position: 'absolute', top: 3, bottom: 3, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)' },
   segmentItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, height: 32, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline },
   emptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.cyanSoft, alignItems: 'center', justifyContent: 'center' },

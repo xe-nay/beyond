@@ -1,12 +1,11 @@
 appId: app.beyond.fitness
-name: First run, workout, food and progress
+name: First run, workout, food, progress and cardio
 ---
 - launchApp:
     clearState: true
 - takeScreenshot: 01-welcome
 - tapOn: "Your name"
 - inputText: "Test"
-- hideKeyboard
 - tapOn: "Continue"
 - takeScreenshot: 02-goal
 - tapOn: "Continue"
@@ -47,7 +46,16 @@ name: First run, workout, food and progress
 - takeScreenshot: 11-food
 - tapOn: "Progress"
 - takeScreenshot: 12-progress
-- tapOn: "Train"
-- takeScreenshot: 13-train
 - tapOn: "Profile"
-- takeScreenshot: 14-profile
+- takeScreenshot: 13-profile
+- tapOn: "Train"
+- takeScreenshot: 14-train
+- tapOn: "Cardio"
+- takeScreenshot: 15-cardio-plan
+- tapOn: "Start ·.*"
+- waitForAnimationToEnd
+- takeScreenshot: 16-cardio-warmup
+- tapOn:
+    point: "83%, 88%"
+- waitForAnimationToEnd
+- takeScreenshot: 17-cardio-work

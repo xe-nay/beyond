@@ -25,9 +25,9 @@ export default function Train() {
   return (
     <Screen>
       <Row gap={space.sm}>
-        <Action icon="play.fill" label="Quick start" onPress={() => start({ empty: true })} tint />
+        <Action icon="play.fill" label="Start" onPress={() => start({ empty: true })} tint />
         <Action icon="figure.run" label="Cardio" onPress={() => router.push('/cardio')} />
-        <Action icon="list.bullet" label="Exercises" onPress={() => router.push('/library')} />
+        <Action icon="list.bullet" label="Library" onPress={() => router.push('/library')} />
         <Action icon="square.and.arrow.down" label="Import" onPress={() => router.push('/import')} />
       </Row>
 
@@ -98,7 +98,7 @@ function Action({ icon, label, onPress, tint }: { icon: IconName; label: string;
   return (
     <Press onPress={onPress} style={{ flex: 1, aspectRatio: 0.95, borderRadius: radius.lg, padding: space.md, justifyContent: 'space-between', backgroundColor: tint ? colors.cyan : colors.surface, borderWidth: 0.5, borderColor: colors.hairline }}>
       <Icon name={icon} size={20} color={tint ? colors.black : colors.cyan} />
-      <T v="label" color={tint ? colors.black : colors.text} style={{ fontWeight: '600' }}>{label}</T>
+      <T v="footnote" numberOfLines={1} color={tint ? colors.black : colors.text} style={{ fontWeight: '600' }}>{label}</T>
     </Press>
   );
 }

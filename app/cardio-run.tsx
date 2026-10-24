@@ -1,24 +1,26 @@
 import { useScreenOn } from '../src/keepAwake';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, View } from 'react-native';
-import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
+import { AppState, useWindowDimensions, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon } from '../src/components/Icon';
-import { Button, Press, Ring, Row, Stepper, T } from '../src/components/ui';
+import { Ambient, Glass, GlassButton, HoldButton, PHASE, PhaseRings, RoundDots } from '../src/components/CardioVisuals';
+import { Icon, type IconName } from '../src/components/Icon';
+import { Button, Press, Row, Stepper, T } from '../src/components/ui';
 import { elapsed, formatClock, pause, position, resume, skip, timeline, totalSeconds } from '../src/domain/intervals';
 import { buzz, cancelEnd, play, playCountdown, prepareAudio, scheduleEnd, stopCue } from '../src/sound';
 import { useStore } from '../src/store';
 import { alpha, colors, space, type } from '../src/theme';
 
-const LABEL = { warmup: 'Warm-up', work: 'Work', recovery: 'Recover', cooldown: 'Cool-down' };
+const LABEL = { warmup: 'Warm-up', work: 'Work', recovery: 'Recover', cooldown: 'Cool-down' } as const;
 
 export default function CardioRun() {
   useScreenOn('cardio-run');
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
+  const { width } = useWindowDimensions();
   const run = useStore((s) => s.cardioRun);
   const [, tick] = useState(0);
   const [done, setDone] = useState<null | { minutes: number }>(null);
@@ -73,7 +75,6 @@ export default function CardioRun() {
   const set = (patch: Partial<NonNullable<typeof run>>) => useStore.getState().set({ cardioRun: { ...run, ...patch } });
   const paused = run.resumedAt === null;
   const kind = pos.phase?.kind ?? 'cooldown';
-  const color = kind === 'work' ? colors.cyan : kind === 'recovery' ? colors.lime : colors.steel;
   const final = pos.phase && run.plan.countdown > 0 && pos.remaining <= run.plan.countdown;
 
   const finish = (save: boolean) => {
@@ -101,38 +102,85 @@ export default function CardioRun() {
   }
 
   const next = phases[pos.index + 1];
+  const look = PHASE[kind];
+  const doneRounds = phases.slice(0, pos.index).filter((x) => x.kind === 'work').length;
+  const current = pos.phase?.kind === 'work' ? pos.phase.round : pos.phase?.kind === 'recovery' ? pos.phase.round + 0.5 : 0;
+  const ringSize = Math.min(width - space.xl * 2, 320);
+  const togglePause = () => {
+    stopCue();
+    set(paused ? resume({ banked: run.banked, resumedAt: null }) : pause({ banked: run.banked, resumedAt: run.resumedAt }));
+  };
   return (
-    <View style={{ flex: 1, backgroundColor: colors.black, paddingTop: insets.top + space.sm, paddingBottom: insets.bottom + space.lg, paddingHorizontal: space.xl }}>
-      <Row style={{ justifyContent: 'space-between' }}>
-        <Press onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' }}><Icon name="chevron.down" size={16} /></Press>
-        <T v="headline">{run.plan.activity}</T>
-        <T v="label" color={colors.dim} style={type.num}>{formatClock(t)} / {formatClock(total)}</T>
-      </Row>
+    <View style={{ flex: 1, backgroundColor: colors.black }}>
+      <Ambient kind={kind} pulseKey={pos.index} />
+      <View style={{ flex: 1, paddingTop: insets.top + space.sm, paddingBottom: insets.bottom + space.lg, paddingHorizontal: space.xl }}>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <GlassButton size={38} onPress={() => router.back()}><Icon name="chevron.down" size={15} /></GlassButton>
+          <Row gap={6}>
+            <Icon name={ACTIVITY_ICON[run.plan.activity] ?? 'figure.run'} size={15} color={look.a} />
+            <T v="headline">{run.plan.activity}</T>
+          </Row>
+          <Glass round style={{ paddingHorizontal: 12, height: 38, justifyContent: 'center' }}>
+            <T v="footnote" color={colors.dim} style={type.num}>{formatClock(t)}</T>
+          </Glass>
+        </Row>
 
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xl }}>
-        <Animated.View key={pos.index} entering={reduced ? undefined : FadeIn.duration(200)} style={{ alignItems: 'center', gap: 6 }}>
-          <T v="caption" color={color}>{LABEL[kind]}{pos.phase?.round ? ` · ${pos.phase.round}/${run.plan.rounds}` : ''}</T>
-          <T v="title" style={{ textAlign: 'center' }}>{pos.phase?.cue || ' '}</T>
-        </Animated.View>
-        <Ring size={290} stroke={14} progress={1 - pos.progress} color={final ? colors.amber : color} track={alpha(color, 0.12)}>
-          <T style={[type.hero, { fontSize: 80, color: final ? colors.amber : colors.text }]}>{formatClock(pos.remaining)}</T>
-          {paused && <T v="caption" color={colors.dim}>Paused</T>}
-        </Ring>
-        <T v="label" color={colors.dim}>{next ? `Next: ${LABEL[next.kind]} ${formatClock(next.seconds)}${next.cue ? ` · ${next.cue}` : ''}` : 'Last phase'}</T>
-      </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xl }}>
+          <PhaseRings
+            size={ringSize} kind={kind} phaseKey={pos.index * 2 + (paused ? 1 : 0)} running={!paused}
+            phaseLeft={pos.remaining} phaseSeconds={pos.phase?.seconds ?? 1} sessionLeft={Math.max(0, total - t)} sessionSeconds={total}>
+            <Animated.View key={pos.index} entering={reduced ? undefined : FadeInDown.duration(320).springify().dampingRatio(0.8)} style={{ alignItems: 'center' }}>
+              <T v="caption" color={look.a} style={{ letterSpacing: 1.5 }}>{look.label}{pos.phase?.round ? `  ${pos.phase.round}/${run.plan.rounds}` : ''}</T>
+              <Digits value={formatClock(pos.remaining)} final={!!final} second={Math.ceil(pos.remaining)} />
+              {paused && <T v="footnote" color={colors.dim}>Paused</T>}
+            </Animated.View>
+          </PhaseRings>
 
-      <View style={{ flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', gap: 2, marginBottom: space.xl }}>
-        {phases.map((p, i) => (
-          <View key={i} style={{ flex: p.seconds, backgroundColor: i < pos.index ? colors.surface3 : i === pos.index ? color : alpha(p.kind === 'work' ? colors.cyan : colors.lime, 0.3) }} />
-        ))}
+          {!!pos.phase?.cue && (
+            <Glass round style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, height: 44 }}>
+              <Icon name="gauge.with.dots.needle.67percent" size={16} color={look.a} />
+              <T v="headline">{pos.phase.cue}</T>
+            </Glass>
+          )}
+          <RoundDots rounds={run.plan.rounds} current={Math.floor(current)} done={doneRounds} tint={look.a} />
+        </View>
+
+        <Glass style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, marginBottom: space.lg }}>
+          <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(next ? PHASE[next.kind].a : colors.lime, 0.18) }}>
+            <Icon name={next ? 'forward.fill' : 'checkmark'} size={14} color={next ? PHASE[next.kind].a : colors.lime} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <T v="footnote" color={colors.dim}>{next ? 'Up next' : 'Last phase'}</T>
+            <T v="headline" numberOfLines={1}>{next ? `${PHASE[next.kind].label} · ${formatClock(next.seconds)}${next.cue ? ` · ${next.cue}` : ''}` : 'Finish strong'}</T>
+          </View>
+          <T v="footnote" color={colors.faint} style={type.num}>{formatClock(Math.max(0, total - t))} left</T>
+        </Glass>
+
+        <Row style={{ justifyContent: 'space-between', paddingHorizontal: space.lg }}>
+          <HoldButton size={64} onConfirm={() => setDone({ minutes: Math.round(t / 60) })}><Icon name="stop.fill" size={18} color={colors.red} /></HoldButton>
+          <GlassButton size={92} tint={look.a} onPress={togglePause}><Icon name={paused ? 'play.fill' : 'pause.fill'} size={32} color={colors.black} /></GlassButton>
+          <GlassButton size={64} onPress={() => { stopCue(); set(skip({ banked: run.banked, resumedAt: run.resumedAt }, phases)); }}><Icon name="forward.fill" size={18} /></GlassButton>
+        </Row>
+        <T v="footnote" color={colors.faint} style={{ textAlign: 'center', marginTop: space.sm }}>Hold the stop button to end</T>
       </View>
-      <Row style={{ justifyContent: 'center' }} gap={space.xl}>
-        <Press onPress={() => setDone({ minutes: Math.round(t / 60) })} style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' }}><Icon name="stop.fill" size={18} color={colors.red} /></Press>
-        <Press onPress={() => { stopCue(); set(paused ? resume({ banked: run.banked, resumedAt: null }) : pause({ banked: run.banked, resumedAt: run.resumedAt })); }} style={{ width: 82, height: 82, borderRadius: 41, backgroundColor: colors.cyan, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name={paused ? 'play.fill' : 'pause.fill'} size={28} color={colors.black} />
-        </Press>
-        <Press onPress={() => { stopCue(); set(skip({ banked: run.banked, resumedAt: run.resumedAt }, phases)); }} style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' }}><Icon name="forward.fill" size={18} /></Press>
-      </Row>
     </View>
+  );
+}
+
+const ACTIVITY_ICON: Record<string, IconName> = {
+  Running: 'figure.run', Walking: 'figure.walk', Cycling: 'bicycle', Rowing: 'figure.rower', Swimming: 'figure.pool.swim',
+  Elliptical: 'figure.elliptical', Stairs: 'figure.stair.stepper', HIIT: 'figure.highintensity.intervaltraining',
+};
+
+/** Big rounded digits; in the final countdown each second pops and turns amber. */
+function Digits({ value, final, second }: { value: string; final: boolean; second: number }) {
+  const reduced = useReducedMotion();
+  const pop = useSharedValue(1);
+  useEffect(() => {
+    if (final && !reduced) pop.set(withSequence(withTiming(1.12, { duration: 90 }), withSpring(1, { duration: 450, dampingRatio: 0.5 })));
+  }, [second, final]);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: pop.get() }] }));
+  return (
+    <Animated.Text style={[type.hero, { fontSize: 84, lineHeight: 96, color: final ? colors.amber : colors.text, transitionProperty: 'color', transitionDuration: 200 } as any, st]}>{value}</Animated.Text>
   );
 }

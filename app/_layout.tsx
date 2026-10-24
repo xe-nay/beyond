@@ -1,7 +1,7 @@
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Platform, View } from 'react-native';
+import { LogBox, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { RestEngine } from '../src/components/RestEngine';
@@ -14,6 +14,10 @@ const theme = {
   ...DarkTheme,
   colors: { ...DarkTheme.colors, primary: colors.cyan, background: colors.black, card: colors.black, text: colors.text, border: 'transparent' },
 };
+
+// react-native-svg's browser build passes native-only props to the DOM; harmless, preview only.
+// Errors still reach the console; the overlay only hides the bottom of the screen in the preview.
+if (Platform.OS === 'web') LogBox.ignoreAllLogs();
 
 function Gate() {
   const onboarded = useStore((s) => s.profile.onboarded);
@@ -30,6 +34,14 @@ export default function RootLayout() {
   useEffect(() => {
     useStore.getState().hydrate();
     prepareAudio();
+    // The browser preview has no San Francisco on Windows; Inter is the closest open face.
+    if (Platform.OS === 'web' && !document.getElementById('inter-font')) {
+      const link = document.createElement('link');
+      link.id = 'inter-font';
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
+      document.head.appendChild(link);
+    }
   }, []);
   if (!ready) return <View style={{ flex: 1, backgroundColor: colors.black }} />;
 
