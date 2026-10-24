@@ -7,7 +7,7 @@ import { Button, Card, Empty, Press, Row, Screen, Section, T } from '../../../sr
 import { volumeLoad, working } from '../../../src/domain/calc';
 import { toDisplay } from '../../../src/domain/plates';
 import { activeProgram, useStore } from '../../../src/store';
-import { alpha, colors, radius, space } from '../../../src/theme';
+import { alpha, colors, plural, radius, space } from '../../../src/theme';
 
 const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -83,7 +83,7 @@ export default function Train() {
             <View style={{ flex: 1, gap: 2 }}>
               <T v="headline">{x.name}</T>
               <T v="label" color={colors.dim}>
-                {new Date(`${x.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · {working(x.sets).length} sets · {Math.round(toDisplay(volumeLoad(x.sets), s.profile.unit)).toLocaleString()} {s.profile.unit}
+                {new Date(`${x.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · {plural(working(x.sets).length, 'set')} · {Math.round(toDisplay(volumeLoad(x.sets), s.profile.unit)).toLocaleString()} {s.profile.unit}
               </T>
             </View>
             <Icon name="chevron.right" size={14} color={colors.faint} />

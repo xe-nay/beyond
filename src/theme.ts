@@ -71,3 +71,6 @@ export function alpha(hex: string, a: number) {
   const v = hex.replace('#', '');
   return `rgba(${parseInt(v.slice(0, 2), 16)}, ${parseInt(v.slice(2, 4), 16)}, ${parseInt(v.slice(4, 6), 16)}, ${a})`;
 }
+
+/** "1 set", "3 sets". */
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;

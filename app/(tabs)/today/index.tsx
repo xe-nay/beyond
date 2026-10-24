@@ -10,7 +10,7 @@ import { fatigueReport, progression, weekStart } from '../../../src/domain/calc'
 import { sum } from '../../../src/domain/nutrition';
 import type { Region } from '../../../src/domain/types';
 import { activeProgram, today, useStore } from '../../../src/store';
-import { alpha, colors, space, type } from '../../../src/theme';
+import { alpha, colors, plural, space, type } from '../../../src/theme';
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -74,7 +74,7 @@ export default function Today() {
               <View style={{ gap: 4 }}>
                 <T v="caption" color={colors.cyan}>In progress</T>
                 <T v="title">{open.name}</T>
-                <T v="label" color={colors.dim}>{open.sets.filter((x) => !x.warmup).length} sets logged</T>
+                <T v="label" color={colors.dim}>{plural(open.sets.filter((x) => !x.warmup).length, 'set')} logged</T>
               </View>
               <Button title="Resume" icon="play.fill" onPress={() => router.push('/workout')} />
             </Row>
@@ -86,7 +86,7 @@ export default function Today() {
                 <T v="caption" color={colors.faint}>{imported ? 'Planned today' : next!.weekday === weekday ? 'Today' : 'Next up'}</T>
                 <T v="title">{imported?.name ?? next!.name}</T>
                 <T v="label" color={colors.dim}>
-                  {(imported?.plan ?? next!.exercises).length} exercises · {(imported?.plan ?? next!.exercises).reduce((n, x) => n + x.sets, 0)} sets
+                  {plural((imported?.plan ?? next!.exercises).length, 'exercise')} · {plural((imported?.plan ?? next!.exercises).reduce((n, x) => n + x.sets, 0), 'set')}
                 </T>
                 <View style={{ gap: 4, marginTop: 6 }}>
                   {(imported?.plan ?? next!.exercises).slice(0, 4).map((x, i) => (

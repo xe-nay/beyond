@@ -13,7 +13,7 @@ import { groupByExercise, REGION_NAMES, volumeLoad, working } from '../domain/ca
 import { formatClock } from '../domain/intervals';
 import { formatWeight, toDisplay } from '../domain/plates';
 import type { Region, Session, Unit } from '../domain/types';
-import { alpha, colors, radius, space, type } from '../theme';
+import { alpha, colors, plural, radius, space, type } from '../theme';
 import { BodyMap } from './BodyMap';
 import { Icon } from './Icon';
 import { Row, T } from './ui';
@@ -104,7 +104,7 @@ export function SummaryCard({ session, prs, unit, width }: { session: Session; p
                   </Row>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                  <T v="label" color={colors.dim} style={type.num}>{working(session.sets).length} sets · {formatClock(minutes)}</T>
+                  <T v="label" color={colors.dim} style={type.num}>{plural(working(session.sets).length, 'set')} · {formatClock(minutes)}</T>
                   <Row gap={4}><Icon name="trophy.fill" size={13} color={prs.length ? colors.lime : colors.faint} /><T v="headline" color={prs.length ? colors.lime : colors.faint}>{prs.length} PR{prs.length === 1 ? '' : 's'}</T></Row>
                 </View>
               </Row>

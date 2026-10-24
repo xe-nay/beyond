@@ -50,7 +50,7 @@ name: First run, workout, food, progress and cardio
 - takeScreenshot: 13-profile
 - tapOn: "Train"
 - takeScreenshot: 14-train
-- tapOn: "Cardio"
+- tapOn: ".*Cardio.*"
 - takeScreenshot: 15-cardio-plan
 - tapOn: ".*Start ·.*"
 - waitForAnimationToEnd
