@@ -1,13 +1,15 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming, useReducedMotion } from 'react-native-reanimated';
+import Animated, { cubicBezier, Easing, useAnimatedProps, useSharedValue, withTiming, useReducedMotion } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon, type IconName } from './Icon';
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+// CSS-transition form of the same curve; native Reanimated rejects a 'cubic-bezier(...)' string.
+export const UI_EASE = cubicBezier(0.23, 1, 0.32, 1);
 const OUTER = ['flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'width', 'height', 'aspectRatio', 'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginHorizontal', 'marginVertical', 'position', 'top', 'left', 'right', 'bottom', 'maxWidth', 'minWidth'] as const;
 export const tap = () => Platform.OS !== 'web' && Haptics.selectionAsync().catch(() => {});
 export const thud = () => Platform.OS !== 'web' && Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -56,7 +58,7 @@ export function Press({ children, onPress, style, disabled, haptic = true, onLon
       <Animated.View
         style={[
           inner,
-          { opacity: disabled ? 0.4 : 1, transform: [{ scale: down ? 0.97 : 1 }], transitionProperty: 'transform', transitionDuration: 120, transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)' } as any,
+          { opacity: disabled ? 0.4 : 1, transform: [{ scale: down ? 0.97 : 1 }], transitionProperty: 'transform', transitionDuration: 120, transitionTimingFunction: UI_EASE } as any,
         ]}>
         {children}
       </Animated.View>
@@ -118,7 +120,7 @@ export function Segmented<V extends string | number>({ options, value, onChange,
     <View style={[styles.segment, style]} onLayout={(e) => setW(e.nativeEvent.layout.width - 6)}>
       {w > 0 && (
         <Animated.View
-          style={[styles.pill, { width: seg, transform: [{ translateX: seg * i }], transitionProperty: 'transform', transitionDuration: 200, transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)' } as any]}
+          style={[styles.pill, { width: seg, transform: [{ translateX: seg * i }], transitionProperty: 'transform', transitionDuration: 200, transitionTimingFunction: UI_EASE } as any]}
         />
       )}
       {options.map((o) => (

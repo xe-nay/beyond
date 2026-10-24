@@ -10,6 +10,7 @@ import type { Equipment, Experience, Goal } from '../../../src/domain/types';
 import { cacheText, readUri } from '../../../src/storage';
 import { useStore } from '../../../src/store';
 import { colors, radius, space } from '../../../src/theme';
+import { pack } from '../../../src/voices';
 
 const GOALS: [Goal, string][] = [['hypertrophy', 'Muscle'], ['strength', 'Strength'], ['fat-loss', 'Fat loss'], ['recomposition', 'Recomp'], ['hybrid', 'Hybrid'], ['general', 'Fitness']];
 const GEAR: [Equipment, string][] = [['barbell', 'Barbell'], ['dumbbell', 'Dumbbells'], ['kettlebell', 'Kettlebells'], ['cable', 'Cables'], ['machine', 'Machines'], ['band', 'Bands'], ['bodyweight', 'Bodyweight']];
@@ -71,7 +72,7 @@ export default function Profile() {
       </Section>
 
       <Card style={{ padding: 0, gap: 0 }}>
-        <Item icon="timer" label="Rest timer & sounds" detail={`${s.timer.countdown ? `${s.timer.countdown}s countdown` : 'End tone only'}`} onPress={() => router.push('/timer-settings')} />
+        <Item icon="timer" label="Rest timer & sounds" detail={s.timer.cue !== 'beeps' ? pack(s.timer.cue).name : s.timer.countdown ? `${s.timer.countdown}s countdown` : 'End tone only'} onPress={() => router.push('/timer-settings')} />
         <Divider />
         <Item icon="flame.fill" label="Nutrition targets" detail={`${s.targets.kcal} kcal`} onPress={() => router.push('/targets')} />
         <Divider />
