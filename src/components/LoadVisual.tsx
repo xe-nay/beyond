@@ -204,27 +204,43 @@ export const RACK: Record<Unit, number[]> = {
   kg: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42.5, 45, 47.5, 50],
   lb: [5, 8, 10, 12, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100],
 };
-const COL = 74;
+const COL = 78;
 
-function RackBell({ w, unit, max, selected, onPress }: { w: number; unit: Unit; max: number; selected: boolean; onPress: () => void }) {
+/** One dumbbell on the rack. The chosen one lifts out; on a completed set it plays one rep of the exercise. */
+function RackBell({ w, unit, max, selected, onPress, pulse, motion }: { w: number; unit: Unit; max: number; selected: boolean; onPress: () => void; pulse: number; motion: Motion }) {
+  const reduced = useReducedMotion();
   const t = w / max; // 0..1, sizes the heads
-  const head = 18 + t * 18;
-  const plate = 7 + t * 9;
+  const head = 20 + t * 22;
+  const plate = 8 + t * 10;
   const lift = useSharedValue(selected ? 1 : 0);
+  const rep = useSharedValue(0);
   useEffect(() => {
     lift.set(withSpring(selected ? 1 : 0, { duration: 420, dampingRatio: 0.6 }));
   }, [selected]);
-  const st = useAnimatedStyle(() => ({ transform: [{ translateY: -7 * lift.get() }, { scale: 1 + 0.08 * lift.get() }] }));
+  useEffect(() => {
+    if (!selected || !pulse || reduced) return;
+    rep.set(withSequence(withTiming(1, { duration: 300, easing: EASE_OUT }), withTiming(1, { duration: 100 }), withSpring(0, { duration: 520, dampingRatio: 0.6 })));
+  }, [pulse]);
+  const st = useAnimatedStyle(() => {
+    const r = rep.get();
+    const move =
+      motion === 'press' ? [{ translateY: -14 * r }] :
+      motion === 'curl' ? [{ translateY: -10 * r }, { rotate: `${-40 * r}deg` }] :
+      motion === 'row' ? [{ translateY: -8 * r }, { translateX: 6 * r }] :
+      motion === 'raise' ? [{ translateY: -10 * r }, { rotate: `${-22 * r}deg` }] :
+      [{ translateY: 4 * r }];
+    return { transform: [{ translateY: -8 * lift.get() }, { scale: 1 + 0.1 * lift.get() }, ...move] as any };
+  });
   const color = selected ? colors.cyan : '#3A4A66';
   return (
-    <Pressable onPress={onPress} style={{ width: COL, height: 56, alignItems: 'center', justifyContent: 'flex-end' }} accessibilityLabel={`${w} ${unit}`}>
+    <Pressable onPress={onPress} style={{ width: COL, height: 70, alignItems: 'center', justifyContent: 'flex-end' }} accessibilityLabel={`${w} ${unit}`}>
       <Animated.View style={[{ alignItems: 'center' }, st]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ width: plate, height: head, borderRadius: 4, backgroundColor: color }} />
-          <View style={{ width: 22, height: 6, borderRadius: 3, backgroundColor: selected ? '#DDF8FB' : '#8D99AB' }} />
-          <View style={{ width: plate, height: head, borderRadius: 4, backgroundColor: color }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', shadowColor: colors.cyan, shadowOpacity: selected ? 0.6 : 0, shadowRadius: 10 }}>
+          <View style={{ width: plate, height: head, borderRadius: 5, backgroundColor: color }} />
+          <View style={{ width: 24, height: 7, borderRadius: 3.5, backgroundColor: selected ? '#DDF8FB' : '#8D99AB' }} />
+          <View style={{ width: plate, height: head, borderRadius: 5, backgroundColor: color }} />
         </View>
-        <T style={[type.footnote, type.num, { marginTop: 4, fontWeight: '700' }]} color={selected ? colors.cyan : colors.dim}>{w}</T>
+        <T style={[type.footnote, type.num, { marginTop: 5, fontWeight: '700' }]} color={selected ? colors.cyan : colors.dim}>{w}</T>
       </Animated.View>
     </Pressable>
   );
@@ -234,7 +250,7 @@ function RackBell({ w, unit, max, selected, onPress }: { w: number; unit: Unit; 
  * The dumbbell rack: two tiers, lighter to heavier from left to right, scrolled sideways.
  * Tapping a dumbbell takes it; the steppers can still fine-tune the weight after.
  */
-export function DumbbellRack({ kg, unit, onPick }: { kg: number; unit: Unit; onPick: (kg: number) => void }) {
+export function DumbbellRack({ kg, unit, onPick, count = 2, pulse = 0, motion = 'carry' }: { kg: number; unit: Unit; onPick: (kg: number) => void; count?: 1 | 2; pulse?: number; motion?: Motion }) {
   const list = RACK[unit];
   const v = roundTo(toDisplay(kg, unit), 0.5);
   const max = list[list.length - 1];
@@ -245,24 +261,26 @@ export function DumbbellRack({ kg, unit, onPick }: { kg: number; unit: Unit; onP
     if (at >= 0) ref.current?.scrollTo({ x: Math.max(0, Math.floor(at / 2) * COL - COL * 1.5), animated: true });
   }, [at, unit]);
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: space.sm }}>
       <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 4 }}>
         <View>
           {[0, 1].map((tier) => (
-            <View key={tier} style={{ flexDirection: 'row', paddingBottom: 6 }}>
+            <View key={tier} style={{ flexDirection: 'row', paddingBottom: 8 }}>
               {/* The rail the dumbbells sit on */}
-              <View style={{ position: 'absolute', left: 6, right: 6, bottom: 22, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.07)' }} />
+              <View style={{ position: 'absolute', left: 6, right: 6, bottom: 27, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.07)' }} />
               {Array.from({ length: cols }, (_, c) => {
                 const w = list[c * 2 + tier];
                 return w === undefined ? <View key={c} style={{ width: COL }} /> : (
-                  <RackBell key={c} w={w} unit={unit} max={max} selected={at === c * 2 + tier} onPress={() => { tap(); onPick(toKg(w, unit)); }} />
+                  <RackBell key={c} w={w} unit={unit} max={max} selected={at === c * 2 + tier} pulse={pulse} motion={motion} onPress={() => { tap(); onPick(toKg(w, unit)); }} />
                 );
               })}
             </View>
           ))}
         </View>
       </ScrollView>
-      {at < 0 && <T v="footnote" color={colors.faint} style={{ textAlign: 'center' }}>Custom weight · {formatNum(v)} {unit}</T>}
+      <T v="footnote" color={colors.dim} style={{ textAlign: 'center' }}>
+        {at < 0 ? 'Custom · ' : ''}{count === 2 ? `2 × ${formatNum(v)} ${unit} · ${formatNum(v * 2)} ${unit} total` : `${formatNum(v)} ${unit}`}
+      </T>
     </View>
   );
 }
@@ -314,9 +332,9 @@ export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count =
 
   return (
     <View style={{ gap: space.lg }}>
-      <View style={{ minHeight: H + 30, justifyContent: 'center' }}>
+      {kind === 'dumbbell' && <DumbbellRack kg={kg} unit={unit} onPick={onChange} count={count} pulse={pulse} motion={motion} />}
+      {kind !== 'dumbbell' && <View style={{ minHeight: H + 30, justifyContent: 'center' }}>
         {kind === 'barbell' && <BarbellView kg={kg} unit={unit} />}
-        {kind === 'dumbbell' && <DumbbellView kg={kg} unit={unit} pulse={pulse} count={count} motion={motion} />}
         {kind === 'kettlebell' && <KettlebellView kg={kg} unit={unit} count={count} />}
         {kind === 'stack' && <StackView kg={kg} unit={unit} />}
         {kind === 'bodyweight' && (
@@ -325,8 +343,7 @@ export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count =
             <T v="label" color={colors.dim}>{kg > 0 ? 'Body weight plus added load' : 'Body weight'}</T>
           </View>
         )}
-      </View>
-      {kind === 'dumbbell' && <DumbbellRack kg={kg} unit={unit} onPick={onChange} />}
+      </View>}
       <Row style={{ justifyContent: 'space-between' }}>
         <Press onPress={() => set(display - step)} style={styles.bigStep} hitSlop={6}><Icon name="minus" size={20} /></Press>
         <View style={{ alignItems: 'center', flex: 1 }}>
