@@ -1,0 +1,179 @@
+name: Build
+
+# iOS: builds an unsigned Beyond.ipa on a cloud Mac and publishes it with a SideStore source.
+# Test: builds for the iOS simulator and walks through the app with Maestro, saving screenshots.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest stable Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      # Generated at build time: the RepDB data may be used in the app but not republished as a dataset.
+      - name: Build the exercise catalog
+        run: node scripts/build-exercises.mjs
+
+      - name: Test the training calculations
+        run: npm test
+
+      - name: Set the version
+        run: |
+          VERSION="1.0.${{ github.run_number }}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          node scripts/set-version.mjs "$VERSION" "${{ github.run_number }}"
+
+      - name: Generate the native project
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install pods
+        run: cd ios && pod install
+
+      - name: Build
+        run: |
+          WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          set +e
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" > xcodebuild.log 2>&1
+          STATUS=$?
+          set -e
+          grep -E "error:|\*\* BUILD" xcodebuild.log | tail -80 || true
+          exit $STATUS
+
+      - name: Package the IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          test -n "$APP"
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry Beyond.ipa Payload
+          ls -lh Beyond.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Beyond-ipa
+          path: Beyond.ipa
+          retention-days: 14
+
+      # Stable links the iPhone downloads from: the installer and the app source read by SideStore.
+      - name: Publish the latest build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/make-source.mjs "${{ github.repository }}" "$VERSION" "$(stat -f%z Beyond.ipa)" > source.json
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Beyond.ipa source.json --title "Beyond $VERSION" --notes "Build $VERSION" --latest
+
+      - name: Keep the build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+          retention-days: 7
+
+  simulator:
+    runs-on: macos-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest stable Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: node scripts/build-exercises.mjs
+      - run: npx expo prebuild --platform ios --no-install
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: cd ios && pod install
+
+      - name: Build for the simulator
+        run: |
+          WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          set +e
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build > xcodebuild-sim.log 2>&1
+          STATUS=$?
+          set -e
+          grep -E "error:|\*\* BUILD" xcodebuild-sim.log | tail -60 || true
+          exit $STATUS
+
+      - name: Boot an iPhone simulator and install the app
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ids=[x['udid'] for k,v in sorted(d.items()) if 'iOS' in k for x in v if 'iPhone' in x['name'] and 'Pro' in x['name']]; print(ids[-1])")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          APP=$(find build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' | head -1)
+          xcrun simctl install "$DEVICE" "$APP"
+          xcrun simctl privacy "$DEVICE" grant notifications app.beyond.fitness || true
+
+      - name: Walk through the app with Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          export PATH="$PATH:$HOME/.maestro/bin"
+          mkdir -p maestro-output
+          maestro --device "$DEVICE" test .maestro --test-output-dir maestro-output || echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
+          xcrun simctl io "$DEVICE" screenshot maestro-output/final.png || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator-screens
+          path: |
+            maestro-output
+            xcodebuild-sim.log
+          retention-days: 14
+
+      - name: Fail if the walkthrough failed
+        if: env.MAESTRO_FAILED == '1'
+        run: exit 1

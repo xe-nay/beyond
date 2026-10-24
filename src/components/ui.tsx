@@ -1,0 +1,219 @@
+import * as Haptics from 'expo-haptics';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming, useReducedMotion } from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
+
+import { alpha, colors, radius, space, type } from '../theme';
+import { Icon, type IconName } from './Icon';
+
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+const OUTER = ['flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'width', 'height', 'aspectRatio', 'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginHorizontal', 'marginVertical', 'position', 'top', 'left', 'right', 'bottom', 'maxWidth', 'minWidth'] as const;
+export const tap = () => Platform.OS !== 'web' && Haptics.selectionAsync().catch(() => {});
+export const thud = () => Platform.OS !== 'web' && Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+export function Screen({ children, style, padded = true }: { children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean }) {
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.black }}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={[padded && { padding: space.lg, paddingBottom: 120, gap: space.lg }, style]}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled">
+      {children}
+    </ScrollView>
+  );
+}
+
+export function T({ children, style, v = 'body', color, numberOfLines }: { children: ReactNode; style?: StyleProp<TextStyle>; v?: keyof typeof type; color?: string; numberOfLines?: number }) {
+  return <Text numberOfLines={numberOfLines} style={[{ color: color ?? colors.text }, type[v] as TextStyle, style]}>{children}</Text>;
+}
+
+/** Scales to 0.97 on press-in (120 ms, ease-out), the press commits on release. */
+export function Press({ children, onPress, style, disabled, haptic = true, onLongPress, hitSlop }: {
+  children: ReactNode; onPress?: () => void; style?: StyleProp<ViewStyle>; disabled?: boolean; haptic?: boolean; onLongPress?: () => void; hitSlop?: number;
+}) {
+  const [down, setDown] = useState(false);
+  // Sizing and placement belong to the touch target; everything else to the scaling view.
+  const flat = StyleSheet.flatten(style) ?? {};
+  const outer: ViewStyle = {};
+  for (const k of OUTER) if (k in flat) (outer as any)[k] = (flat as any)[k];
+  const inner: ViewStyle = { ...flat, ...Object.fromEntries(OUTER.filter((k) => k in flat).map((k) => [k, undefined])) };
+  if ('flex' in flat || 'height' in flat || 'aspectRatio' in flat) inner.flex = 1;
+  return (
+    <Pressable
+      style={outer}
+      disabled={disabled}
+      onPressIn={() => setDown(true)}
+      onPressOut={() => setDown(false)}
+      onLongPress={onLongPress}
+      hitSlop={hitSlop}
+      pressRetentionOffset={12}
+      onPress={() => {
+        if (haptic) tap();
+        onPress?.();
+      }}>
+      <Animated.View
+        style={[
+          inner,
+          { opacity: disabled ? 0.4 : 1, transform: [{ scale: down ? 0.97 : 1 }], transitionProperty: 'transform', transitionDuration: 120, transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)' } as any,
+        ]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
+  return onPress ? <Press onPress={onPress} style={[styles.card, style]}>{children}</Press> : <View style={[styles.card, style]}>{children}</View>;
+}
+
+export function Button({ title, icon, onPress, kind = 'primary', style, disabled, small }: {
+  title?: string; icon?: IconName; onPress?: () => void; kind?: 'primary' | 'secondary' | 'ghost' | 'lime' | 'danger'; style?: StyleProp<ViewStyle>; disabled?: boolean; small?: boolean;
+}) {
+  const bg = { primary: colors.cyan, lime: colors.lime, secondary: colors.surface2, ghost: 'transparent', danger: alpha(colors.red, 0.14) }[kind];
+  const fg = kind === 'primary' || kind === 'lime' ? colors.black : kind === 'danger' ? colors.red : colors.text;
+  return (
+    <Press onPress={onPress} disabled={disabled} style={[styles.button, small && styles.small, { backgroundColor: bg }, !title && { paddingHorizontal: 0, width: small ? 40 : 52 }, style]}>
+      {icon && <Icon name={icon} color={fg} size={small ? 15 : 18} />}
+      {title && <T v="headline" color={fg} style={small && { fontSize: 14 }}>{title}</T>}
+    </Press>
+  );
+}
+
+export function Row({ children, style, gap = space.md }: { children: ReactNode; style?: StyleProp<ViewStyle>; gap?: number }) {
+  return <View style={[{ flexDirection: 'row', alignItems: 'center', gap }, style]}>{children}</View>;
+}
+
+export function Stat({ label, value, unit, color, small }: { label: string; value: string | number; unit?: string; color?: string; small?: boolean }) {
+  return (
+    <View style={{ gap: 2 }}>
+      <T v="caption" color={colors.faint}>{label}</T>
+      <Row gap={4} style={{ alignItems: 'baseline' }}>
+        <T v={small ? 'title' : 'big'} color={color} style={type.num}>{value}</T>
+        {unit && <T v="label" color={colors.dim}>{unit}</T>}
+      </Row>
+    </View>
+  );
+}
+
+export function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+  return (
+    <View style={{ gap: space.sm }}>
+      <Row style={{ justifyContent: 'space-between', paddingHorizontal: 4 }}>
+        <T v="caption" color={colors.faint}>{title}</T>
+        {action}
+      </Row>
+      {children}
+    </View>
+  );
+}
+
+/** Segmented control with a sliding pill: an absolute, childless view, so animating left/width is cheap. */
+export function Segmented<V extends string | number>({ options, value, onChange, style }: { options: { value: V; label: string }[]; value: V; onChange: (v: V) => void; style?: StyleProp<ViewStyle> }) {
+  const [w, setW] = useState(0);
+  const i = Math.max(0, options.findIndex((o) => o.value === value));
+  const seg = w / options.length;
+  return (
+    <View style={[styles.segment, style]} onLayout={(e) => setW(e.nativeEvent.layout.width - 6)}>
+      {w > 0 && (
+        <Animated.View
+          style={[styles.pill, { width: seg, transform: [{ translateX: seg * i }], transitionProperty: 'transform', transitionDuration: 200, transitionTimingFunction: 'cubic-bezier(0.23, 1, 0.32, 1)' } as any]}
+        />
+      )}
+      {options.map((o) => (
+        <Pressable key={String(o.value)} style={styles.segmentItem} onPress={() => { if (o.value !== value) { tap(); onChange(o.value); } }}>
+          <T v="label" color={o.value === value ? colors.text : colors.dim} style={{ fontWeight: '600' }}>{o.label}</T>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+export function Chip({ label, active, onPress, icon }: { label: string; active?: boolean; onPress?: () => void; icon?: IconName }) {
+  return (
+    <Press onPress={onPress} style={[styles.chip, active && { backgroundColor: colors.cyanSoft, borderColor: alpha(colors.cyan, 0.5) }]}>
+      {icon && <Icon name={icon} size={13} color={active ? colors.cyan : colors.dim} />}
+      <T v="label" color={active ? colors.cyan : colors.dim}>{label}</T>
+    </Press>
+  );
+}
+
+const ACircle = Animated.createAnimatedComponent(Circle);
+
+/** Progress ring; the stroke animates on the UI thread when the value changes. */
+export function Ring({ size = 120, stroke = 10, progress, color = colors.cyan, track = colors.surface3, children }: {
+  size?: number; stroke?: number; progress: number; color?: string; track?: string; children?: ReactNode;
+}) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const reduced = useReducedMotion();
+  const p = useSharedValue(0);
+  useEffect(() => {
+    const v = Math.max(0, Math.min(1, progress));
+    p.set(reduced ? v : withTiming(v, { duration: 600, easing: EASE_OUT }));
+  }, [progress, reduced]);
+  const props = useAnimatedProps(() => ({ strokeDashoffset: c * (1 - p.get()) }));
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={track} strokeWidth={stroke} fill="none" />
+        <ACircle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round" strokeDasharray={c} animatedProps={props} rotation={-90} origin={`${size / 2}, ${size / 2}`} />
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
+export function Bar({ value, max, color = colors.cyan, height = 6 }: { value: number; max: number; color?: string; height?: number }) {
+  const pct = max > 0 ? Math.min(1, value / max) : 0;
+  return (
+    <View style={{ height, borderRadius: height, backgroundColor: colors.surface3, overflow: 'hidden' }}>
+      <Animated.View style={[{ height, borderRadius: height, backgroundColor: color, width: `${pct * 100}%`, transitionProperty: 'width', transitionDuration: 400 } as any]} />
+    </View>
+  );
+}
+
+export function Empty({ icon, title, detail, action }: { icon: IconName; title: string; detail?: string; action?: ReactNode }) {
+  return (
+    <View style={{ alignItems: 'center', gap: space.sm, paddingVertical: space.xxl }}>
+      <View style={styles.emptyIcon}><Icon name={icon} size={26} color={colors.cyan} /></View>
+      <T v="headline">{title}</T>
+      {detail && <T v="label" color={colors.dim} style={{ textAlign: 'center', maxWidth: 280 }}>{detail}</T>}
+      {action}
+    </View>
+  );
+}
+
+export function Divider() {
+  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.hairline }} />;
+}
+
+/** Number stepper: tap for one step, hold to repeat. */
+export function Stepper({ value, onChange, step = 1, min = 0, max = 9999, format = (v: number) => String(v), label, big }: {
+  value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; format?: (v: number) => string; label?: string; big?: boolean;
+}) {
+  const clamp = (v: number) => Math.min(max, Math.max(min, Math.round(v * 1000) / 1000));
+  return (
+    <View style={{ alignItems: 'center', gap: 6, flex: 1 }}>
+      {label && <T v="caption" color={colors.faint}>{label}</T>}
+      <Row gap={space.sm}>
+        <Press onPress={() => onChange(clamp(value - step))} style={styles.step} hitSlop={6}><Icon name="minus" size={16} /></Press>
+        <T v={big ? 'big' : 'title'} style={[type.num, { minWidth: big ? 84 : 52, textAlign: 'center' }]}>{format(value)}</T>
+        <Press onPress={() => onChange(clamp(value + step))} style={styles.step} hitSlop={6}><Icon name="plus" size={16} /></Press>
+      </Row>
+    </View>
+  );
+}
+
+export const styles = StyleSheet.create({
+  card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline, gap: space.md },
+  button: { height: 52, borderRadius: radius.pill, paddingHorizontal: space.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
+  small: { height: 40, paddingHorizontal: space.lg },
+  segment: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: radius.pill, padding: 3, height: 38 },
+  pill: { position: 'absolute', top: 3, left: 3, bottom: 3, borderRadius: radius.pill, backgroundColor: colors.surface3, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairlineStrong },
+  segmentItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, height: 32, borderRadius: radius.pill, backgroundColor: colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline },
+  emptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.cyanSoft, alignItems: 'center', justifyContent: 'center' },
+  step: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface3, alignItems: 'center', justifyContent: 'center' },
+});

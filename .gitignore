@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+ios/
+android/
+web-build/
+*.ipa
+*.apk
+data/raw/
+maestro-output/
+src/data/exercises.json
+npm-install*.log

@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "Beyond",
+    "slug": "beyond",
+    "scheme": "beyond",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "ios": {
+      "bundleIdentifier": "app.beyond.fitness",
+      "supportsTablet": false,
+      "infoPlist": {
+        "CFBundleDisplayName": "Beyond",
+        "NSCameraUsageDescription": "Beyond uses the camera to scan food barcodes.",
+        "NSPhotoLibraryUsageDescription": "Beyond saves the progress photos you choose, privately on this iPhone.",
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-image",
+      "expo-sharing",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Beyond uses the camera to scan food barcodes.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 140,
+          "backgroundColor": "#000000"
+        }
+      ]
+    ],
+    "android": {
+      "package": "app.beyond.fitness",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#03060D"
+      }
+    }
+  }
+}
