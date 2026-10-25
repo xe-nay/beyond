@@ -21,7 +21,8 @@ type Phase = { kind: 'scanning' } | { kind: 'looking'; code: string } | { kind: 
 const variants = (code: string) => [...new Set([code, code.length === 13 && code.startsWith('0') ? code.slice(1) : null, code.length === 12 ? `0${code}` : null].filter(Boolean) as string[])];
 
 export default function Scan() {
-  const { date, meal } = useLocalSearchParams<{ date?: string; meal?: string }>();
+  const { date, meal, mode } = useLocalSearchParams<{ date?: string; meal?: string; mode?: 'intake' }>();
+  const intake = mode === 'intake';
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -48,6 +49,8 @@ export default function Scan() {
     busy.current = true;
     const code = raw.replace(/\D/g, '');
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    // Supplements are set up on their own sheet, which looks the product up itself.
+    if (intake) return router.replace({ pathname: '/intake', params: { code } });
     const { foods, saveFood } = useStore.getState();
     // Anything scanned before opens instantly, also without a connection.
     const known = variants(code).map((c) => foods[c]).find(Boolean);
@@ -119,10 +122,10 @@ export default function Scan() {
         )}
         {phase.kind === 'scanning' && typed === null && (
           <View style={{ alignItems: 'center', gap: space.md }}>
-            <T v="headline" color={colors.dim} style={{ textAlign: 'center' }}>{permission && !permission.granted ? 'Allow camera access in Settings' : 'Point at a barcode'}</T>
-            <Press onPress={() => router.replace({ pathname: '/food-search', params: { date: date ?? '', meal: meal ?? '' } })} style={styles.searchPill}>
-              <Icon name="magnifyingglass" size={16} />
-              <T v="headline">No barcode? Search food</T>
+            <T v="headline" color={colors.dim} style={{ textAlign: 'center' }}>{permission && !permission.granted ? 'Allow camera access in Settings' : intake ? 'Scan the supplement' : 'Point at a barcode'}</T>
+            <Press onPress={() => (intake ? router.replace('/intake') : router.replace({ pathname: '/food-search', params: { date: date ?? '', meal: meal ?? '' } }))} style={styles.searchPill}>
+              <Icon name={intake ? 'pencil' : 'magnifyingglass'} size={16} />
+              <T v="headline">{intake ? 'No barcode? Add by name' : 'No barcode? Search food'}</T>
             </Press>
           </View>
         )}

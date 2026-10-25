@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 
 import { byId } from './catalog';
+import { sum } from './domain/nutrition';
 import { generateProgram, TEMPLATES } from './domain/program';
+import { doseNutrients, formatDose } from './domain/supplements';
 import type {
-  BodyEntry, CardioSession, Food, FoodEntry, IntervalPlan, Meal, NutritionTargets, Prescription, Profile, Program,
-  RecoveryCheck, Session, TimerSettings, WorkoutSet,
+  BodyEntry, CardioSession, Food, FoodEntry, Intake, IntervalPlan, Meal, NutritionTargets, Prescription, Profile, Program,
+  RecoveryCheck, Session, Supplement, TimerSettings, WorkoutSet,
 } from './domain/types';
 import { loadJson, saveJson } from './storage';
 
@@ -34,6 +36,8 @@ interface Data {
   analyticsLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   cardioRun: { id: string; date: string; plan: IntervalPlan; banked: number; resumedAt: number | null; gpsMeters?: number } | null;
   cardioPlans: IntervalPlan[];
+  supplements: Supplement[];
+  intakes: Intake[];
 }
 
 const initial: Data = {
@@ -58,6 +62,8 @@ const initial: Data = {
   analyticsLevel: 'intermediate',
   cardioRun: null,
   cardioPlans: [],
+  supplements: [],
+  intakes: [],
 };
 
 interface Actions {
@@ -88,6 +94,10 @@ interface Actions {
   toggleFavorite(id: string): void;
   logFood(food: Food, amount: number, meal: Meal, date: string, nutrients: FoodEntry['nutrients']): void;
   deleteEntry(id: string): void;
+  saveSupplement(x: Supplement): void;
+  deleteSupplement(id: string): void;
+  /** Ticks or unticks a supplement as taken on a date. */
+  toggleIntake(supplementId: string, date: string): void;
   saveCardio(c: CardioSession): void;
   deleteCardio(id: string): void;
   saveBody(b: BodyEntry): void;
@@ -247,6 +257,16 @@ export const useStore = create<State>((set, get) => ({
     set((s) => ({ entries: [...s.entries, entry] }));
   },
   deleteEntry(id) { set((s) => ({ entries: s.entries.filter((e) => e.id !== id) })); },
+  saveSupplement(x) { set((s) => ({ supplements: [...s.supplements.filter((y) => y.id !== x.id), x] })); },
+  deleteSupplement(id) { set((s) => ({ supplements: s.supplements.filter((y) => y.id !== id), intakes: s.intakes.filter((i) => i.supplementId !== id || i.date < today()) })); },
+  toggleIntake(supplementId, date) {
+    const s = get();
+    const had = s.intakes.find((i) => i.supplementId === supplementId && i.date === date);
+    if (had) return set({ intakes: s.intakes.filter((i) => i !== had) });
+    const x = s.supplements.find((y) => y.id === supplementId);
+    if (!x) return;
+    set({ intakes: [...s.intakes, { id: uid(), date, supplementId, name: x.name, dose: formatDose(x), takenAt: new Date().toISOString(), nutrients: doseNutrients(x) }] });
+  },
 
   saveCardio(c) { set((s) => ({ cardio: s.cardio.some((x) => x.id === c.id) ? s.cardio.map((x) => (x.id === c.id ? c : x)) : [...s.cardio, c] })); },
   deleteCardio(id) { set((s) => ({ cardio: s.cardio.filter((x) => x.id !== id) })); },
@@ -268,5 +288,8 @@ export const useStore = create<State>((set, get) => ({
 useStore.subscribe((s) => s.ready && persist(s));
 
 export const activeProgram = (s: State) => s.programs.find((p) => p.id === s.activeProgram) ?? null;
+/** Everything eaten on a date: logged food plus supplements ticked as taken. */
+export const eatenOn = (s: Data, date: string) =>
+  sum([...s.entries.filter((e) => e.date === date).map((e) => e.nutrients), ...s.intakes.filter((i) => i.date === date && i.nutrients).map((i) => i.nutrients!)]);
 export const finished = (s: State) => s.sessions.filter((x) => x.finishedAt);
 export const latestWeight = (s: State) => [...s.body].reverse().find((b) => b.weightKg)?.weightKg ?? null;

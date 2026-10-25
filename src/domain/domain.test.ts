@@ -207,3 +207,20 @@ test('import rules: type, empty workouts, ranges, cardio minutes and dumbbell co
   assert.deepEqual(r.sessions[1].sets.map((s) => s.implements), [2, 1]);
   assert.equal(r.cardio[0].minutes, 30);
 });
+
+test('supplements: label values, dose maths and reminders skip ticked days', async () => {
+  const { supplementFromOff, doseNutrients, doseMicros, formatDose, reminderPlan } = await import('./supplements.ts');
+  const p = supplementFromOff({ code: '123', product_name: 'Multi', brands: 'Acme', nutriments: { 'vitamin-c_serving': 0.08, 'vitamin-c_unit': 'mg', 'vitamin-d_100g': 0.0005 }, serving_quantity: 1 })!;
+  const multi = { ...p, id: 'm', dose: 1, unit: 'tablet' as const, time: '08:00', createdAt: '2026-01-01T00:00:00Z' };
+  assert.equal(formatDose(multi), '1 tablet');
+  assert.deepEqual(doseMicros(multi), [{ label: 'Vitamin D', amount: 5, unit: 'µg' }, { label: 'Vitamin C', amount: 80, unit: 'mg' }]);
+  assert.equal(doseNutrients(multi), null);
+  const whey = { ...multi, id: 'w', name: 'Whey', unit: 'g' as const, dose: 30, per100: { kcal: 400, protein: 80, carbs: 6, fat: 6 }, micros: [], time: '08:00' };
+  assert.deepEqual(doseNutrients(whey), { kcal: 120, protein: 24, carbs: 1.8, fat: 1.8 });
+  const now = new Date(2026, 0, 10, 9, 0);
+  const plan = reminderPlan([multi, whey], [], now, 3);
+  assert.equal(plan.length, 2); // today's 08:00 has passed; the next two mornings remain
+  assert.match(plan[0].body, /Multi · 1 tablet\nWhey · 30 g/);
+  const ticked = [{ id: 'i', date: '2026-01-11', supplementId: 'm', name: 'Multi', dose: '1 tablet', takenAt: '', nutrients: null }];
+  assert.doesNotMatch(reminderPlan([multi, whey], ticked, now, 3)[0].body, /Multi/);
+});

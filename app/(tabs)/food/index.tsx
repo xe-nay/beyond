@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-native-reanimated';
 
+import { DailyIntake } from '../../../src/components/DailyIntake';
 import { Icon } from '../../../src/components/Icon';
 import { MacroDonut, MacroLegend } from '../../../src/components/Nutrition';
 import { Card, Press, Row, Screen, Section, T } from '../../../src/components/ui';
-import { sum } from '../../../src/domain/nutrition';
 import type { FoodEntry } from '../../../src/domain/types';
 import { MEALS } from '../../../src/meals';
-import { today, useStore } from '../../../src/store';
+import { eatenOn, today, useStore } from '../../../src/store';
 import { alpha, colors, radius, space, type } from '../../../src/theme';
 
 export default function Food() {
@@ -22,7 +22,7 @@ export default function Food() {
   d.setDate(d.getDate() + offset);
   const date = today(d);
   const entries = s.entries.filter((e) => e.date === date);
-  const total = sum(entries.map((e) => e.nutrients));
+  const total = eatenOn(s, date);
   const left = s.targets.kcal - total.kcal;
   const recent = Object.values(s.foods).sort((a, b) => Number(b.favorite) - Number(a.favorite) || b.lastUsed.localeCompare(a.lastUsed)).slice(0, 12);
 
@@ -34,6 +34,8 @@ export default function Food() {
         <T v="headline">{offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</T>
         <Press onPress={() => setOffset(Math.min(0, offset + 1))} hitSlop={10} disabled={offset === 0}><Icon name="chevron.right" size={16} color={colors.dim} /></Press>
       </Row>
+
+      <DailyIntake date={date} />
 
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.xl }} onPress={() => router.push('/targets')}>
         <MacroDonut n={total} size={136} label={`of ${s.targets.kcal}`} />

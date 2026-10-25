@@ -109,3 +109,16 @@ export function startingTargets(profile: Profile, weightKg: number | null): Nutr
   const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
   return { kcal, protein, carbs, fat };
 }
+
+/** The raw product for a barcode, for supplements read by supplementFromOff. */
+export async function lookupProduct(code: string, signal?: AbortSignal): Promise<{ status: 'found'; product: any } | { status: 'missing' | 'offline' }> {
+  try {
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}?fields=${FIELDS}`, { headers: { 'User-Agent': UA }, signal });
+    if (res.status === 404) return { status: 'missing' };
+    const body = await res.json();
+    return body.status === 1 && body.product ? { status: 'found', product: { ...body.product, code } } : { status: 'missing' };
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw e;
+    return { status: 'offline' };
+  }
+}

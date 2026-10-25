@@ -77,6 +77,9 @@ const preview: Partial<Record<IconName, string>> = {
   'waveform': 'graphic_eq',
   'square.on.square': 'content_copy',
   'doc.on.clipboard': 'content_paste',
+  'pills.fill': 'medication',
+  circle: 'radio_button_unchecked',
+  'calendar.badge.clock': 'event',
 };
 
 type Props = { name: IconName; size?: number; color?: ColorValue; weight?: SymbolWeight; style?: StyleProp<ViewStyle> };

@@ -1,5 +1,5 @@
 // Week strip that pages through weeks with a swipe. The month above follows the visible week; a
-// double tap on the strip or the month comes back to today. Tapping a trained day opens that workout.
+// double tap on the strip or the month comes back to today. Tapping a day opens it: what was done, or what is planned.
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -91,7 +91,7 @@ export function WeekCalendar() {
           const isToday = iso === todayIso;
           const first = day.getDate() === 1;
           return (
-            <Press key={i} haptic={false} onPress={() => tap(session ? () => router.push(`/session/${session.id}`) : undefined)}>
+            <Press key={i} haptic={false} onPress={() => tap(() => router.push(`/day/${iso}`))}>
               <View style={{ alignItems: 'center', gap: 6 }}>
                 <T v="caption" color={isToday ? colors.cyan : colors.faint}>{first ? MONTHS[day.getMonth()].slice(0, 3) : d}</T>
                 <View style={{

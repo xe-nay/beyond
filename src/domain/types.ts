@@ -210,3 +210,34 @@ export interface RecoveryCheck {
   soreness: number; // 1-5
   sleepHours: number;
 }
+
+export type DoseUnit = 'g' | 'mg' | 'ml' | 'capsule' | 'tablet' | 'scoop' | 'drop';
+
+/** A label value from the product, such as Vitamin D. Amounts are in grams, as Open Food Facts stores them. */
+export interface Micro { key: string; label: string; unit: string; per100: number | null; perServing: number | null }
+
+/** Something taken every day (creatine, a multivitamin), set up once from its barcode. */
+export interface Supplement {
+  id: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  barcode: string | null;
+  dose: number;
+  unit: DoseUnit;
+  time: string | null; // "HH:MM" daily reminder, or null for none
+  per100: Nutrients | null; // per 100 g/ml when the label has it
+  servingG: number | null; // grams in one capsule/tablet/scoop, from the label
+  micros: Micro[];
+  createdAt: string;
+}
+
+export interface Intake {
+  id: string;
+  date: string;
+  supplementId: string;
+  name: string; // kept so history still reads well after a supplement is removed
+  dose: string; // "5 g", "1 capsule"
+  takenAt: string;
+  nutrients: Nutrients | null; // frozen when ticked, counted in the day's totals
+}

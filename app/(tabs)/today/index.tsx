@@ -8,9 +8,8 @@ import { Icon } from '../../../src/components/Icon';
 import { WeekCalendar } from '../../../src/components/WeekCalendar';
 import { Button, Card, Ring, Row, Screen, Section, T } from '../../../src/components/ui';
 import { fatigueReport, progression, weekStart } from '../../../src/domain/calc';
-import { sum } from '../../../src/domain/nutrition';
 import type { Region } from '../../../src/domain/types';
-import { activeProgram, today, useStore } from '../../../src/store';
+import { activeProgram, eatenOn, today, useStore } from '../../../src/store';
 import { alpha, colors, plural, space, type } from '../../../src/theme';
 
 export default function Today() {
@@ -29,7 +28,7 @@ export default function Today() {
   const regions = useMemo(() => [...new Set(next?.exercises.flatMap((x) => byId[x.exerciseId]?.primary ?? []) ?? [])] as Region[], [next]);
   const imported = s.sessions.find((x) => !x.finishedAt && !x.startedAt && x.date === date);
 
-  const eaten = sum(s.entries.filter((e) => e.date === date).map((e) => e.nutrients));
+  const eaten = eatenOn(s, date);
   const fatigue = fatigueReport(done, s.checks);
   const advice = next?.exercises[0] ? progression(done, next.exercises[0]) : null;
   const cardioWeek = s.cardio.filter((c) => c.completed && Date.parse(c.date) >= monday.getTime()).reduce((n, c) => n + c.minutes, 0);
