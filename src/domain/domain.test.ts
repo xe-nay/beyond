@@ -189,3 +189,21 @@ test('GPS distance ignores jitter and jumps; pace and target parsing', async () 
   assert.ok(onPace(275, 270) && !onPace(290, 270));
   assert.equal(formatPace(299.6), '5:00');
 });
+
+test('import rules: type, empty workouts, ranges, cardio minutes and dumbbell count', () => {
+  const all = [{ id: 'db-press', name: 'Dumbbell Shoulder Press', equipment: 'dumbbell' }, { id: 'goblet', name: 'Goblet Squat', equipment: 'dumbbell' }] as Exercise[];
+  const file = (entries: unknown[]) => JSON.stringify({ format: 'beyond-training', version: 1, id: 'r', entries });
+  const none = { sessions: [], cardio: [] };
+  assert.match(parseTrainingFile(file([{ id: 'a', date: '2026-01-05', type: 'yoga' }]), all, none).errors[0], /type must be/);
+  assert.match(parseTrainingFile(file([{ id: 'a', date: '2026-01-05' }]), all, none).errors[0], /needs "exercises"/);
+  const r = parseTrainingFile(file([
+    { id: 'a', date: '2099-01-05', exercises: [{ name: 'Dumbbell Shoulder Press', sets: 40, minReps: 12, maxReps: 6, rir: 9, warmupSets: 9 }] },
+    { id: 'b', date: '2026-01-06', performed: { sets: [{ name: 'Dumbbell Shoulder Press', reps: 8, loadKg: 20 }, { name: 'Goblet Squat', reps: 10, loadKg: 24 }] } },
+    { id: 'c', date: '2026-01-07', type: 'cardio', intervals: { workSeconds: 1800 }, performed: { distanceKm: 5 } },
+  ]), all, none);
+  assert.deepEqual(r.errors, []);
+  const p = r.sessions[0].plan[0];
+  assert.deepEqual([p.sets, p.minReps, p.maxReps, p.rir, p.warmupSets], [10, 12, 12, 5, 5]);
+  assert.deepEqual(r.sessions[1].sets.map((s) => s.implements), [2, 1]);
+  assert.equal(r.cardio[0].minutes, 30);
+});

@@ -1,5 +1,6 @@
 // One dated training file for plans and history. Entries with a "performed" block become history;
 // the rest become scheduled sessions. Also reads the earlier "kinetic-training" v1 files.
+import { defaultImplements } from './equipment.ts';
 import type { CardioSession, Exercise, IntervalPlan, Prescription, Session, WorkoutSet } from './types.ts';
 
 /** Something already in the app on the same date and of the same type as an imported entry. */
@@ -22,6 +23,7 @@ export interface ImportResult {
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 /** Everyday names that would otherwise land on a variant. */
@@ -86,11 +88,13 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
     if (!entry?.id || ids.has(entry.id)) return out.errors.push(`${where}: missing or duplicate id.`);
     ids.add(entry.id);
     if (!DATE.test(entry.date ?? '') || Number.isNaN(Date.parse(entry.date))) return out.errors.push(`${where}: date must be YYYY-MM-DD.`);
+    const type = entry.type ?? 'strength';
+    if (type !== 'strength' && type !== 'cardio') return out.errors.push(`${where}: type must be "strength" or "cardio".`);
     const done = !!entry.performed;
     if (done && entry.date > today) return out.errors.push(`${where}: a future date cannot have results.`);
     const id = `imp-${fileId}-${entry.id}`;
 
-    if (entry.type === 'cardio') {
+    if (type === 'cardio') {
       const iv = entry.intervals ?? {};
       const plan: IntervalPlan = {
         activity: iv.activityType ?? iv.activity ?? 'Running',
@@ -107,7 +111,8 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
       const p = entry.performed;
       const c: CardioSession = {
         id, date: entry.date, activity: plan.activity, plan, notes: entry.notes ?? '',
-        minutes: done ? +p.minutes || 0 : Math.round((plan.warmupSeconds + plan.rounds * plan.workSeconds + (plan.rounds - 1) * plan.recoverySeconds + plan.cooldownSeconds) / 60),
+        // Without minutes, a finished session counts its planned length.
+        minutes: done && +p.minutes > 0 ? +p.minutes : Math.round((plan.warmupSeconds + plan.rounds * plan.workSeconds + (plan.rounds - 1) * plan.recoverySeconds + plan.cooldownSeconds) / 60),
         distanceKm: done ? p.distanceKm ?? null : null,
         rpe: done ? p.rpe ?? null : null,
         avgHr: done ? p.avgHr ?? null : null,
@@ -120,19 +125,21 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
       return;
     }
 
+    if (!entry.exercises?.length && !entry.performed?.sets?.length) return out.errors.push(`${where}: a workout needs "exercises" or performed "sets".`);
     const plan: Prescription[] = [];
     for (const x of entry.exercises ?? []) {
       const e = find(x.exerciseId ?? x.name ?? '');
       if (!e) return out.errors.push(`${where}: unknown exercise "${x.exerciseId ?? x.name}".`);
+      const minReps = clamp(+x.minReps || 8, 1, 50);
       plan.push({
         exerciseId: e.id,
-        sets: Math.min(10, Math.max(1, +x.sets || 3)),
-        minReps: +x.minReps || 8,
-        maxReps: +x.maxReps || +x.minReps || 12,
-        rir: x.rir ?? 2,
-        restSeconds: Math.min(600, Math.max(15, +x.restSeconds || 120)),
+        sets: clamp(+x.sets || 3, 1, 10),
+        minReps,
+        maxReps: clamp(+x.maxReps || +x.minReps || 12, minReps, 50),
+        rir: clamp(x.rir ?? 2, 0, 5),
+        restSeconds: clamp(+x.restSeconds || 120, 15, 600),
         loadKg: x.loadKg ?? null,
-        warmupSets: x.warmupSets ?? 0,
+        warmupSets: clamp(+x.warmupSets || 0, 0, 5),
         superset: x.superset || undefined,
       });
     }
@@ -142,7 +149,7 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
       sets = (p.sets ?? []).map((s: any, n: number) => {
         const e = find(s.exerciseId ?? s.name ?? '');
         return e && {
-          id: `${id}-s${n}`, exerciseId: e.id, reps: +s.reps || 0, loadKg: +s.loadKg || 0, rir: s.rir ?? null, implements: s.implements === 2 ? 2 : undefined,
+          id: `${id}-s${n}`, exerciseId: e.id, reps: +s.reps || 0, loadKg: +s.loadKg || 0, rir: typeof s.rir === 'number' ? clamp(s.rir, 0, 10) : null, implements: s.implements === 1 || s.implements === 2 ? s.implements : defaultImplements(e),
           warmup: !!s.warmup, completedAt: s.completedAt ?? `${entry.date}T12:00:00Z`, restSeconds: s.actualRestSeconds ?? null,
         };
       });
