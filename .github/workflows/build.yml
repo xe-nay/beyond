@@ -166,10 +166,20 @@ jobs:
           maestro --device "$DEVICE" test .maestro --test-output-dir maestro-output || echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
           xcrun simctl io "$DEVICE" screenshot maestro-output/final.png || true
 
+      # Screenshots on their own, so they download in seconds; the large logs go separately.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: simulator-screens
+          path: |
+            maestro-output/**/*.png
+            maestro-output/**/commands*.json
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator-logs
           path: |
             maestro-output
             xcodebuild-sim.log
