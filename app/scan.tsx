@@ -141,7 +141,8 @@ export default function Scan() {
               <T v="label" color={colors.dim}>{phase.name ? `${phase.name} has no nutrition facts yet.` : `No product for ${phase.code}.`} Find it by name and it will open instantly next time you scan it.</T>
             </View>
             <Button icon="magnifyingglass" title="Search by name" onPress={() => router.replace({ pathname: '/food-search', params: { barcode: phase.code, q: phase.name ?? '', date: date ?? '', meal: meal ?? '' } })} />
-            <Button kind="secondary" title="Scan again" onPress={again} />
+            <Button kind="secondary" icon="pencil" title="Create from the label" onPress={() => router.replace({ pathname: '/food-new', params: { barcode: phase.code, q: phase.name ?? '', date: date ?? '', meal: meal ?? '' } })} />
+            <Button kind="ghost" title="Scan again" onPress={again} />
           </Animated.View>
         )}
         {phase.kind === 'offline' && (

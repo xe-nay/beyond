@@ -62,6 +62,7 @@ export default function RootLayout() {
           <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade' }} />
           <Stack.Screen name="food/[id]" options={{ ...sheet, sheetAllowedDetents: [0.92] }} />
           <Stack.Screen name="food-search" options={{ ...sheet, sheetAllowedDetents: [0.92] }} />
+          <Stack.Screen name="food-new" options={{ ...sheet, sheetAllowedDetents: [0.92] }} />
           <Stack.Screen name="program" options={{ title: 'Program', headerLargeTitle: true }} />
           <Stack.Screen name="templates" options={{ ...sheet, sheetAllowedDetents: [0.75, 1] }} />
           <Stack.Screen name="prescription" options={{ ...sheet, sheetAllowedDetents: [0.7] }} />

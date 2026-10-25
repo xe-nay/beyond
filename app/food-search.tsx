@@ -6,7 +6,7 @@ import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { Icon } from '../src/components/Icon';
 import { Press, Row, T } from '../src/components/ui';
 import { basicFoods, searchBasics } from '../src/basicFoods';
-import { searchFoods } from '../src/domain/nutrition';
+import { searchFoods, SearchError } from '../src/domain/nutrition';
 import type { Food } from '../src/domain/types';
 import { useStore } from '../src/store';
 import { colors, radius, space, type } from '../src/theme';
@@ -18,11 +18,14 @@ export default function FoodSearch() {
   const s = useStore();
   const [query, setQuery] = useState(q ?? '');
   const [results, setResults] = useState<Food[]>([]);
-  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'loading' | 'offline' | 'down'>('idle');
   const ctrl = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (query.trim().length < 2) return setResults([]);
+    if (query.trim().length < 2) {
+      setState('idle');
+      return setResults([]);
+    }
     const t = setTimeout(async () => {
       ctrl.current?.abort();
       ctrl.current = new AbortController();
@@ -31,7 +34,7 @@ export default function FoodSearch() {
         setResults(await searchFoods(query.trim(), ctrl.current.signal));
         setState('idle');
       } catch (e: any) {
-        if (e?.name !== 'AbortError') setState('error');
+        if (e?.name !== 'AbortError') setState(e instanceof SearchError && e.kind === 'offline' ? 'offline' : 'down');
       }
     }, 350);
     return () => clearTimeout(t);
@@ -67,7 +70,8 @@ export default function FoodSearch() {
             <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Eggs, rice, chicken, a brand…" placeholderTextColor={colors.faint} style={{ flex: 1, color: colors.text, fontSize: 17 }} returnKeyType="search" />
             {state === 'loading' && <T v="label" color={colors.dim}>…</T>}
           </Row>
-          {state === 'error' && <T v="label" color={colors.amber}>Search needs a connection.</T>}
+          {state === 'offline' && <T v="label" color={colors.amber}>No internet. Your foods and the basic foods still work.</T>}
+          {state === 'down' && <T v="label" color={colors.amber}>Open Food Facts isn't answering right now. Try again in a minute, or create the food yourself.</T>}
         </View>
       }
       renderItem={({ item }) => (
@@ -87,6 +91,12 @@ export default function FoodSearch() {
           </Row>
         </Press>
       )}
+      // Whatever the search found, a food can always be typed from its label.
+      ListFooterComponent={
+        <Press onPress={() => router.replace({ pathname: '/food-new', params: { barcode: barcode ?? '', q: query, date: date ?? '', meal: meal ?? '' } })} style={{ marginHorizontal: space.xl, marginTop: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.hairlineStrong }}>
+          <T v="headline" color={colors.cyan} style={{ textAlign: 'center' }}>Can't find it? Create it from the label</T>
+        </Press>
+      }
       ListEmptyComponent={query.length > 1 && state === 'idle' ? <T v="label" color={colors.faint} style={{ paddingHorizontal: space.xl }}>No matches yet.</T> : null}
     />
   );

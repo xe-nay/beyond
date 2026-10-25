@@ -64,18 +64,47 @@ export async function lookupBarcode(code: string, signal?: AbortSignal): Promise
   }
 }
 
-export async function searchFoods(query: string, signal?: AbortSignal): Promise<Food[]> {
-  const q = encodeURIComponent(query);
+/** Why a search failed: no internet at all, or Open Food Facts not answering. */
+export class SearchError extends Error {
+  constructor(public kind: 'offline' | 'down') { super(kind); }
+}
+
+async function getJson(url: string, signal?: AbortSignal) {
+  let res: Response;
   try {
-    const res = await fetch(`https://search.openfoodfacts.org/search?q=${q}&page_size=30&fields=${FIELDS}`, { headers: { 'User-Agent': UA }, signal });
-    const body = await res.json();
-    return (body.hits ?? []).map(fromOff).filter(Boolean) as Food[];
+    res = await fetch(url, { headers: { 'User-Agent': UA }, signal });
   } catch (e: any) {
     if (e?.name === 'AbortError') throw e;
-    // The classic endpoint is slower but a useful second chance.
-    const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${q}&search_simple=1&json=1&page_size=30&fields=${FIELDS}`, { headers: { 'User-Agent': UA }, signal });
-    const body = await res.json();
+    throw new SearchError('offline');
+  }
+  if (!res.ok) throw new SearchError('down');
+  try {
+    return await res.json();
+  } catch {
+    throw new SearchError('down'); // an error page instead of results
+  }
+}
+
+export async function searchFoods(query: string, signal?: AbortSignal): Promise<Food[]> {
+  const q = encodeURIComponent(query);
+  const fast = `https://search.openfoodfacts.org/search?q=${q}&page_size=30&fields=${FIELDS}`;
+  let last: unknown;
+  // The search service, tried twice; the classic endpoint as a last chance.
+  for (const wait of [0, 700]) {
+    try {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      return ((await getJson(fast, signal)).hits ?? []).map(fromOff).filter(Boolean) as Food[];
+    } catch (e: any) {
+      if (e?.name === 'AbortError' || (e instanceof SearchError && e.kind === 'offline')) throw e;
+      last = e;
+    }
+  }
+  try {
+    const body = await getJson(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${q}&search_simple=1&json=1&page_size=30&fields=${FIELDS}`, signal);
     return (body.products ?? []).map(fromOff).filter(Boolean) as Food[];
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw e;
+    throw e instanceof SearchError ? e : last;
   }
 }
 
