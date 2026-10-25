@@ -65,8 +65,20 @@ jobs:
       - name: Check the native modules are registered
         run: |
           # The Live Activity module is local source (modules/live-activity); a build without it shows nothing.
-          grep -n "LiveActivity" ios/Podfile.lock || { echo "::error::LiveActivity native module is missing from the pods"; exit 1; }
-          grep -rn "LiveActivityModule" $(find ios -name "ExpoModulesProvider.swift") || { echo "::error::LiveActivity is not registered with Expo"; exit 1; }
+          {
+            echo "== modules/live-activity"; ls -R modules/live-activity
+            echo "== autolinking"; npx expo-modules-autolinking resolve -p ios 2>&1 | grep -i -B2 -A6 "live" || echo "not found by autolinking"
+            echo "== Podfile.lock"; grep -n "LiveActivity" ios/Podfile.lock || echo "not in Podfile.lock"
+            echo "== providers"; find ios -name "ExpoModulesProvider.swift" -exec grep -Hn "LiveActivity" {} + || echo "no provider mentions it yet"
+          } | tee native-check.txt
+          grep -q "LiveActivity" ios/Podfile.lock || { echo "::error::LiveActivity native module is missing from the pods"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-check
+          path: native-check.txt
+          retention-days: 14
 
       - name: Build
         run: |
