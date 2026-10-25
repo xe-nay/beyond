@@ -171,6 +171,17 @@ jobs:
           xcrun simctl openurl "$DEVICE" "https://www.apple.com" || true
           sleep 6
           xcrun simctl io "$DEVICE" screenshot maestro-output/island-cardio.png || true
+          # What iOS said about the Live Activity, and whether the app carries what it needs.
+          {
+            APP=$(find build/Build/Products -maxdepth 2 -name '*.app' -path '*iphonesimulator*' | head -1)
+            echo "== app: $APP"
+            plutil -p "$APP/Info.plist" | grep -i -E "LiveActivit|CFBundleIdentifier" || true
+            echo "== extensions"; ls "$APP/PlugIns" 2>&1 || true
+            for EX in "$APP"/PlugIns/*.appex; do plutil -p "$EX/Info.plist" | grep -i -E "CFBundleIdentifier|NSExtensionPointIdentifier|MinimumOSVersion" || true; done
+            echo "== log"
+            xcrun simctl spawn "$DEVICE" log show --last 30m --style compact --info \
+              --predicate 'subsystem == "app.beyond.fitness" OR subsystem CONTAINS[c] "activitykit" OR process == "liveactivitiesd" OR process == "chronod" OR (process == "Beyond" AND messageType == error)' | tail -400
+          } > maestro-output/live.log 2>&1 || true
 
       # Screenshots on their own, so they download in seconds; the large logs go separately.
       - uses: actions/upload-artifact@v4
@@ -180,6 +191,7 @@ jobs:
           path: |
             maestro-output/**/*.png
             maestro-output/**/commands*.json
+            maestro-output/live.log
           retention-days: 14
 
       - uses: actions/upload-artifact@v4

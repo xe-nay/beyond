@@ -62,6 +62,23 @@ name: First run, workout, food, progress and cardio
 - takeScreenshot: 12-progress
 - tapOn: "Profile"
 - takeScreenshot: 13-profile
+# Dynamic Island self-test: its status line shows whether iOS accepted the activity
+- tapOn:
+    text: ".*Rest timer.*"
+    optional: true
+- scrollUntilVisible:
+    element: "Dynamic Island"
+    optional: true
+- tapOn:
+    text: "Test"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: 13b-island-test
+- swipe:
+    start: "50%, 45%"
+    end: "50%, 98%"
+    duration: 300
+- waitForAnimationToEnd
 - tapOn: "Train"
 - takeScreenshot: 14-train
 - tapOn: ".*Cardio.*"
