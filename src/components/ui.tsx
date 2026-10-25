@@ -35,8 +35,8 @@ export function T({ children, style, v = 'body', color, numberOfLines }: { child
 }
 
 /** Scales to 0.97 on press-in (120 ms, ease-out), the press commits on release. */
-export function Press({ children, onPress, style, disabled, haptic = true, onLongPress, hitSlop }: {
-  children: ReactNode; onPress?: () => void; style?: StyleProp<ViewStyle>; disabled?: boolean; haptic?: boolean; onLongPress?: () => void; hitSlop?: number;
+export function Press({ children, onPress, style, disabled, haptic = true, onLongPress, hitSlop, label }: {
+  children: ReactNode; onPress?: () => void; style?: StyleProp<ViewStyle>; disabled?: boolean; haptic?: boolean; onLongPress?: () => void; hitSlop?: number; label?: string;
 }) {
   const [down, setDown] = useState(false);
   // Sizing and placement belong to the touch target; everything else to the scaling view.
@@ -53,6 +53,8 @@ export function Press({ children, onPress, style, disabled, haptic = true, onLon
       onPressOut={() => setDown(false)}
       onLongPress={onLongPress}
       hitSlop={hitSlop}
+      accessibilityRole={label ? 'button' : undefined}
+      accessibilityLabel={label}
       pressRetentionOffset={12}
       onPress={() => {
         if (haptic) tap();

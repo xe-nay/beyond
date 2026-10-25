@@ -58,7 +58,7 @@ export default function Train() {
                   <T v="headline">{d.name}</T>
                   <T v="label" color={colors.dim} numberOfLines={1}>{d.exercises.map((x) => exercise(x.exerciseId)?.name).join(' · ')}</T>
                 </View>
-                <Press onPress={() => start({ dayId: d.id })} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: alpha(colors.cyan, 0.15), alignItems: 'center', justifyContent: 'center' }}>
+                <Press onPress={() => start({ dayId: d.id })} label={`Start ${d.name}`} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: alpha(colors.cyan, 0.15), alignItems: 'center', justifyContent: 'center' }}>
                   <Icon name="play.fill" size={14} color={colors.cyan} />
                 </Press>
               </Row>

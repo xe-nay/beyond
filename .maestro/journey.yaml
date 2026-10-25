@@ -15,8 +15,9 @@ name: First run, workout, food, progress and cardio
 - tapOn: "Continue"
 - takeScreenshot: 04-about
 - tapOn: ".*Build my program.*"
+# Today shows only today's plan, which depends on the date, so the walkthrough starts its workout from Train.
 - extendedWaitUntil:
-    visible: ".*Start workout.*"
+    visible: "Today"
     timeout: 15000
 - takeScreenshot: 05-today
 - swipe:
@@ -29,7 +30,10 @@ name: First run, workout, food, progress and cardio
     point: "20%, 32%"
 - waitForAnimationToEnd
 - takeScreenshot: 05c-calendar-back-to-today
-- tapOn: ".*Start workout.*"
+- tapOn: "Train"
+- tapOn:
+    text: "Start .+"
+    index: 0
 - extendedWaitUntil:
     visible: ".*Complete set 1.*"
     timeout: 10000
