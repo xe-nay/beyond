@@ -165,6 +165,12 @@ jobs:
           mkdir -p maestro-output
           maestro --device "$DEVICE" test .maestro --test-output-dir maestro-output || echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
           xcrun simctl io "$DEVICE" screenshot maestro-output/final.png || true
+          # The walkthrough ends mid-cardio. iOS hides an app's own Live Activity while the app is in
+          # front, so open Safari over it and capture the Dynamic Island with the simulator's own
+          # screenshot (the walkthrough's screenshots leave the island out).
+          xcrun simctl openurl "$DEVICE" "https://www.apple.com" || true
+          sleep 6
+          xcrun simctl io "$DEVICE" screenshot maestro-output/island-cardio.png || true
 
       # Screenshots on their own, so they download in seconds; the large logs go separately.
       - uses: actions/upload-artifact@v4
