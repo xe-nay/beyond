@@ -7,7 +7,7 @@ import { MICROS } from './domain/micros';
 import { sum } from './domain/nutrition';
 import { formatWeight, toDisplay } from './domain/plates';
 import { MEALS } from './meals';
-import type { State } from './store';
+import { intakeNutrients, type State } from './store';
 
 export type Line =
   | { t: 'title'; text: string; sub?: string }
@@ -44,7 +44,7 @@ export function buildReport(s: State, from: string, to: string): Page[] {
 
   const volume = sessions.reduce((n, x) => n + volumeLoad(x.sets), 0);
   const minutes = sessions.reduce((n, x) => n + (sessionMinutes(x) ?? 0), 0);
-  const kcalDays = foodDays.map((d) => sum([...s.entries.filter((e) => e.date === d).map((e) => e.nutrients), ...s.intakes.filter((i) => i.date === d && i.nutrients).map((i) => i.nutrients!)]));
+  const kcalDays = foodDays.map((d) => sum([...s.entries.filter((e) => e.date === d).map((e) => e.nutrients), ...s.intakes.filter((i) => i.date === d).map((i) => intakeNutrients(s, i)).filter((n): n is NonNullable<typeof n> => !!n)]));
   add([
     { t: 'title', text: 'Beyond · training and nutrition', sub: `${fmtDate(from)} to ${fmtDate(to)} · exported ${fmtDate(new Date().toISOString().slice(0, 10))}` },
     { t: 'h', text: 'Summary' },
@@ -88,7 +88,7 @@ export function buildReport(s: State, from: string, to: string): Page[] {
   for (const d of foodDays) {
     const entries = s.entries.filter((e) => e.date === d).sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
     const intakes = s.intakes.filter((i) => i.date === d);
-    const total = sum([...entries.map((e) => e.nutrients), ...intakes.filter((i) => i.nutrients).map((i) => i.nutrients!)]);
+    const total = sum([...entries.map((e) => e.nutrients), ...intakes.map((i) => intakeNutrients(s, i)).filter((n): n is NonNullable<typeof n> => !!n)]);
     const lines: Line[] = [
       { t: 'h', text: fmtDate(d), right: `${n0(total.kcal)} kcal · P ${n0(total.protein)} · C ${n0(total.carbs)} · F ${n0(total.fat)} g` },
       { t: 'cells', head: true, cells: ['Time', 'Meal', 'Food', 'Amount', 'kcal', 'P / C / F'] },

@@ -6,6 +6,7 @@ import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated'
 import { exercise } from '../../src/catalog';
 import { DailyIntake } from '../../src/components/DailyIntake';
 import { ExerciseImage } from '../../src/components/ExerciseImage';
+import { PHASE } from '../../src/components/CardioVisuals';
 import { Icon, type IconName } from '../../src/components/Icon';
 import { MacroDonut, MacroLegend } from '../../src/components/Nutrition';
 import { SummaryCard } from '../../src/components/SummaryCard';
@@ -82,7 +83,7 @@ export default function Day() {
         </Animated.View>
       ))}
       {imported.map((x) => (
-        <PlanCard key={x.id} title={x.name} label={isToday ? 'Planned today' : 'Planned'} plan={x.plan} unit={s.profile.unit} onStart={isToday && !open ? () => start({ sessionId: x.id }) : undefined} />
+        <PlanCard key={x.id} title={x.name} label={isToday ? 'Planned today' : 'Planned'} plan={x.plan} notes={x.notes} unit={s.profile.unit} onStart={isToday && !open ? () => start({ sessionId: x.id }) : undefined} />
       ))}
       {programDay && (
         <PlanCard title={programDay.name} label={`${program!.name}${isToday ? ' · today' : ''}`} plan={programDay.exercises} unit={s.profile.unit} onStart={isToday && !open ? () => start({ dayId: programDay.id }) : undefined} />
@@ -90,21 +91,7 @@ export default function Day() {
 
       {/* Cardio */}
       {cardioDone.map((c) => <CardioDone key={c.id} c={c} weightKg={latestWeight(s)} />)}
-      {cardioPlanned.map((c) => (
-        <Card key={c.id}>
-          <Row>
-            <Icon name={ACTIVITY_ICON[c.activity] ?? 'figure.run'} size={20} color={colors.cyan} />
-            <View style={{ flex: 1 }}>
-              <T v="caption" color={colors.faint}>Planned cardio</T>
-              <T v="headline">{c.activity} · {formatClock(totalSeconds(c.plan!))}</T>
-              <T v="footnote" color={colors.dim}>
-                {c.plan!.rounds > 1 ? `${c.plan!.rounds} × ${formatClock(c.plan!.workSeconds)}${c.plan!.recoverySeconds ? ` / ${formatClock(c.plan!.recoverySeconds)}` : ''}` : 'Steady'}{c.plan!.workCue ? ` · ${c.plan!.workCue}` : ''}
-              </T>
-            </View>
-          </Row>
-          {isToday && <Button title="Open cardio" icon="play.fill" kind="secondary" onPress={() => router.push('/cardio')} />}
-        </Card>
-      ))}
+      {cardioPlanned.map((c) => <CardioPlan key={c.id} c={c} canStart={isToday} />)}
 
       {nothing && (
         <Card style={{ alignItems: 'center', paddingVertical: space.xl }}>
@@ -162,7 +149,7 @@ export default function Day() {
   );
 }
 
-function PlanCard({ title, label, plan, unit, onStart }: { title: string; label: string; plan: Prescription[]; unit: 'kg' | 'lb'; onStart?: () => void }) {
+function PlanCard({ title, label, plan, unit, onStart, notes }: { title: string; label: string; plan: Prescription[]; unit: 'kg' | 'lb'; onStart?: () => void; notes?: string }) {
   const router = useRouter();
   const sets = plan.reduce((n, x) => n + x.sets, 0);
   return (
@@ -189,7 +176,67 @@ function PlanCard({ title, label, plan, unit, onStart }: { title: string; label:
           </Press>
         );
       })}
+      {!!notes && <T v="callout" color={colors.dim}>{notes}</T>}
       {onStart && <Button title="Start workout" icon="play.fill" onPress={onStart} />}
+    </Card>
+  );
+}
+
+/** A planned cardio session in full: its phases drawn to scale, each with its time and cue, and the notes. */
+function CardioPlan({ c, canStart }: { c: CardioSession; canStart: boolean }) {
+  const router = useRouter();
+  const p = c.plan!;
+  const total = totalSeconds(p);
+  const steps = [
+    p.warmupSeconds ? { kind: 'warmup' as const, label: 'Warm-up', time: formatClock(p.warmupSeconds), cue: '', seconds: p.warmupSeconds } : null,
+    { kind: 'work' as const, label: p.rounds > 1 ? `Work × ${p.rounds}` : 'Work', time: formatClock(p.workSeconds), cue: p.workCue, seconds: p.workSeconds * p.rounds },
+    p.recoverySeconds && p.rounds > 1 ? { kind: 'recovery' as const, label: `Recover × ${p.rounds - 1}`, time: formatClock(p.recoverySeconds), cue: p.recoveryCue, seconds: p.recoverySeconds * (p.rounds - 1) } : null,
+    p.cooldownSeconds ? { kind: 'cooldown' as const, label: 'Cool-down', time: formatClock(p.cooldownSeconds), cue: '', seconds: p.cooldownSeconds } : null,
+  ].filter(Boolean) as { kind: keyof typeof PHASE; label: string; time: string; cue: string; seconds: number }[];
+  const start = () => {
+    useStore.getState().set({ cardioRun: { id: c.id, date: today(), plan: p, banked: 0, resumedAt: Date.now() } });
+    router.push('/cardio-run');
+  };
+  return (
+    <Card>
+      <Row>
+        <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.cyan, 0.14) }}>
+          <Icon name={ACTIVITY_ICON[c.activity] ?? 'figure.run'} size={18} color={colors.cyan} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <T v="caption" color={colors.faint}>Planned cardio · {c.activity}</T>
+          <T v="title3" numberOfLines={2}>{c.name ?? c.activity}</T>
+        </View>
+        <T v="title3" style={type.num}>{formatClock(total)}</T>
+      </Row>
+      {/* The session to scale: each phase's share of the total time, in its colour */}
+      <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 }}>
+        {p.warmupSeconds > 0 && <View style={{ flex: p.warmupSeconds, backgroundColor: PHASE.warmup.a }} />}
+        {Array.from({ length: p.rounds }, (_, i) => (
+          <View key={i} style={{ flex: p.workSeconds + (i < p.rounds - 1 ? p.recoverySeconds : 0), flexDirection: 'row', gap: 1 }}>
+            <View style={{ flex: p.workSeconds, backgroundColor: PHASE.work.a }} />
+            {i < p.rounds - 1 && p.recoverySeconds > 0 && <View style={{ flex: p.recoverySeconds, backgroundColor: PHASE.recovery.a }} />}
+          </View>
+        ))}
+        {p.cooldownSeconds > 0 && <View style={{ flex: p.cooldownSeconds, backgroundColor: PHASE.cooldown.a }} />}
+      </View>
+      <View style={{ gap: space.sm }}>
+        {steps.map((x) => (
+          <Row key={x.kind} style={{ alignItems: 'flex-start' }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, backgroundColor: PHASE[x.kind].a }} />
+            <View style={{ flex: 1 }}>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <T v="headline">{x.label}</T>
+                <T v="headline" color={colors.dim} style={type.num}>{x.time}</T>
+              </Row>
+              {!!x.cue && <T v="footnote" color={colors.dim}>{x.cue}</T>}
+            </View>
+          </Row>
+        ))}
+      </View>
+      <T v="footnote" color={colors.faint}>{p.countdown ? `${p.countdown} s countdown before each change` : 'No countdown beeps'}{['Running', 'Walking', 'Cycling'].includes(c.activity) ? ' · distance by GPS' : ''}</T>
+      {!!c.notes && <T v="callout" color={colors.dim}>{c.notes}</T>}
+      {canStart && <Button title="Start" icon="play.fill" onPress={start} />}
     </Card>
   );
 }

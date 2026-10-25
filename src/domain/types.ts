@@ -88,6 +88,8 @@ export interface Program {
   days: ProgramDay[];
   deloadEvery: number | null; // weeks
   notes: string[];
+  from?: string; // first date it plans (YYYY-MM-DD); open when missing
+  until?: string | null; // last date it plans; null or missing: ongoing
 }
 
 export interface WorkoutSet {
@@ -135,6 +137,7 @@ export interface CardioSession {
   id: string;
   date: string;
   activity: string;
+  name?: string; // from an imported plan, such as "Easy walk - 25 minutes"
   minutes: number;
   distanceKm: number | null;
   rpe: number | null;

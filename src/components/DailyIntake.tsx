@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { Platform, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 
-import { formatDose } from '../domain/supplements';
+import { doseMicros, formatDose } from '../domain/supplements';
 import { today, useStore } from '../store';
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon } from './Icon';
@@ -70,6 +70,10 @@ export function DailyIntake({ date }: { date: string }) {
                   <View style={{ flex: 1 }}>
                     <T v="headline" numberOfLines={1} color={on ? colors.dim : colors.text}>{x.name}</T>
                     <T v="footnote" color={colors.faint}>{formatDose(x)}{x.time ? ` · ${x.time}` : ''}</T>
+                    {/* What it adds to the day's nutrition, or a nudge when it adds nothing yet */}
+                    <T v="footnote" color={doseMicros(x).length ? colors.cyan : colors.amber} numberOfLines={1}>
+                      {doseMicros(x).length ? doseMicros(x).slice(0, 3).map((v) => `${v.label} ${v.amount} ${v.unit}`).join(' · ') : 'No label values · tap to add'}
+                    </T>
                   </View>
                 </Row>
               </Press>

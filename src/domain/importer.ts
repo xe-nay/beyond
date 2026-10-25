@@ -110,7 +110,7 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
       if (!plan.workSeconds) return out.errors.push(`${where}: cardio needs workSeconds.`);
       const p = entry.performed;
       const c: CardioSession = {
-        id, date: entry.date, activity: plan.activity, plan, notes: entry.notes ?? '',
+        id, date: entry.date, activity: plan.activity, plan, notes: entry.notes ?? '', ...(entry.name ? { name: String(entry.name) } : {}),
         // Without minutes, a finished session counts its planned length.
         minutes: done && +p.minutes > 0 ? +p.minutes : Math.round((plan.warmupSeconds + plan.rounds * plan.workSeconds + (plan.rounds - 1) * plan.recoverySeconds + plan.cooldownSeconds) / 60),
         distanceKm: done ? p.distanceKm ?? null : null,

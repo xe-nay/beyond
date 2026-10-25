@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Icon } from '../src/components/Icon';
-import { Chip, Divider, Press, Row, Stepper, T, Toggle } from '../src/components/ui';
+import { Button, Chip, Divider, Press, Row, Stepper, T, Toggle } from '../src/components/ui';
+import { endLive, liveStatus, startLive } from '../modules/live-activity';
 import { formatClock } from '../src/domain/intervals';
 import type { Cue } from '../src/domain/types';
 import { downloadPack, packReady, playClip, playCountdown, playVoice, prepareAudio } from '../src/sound';
@@ -15,6 +16,13 @@ export default function TimerSettings() {
   const t = s.timer;
   const [loading, setLoading] = useState<{ cue: Cue; done: number; total: number } | null>(null);
   const [failed, setFailed] = useState<Cue | null>(null);
+  const [island, setIsland] = useState(liveStatus());
+  // A 15-second countdown in the Dynamic Island, to check it works; any refusal from iOS is shown.
+  const testIsland = async () => {
+    await startLive('Beyond', { mode: 'rest', title: 'Test', subtitle: 'Dynamic Island check', symbol: 'timer', accent: '#40E0F0', endsAt: Date.now() + 15000, total: 15 });
+    setIsland(liveStatus());
+    setTimeout(() => { endLive().then(() => setIsland(liveStatus())); }, 16000);
+  };
   const muted = t.muted ?? [];
   const current = pack(t.cue);
   const kept = current.clips.filter((c) => !muted.includes(c.id));
@@ -128,6 +136,17 @@ export default function TimerSettings() {
         </View>
       )}
       {toggle('Vibration', t.haptics, 'haptics')}
+      <Divider />
+      <View style={{ gap: space.sm }}>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <T v="headline">Dynamic Island</T>
+            <T v="footnote" color={island.ok ? colors.lime : colors.amber}>{island.text}</T>
+          </View>
+          <Button small kind="secondary" title="Test" onPress={testIsland} />
+        </Row>
+        <T v="footnote" color={colors.faint}>Shows a 15-second countdown. Swipe home to see it in the island.</T>
+      </View>
       <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0 }}>
         Your music keeps playing: it lowers while a cue plays and comes back up right after. Cues play in silent mode too. If the phone is locked, a notification rings at the end.
       </T>

@@ -7,6 +7,8 @@ import { Button, Card, Empty, Press, Row, Screen, Section, T } from '../../../sr
 import { volumeLoad, working } from '../../../src/domain/calc';
 import { toDisplay } from '../../../src/domain/plates';
 import { formatClock, totalSeconds } from '../../../src/domain/intervals';
+import { dayLabel } from '../../../src/meals';
+import { importedUntil, planActive } from '../../../src/schedule';
 import { activeProgram, today, useStore } from '../../../src/store';
 import { alpha, colors, plural, radius, space } from '../../../src/theme';
 
@@ -18,11 +20,14 @@ export default function Train() {
   const program = activeProgram(s);
   const history = s.sessions.filter((x) => x.finishedAt).sort((a, b) => b.finishedAt!.localeCompare(a.finishedAt!));
   const now = today();
+  const plan = planActive(s, now) ? importedUntil(s) : null;
   // Workouts and cardio planned from today on, in date order.
   const planned = [
     ...s.sessions.filter((x) => !x.finishedAt && !x.startedAt && x.date >= now).map((x) => ({ kind: 'strength' as const, id: x.id, date: x.date, name: x.name, detail: plural(x.plan.length, 'exercise') })),
-    ...s.cardio.filter((c) => !c.completed && c.plan && c.date >= now).map((c) => ({ kind: 'cardio' as const, id: c.id, date: c.date, name: c.activity, detail: formatClock(totalSeconds(c.plan!)) + (c.plan!.rounds > 1 ? ` · ${c.plan!.rounds} rounds` : '') })),
+    ...s.cardio.filter((c) => !c.completed && c.plan && c.date >= now).map((c) => ({ kind: 'cardio' as const, id: c.id, date: c.date, name: c.name ?? c.activity, detail: formatClock(totalSeconds(c.plan!)) + (c.plan!.rounds > 1 ? ` · ${c.plan!.rounds} rounds` : '') })),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
+  // Show the whole plan while one is running, otherwise the next few.
+  const shown = plan ? planned.slice(0, 30) : planned.slice(0, 8);
   const start = (input: Parameters<typeof s.startSession>[0]) => {
     s.startSession(input);
     router.push('/workout');
@@ -37,6 +42,20 @@ export default function Train() {
         <Action icon="square.and.arrow.down" label="Import" onPress={() => router.push('/import')} />
       </Row>
 
+      {plan ? (
+        // An imported plan is running: it is the program, so the template stays out of the way.
+        <Section title="Your plan" action={<Press onPress={() => router.push('/templates')}><T v="label" color={colors.cyan}>Programs</T></Press>}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+            <View style={{ width: 44, height: 44, borderRadius: radius.md, backgroundColor: alpha(colors.lime, 0.14), alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="calendar" size={18} color={colors.lime} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <T v="headline">Planned until {dayLabel(plan)}</T>
+              <T v="label" color={colors.dim}>{plural(planned.filter((x) => x.kind === 'strength').length, 'workout')} · {plural(planned.filter((x) => x.kind === 'cardio').length, 'cardio session')} to go</T>
+            </View>
+          </Card>
+        </Section>
+      ) : (
       <Section title="Program" action={<Press onPress={() => router.push('/templates')}><T v="label" color={colors.cyan}>Change</T></Press>}>
         {program ? (
           <Card style={{ padding: 0, gap: 0 }}>
@@ -68,10 +87,11 @@ export default function Train() {
           <Card><Empty icon="dumbbell.fill" title="No program" action={<Button small title="Pick a template" onPress={() => router.push('/templates')} />} /></Card>
         )}
       </Section>
+      )}
 
       {planned.length > 0 && (
         <Section title="Planned">
-          {planned.slice(0, 8).map((x) => (
+          {shown.map((x) => (
             <Card key={x.id} onPress={() => router.push(`/day/${x.date}`)} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
               <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(x.kind === 'cardio' ? colors.lime : colors.cyan, 0.14) }}>
                 <Icon name={x.kind === 'cardio' ? 'figure.run' : 'dumbbell.fill'} size={15} color={x.kind === 'cardio' ? colors.lime : colors.cyan} />

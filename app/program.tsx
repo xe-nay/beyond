@@ -10,6 +10,7 @@ import { weekStart } from '../src/domain/calc';
 import { weekTemplate } from '../src/domain/importer';
 import { formatClock } from '../src/domain/intervals';
 import { cacheText } from '../src/storage';
+import { dayLabel } from '../src/meals';
 import { activeProgram, useStore } from '../src/store';
 import { alpha, colors, radius, space } from '../src/theme';
 
@@ -88,6 +89,10 @@ export default function ProgramEditor() {
           </Row>
         </Row>
       </Card>
+      <T v="footnote" color={colors.faint} style={{ textAlign: 'center' }}>
+        {program.from || program.until ? `Plans ${program.from ? dayLabel(program.from) : 'now'} → ${program.until ? dayLabel(program.until) : 'no end'}` : 'Plans every week, after any imported plan'}
+      </T>
+      <Button kind="lime" icon="wand.and.stars" title="Build a new program" onPress={() => router.push('/templates')} />
     </Screen>
   );
 }

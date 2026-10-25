@@ -7,7 +7,7 @@ import { useCallback, useRef, useState } from 'react';
 import { FlatList, Platform, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { importedUntil } from '../schedule';
+import { importedUntil, programCovers } from '../schedule';
 import { activeProgram, today, useStore } from '../store';
 import { alpha, colors, space, type } from '../theme';
 import { Icon } from './Icon';
@@ -83,7 +83,7 @@ export function WeekCalendar() {
     const planned = iso >= todayIso && (
       s.sessions.some((x) => !x.startedAt && x.date === iso) ||
       s.cardio.some((c) => !c.completed && c.plan && c.date === iso) ||
-      (!!program?.days.some((p) => p.weekday === wd) && (!until || iso > until))
+      (!!program?.days.some((p) => p.weekday === wd) && programCovers(s, iso, until))
     );
     const isToday = iso === todayIso;
     const first = day.getDate() === 1;

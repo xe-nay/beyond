@@ -20,6 +20,8 @@ export const clock = (d = new Date()) => `${String(d.getHours()).padStart(2, '0'
 export const isPlanned = (e: Pick<FoodEntry, 'date' | 'time'>, now = new Date()) => `${e.date}T${e.time ?? '00:00'}` > `${today(now)}T${clock(now)}`;
 export const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
+export interface Period { from: string; until: string | null }
+
 export interface Rest { endsAt: number | null; total: number; paused: number | null; exerciseId: string | null; sessionId: string | null }
 
 interface Data {
@@ -75,8 +77,10 @@ interface Actions {
   set(patch: Partial<Data>): void;
   setProfile(patch: Partial<Profile>): void;
   setTimer(patch: Partial<TimerSettings>): void;
-  useTemplate(templateId: string): void;
-  generate(): void;
+  useTemplate(templateId: string, period?: Period): void;
+  generate(period?: Period): void;
+  /** Removes workouts planned (not started) between two dates, for a new program to take over. */
+  clearPlanned(from: string, until: string | null): void;
   saveProgram(p: Program): void;
   updatePrescription(programId: string, dayId: string, index: number, patch: Partial<Prescription> | null): void;
   addToDay(programId: string, dayId: string, exerciseId: string): void;
@@ -139,16 +143,19 @@ export const useStore = create<State>((set, get) => ({
   setProfile(patch) { set((s) => ({ profile: { ...s.profile, ...patch } })); },
   setTimer(patch) { set((s) => ({ timer: { ...s.timer, ...patch } })); },
 
-  useTemplate(templateId) {
+  useTemplate(templateId, period) {
     const t = TEMPLATES.find((x) => x.id === templateId)!;
     const profile = { ...get().profile, ...t.profile };
-    const p = generateProgram(profile, byId);
+    const p = { ...generateProgram(profile, byId), ...period };
     p.name = t.name;
     set((s) => ({ programs: [p, ...s.programs], activeProgram: p.id }));
   },
-  generate() {
-    const p = generateProgram(get().profile, byId);
+  generate(period) {
+    const p = { ...generateProgram(get().profile, byId), ...period };
     set((s) => ({ programs: [p, ...s.programs], activeProgram: p.id }));
+  },
+  clearPlanned(from, until) {
+    set((s) => ({ sessions: s.sessions.filter((x) => x.startedAt || x.finishedAt || x.date < from || (until !== null && x.date > until)) }));
   },
   saveProgram(p) {
     set((s) => ({ programs: s.programs.some((x) => x.id === p.id) ? s.programs.map((x) => (x.id === p.id ? p : x)) : [p, ...s.programs] }));
@@ -299,8 +306,18 @@ export const useStore = create<State>((set, get) => ({
 useStore.subscribe((s) => s.ready && persist(s));
 
 export const activeProgram = (s: State) => s.programs.find((p) => p.id === s.activeProgram) ?? null;
+/** What a ticked supplement added; ticks saved before label values existed use the supplement's values now. */
+export const intakeNutrients = (s: Pick<Data, 'supplements'>, i: Intake) => {
+  if (i.nutrients) return i.nutrients;
+  const x = s.supplements.find((y) => y.id === i.supplementId);
+  return x ? doseNutrients(x) : null;
+};
+
 /** Everything eaten on a date: logged food plus supplements ticked as taken. */
 export const eatenOn = (s: Data, date: string) =>
-  sum([...s.entries.filter((e) => e.date === date && !isPlanned(e)).map((e) => e.nutrients), ...s.intakes.filter((i) => i.date === date && i.nutrients).map((i) => i.nutrients!)]);
+  sum([
+    ...s.entries.filter((e) => e.date === date && !isPlanned(e)).map((e) => e.nutrients),
+    ...s.intakes.filter((i) => i.date === date).map((i) => intakeNutrients(s, i)).filter((n): n is NonNullable<typeof n> => !!n),
+  ]);
 export const finished = (s: State) => s.sessions.filter((x) => x.finishedAt);
 export const latestWeight = (s: State) => [...s.body].reverse().find((b) => b.weightKg)?.weightKg ?? null;
