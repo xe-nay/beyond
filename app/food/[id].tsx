@@ -60,7 +60,7 @@ export default function FoodSheet() {
   ];
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: space.xxl }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={{ paddingBottom: space.xxl }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       {/* Product */}
       <View style={[styles.hero, !food.image && { backgroundColor: colors.surface2 }]}>
         {food.image ? <Image source={food.image} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" transition={200} /> : <Icon name="fork.knife" size={40} color={colors.dim} />}

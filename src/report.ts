@@ -1,7 +1,7 @@
 // The export: everything logged, laid out on A4 pages. One page model feeds the in-app preview, the
 // PDF (as HTML for expo-print) and a plain-text copy, so the preview shows exactly what is exported.
 import { exercise } from './catalog';
-import { personalRecords, sessionMinutes, volumeLoad, working } from './domain/calc';
+import { personalRecords, restBefore, sessionMinutes, volumeLoad, working } from './domain/calc';
 import { pace } from './domain/intervals';
 import { MICROS } from './domain/micros';
 import { sum } from './domain/nutrition';
@@ -18,7 +18,7 @@ export type Line =
 export interface Page { lines: Line[]; widths: Record<number, number[]> }
 
 const HEIGHT: Record<Line['t'], number> = { title: 4, h: 2, meta: 1, cells: 1, gap: 0.6 };
-const CAPACITY = 50; // lines on an A4 page at 10 pt
+const CAPACITY = 46; // lines per page at 10 pt, small enough for A4 or US Letter
 export const A4 = { w: 595, h: 842 };
 
 const fmtDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -63,13 +63,13 @@ export function buildReport(s: State, from: string, to: string): Page[] {
       { t: 'cells', head: true, cells: ['Exercise', 'Set', 'Weight', 'Reps', 'RIR', 'Rest'] },
     ];
     const count: Record<string, number> = {};
-    for (const set of x.sets) {
+    x.sets.forEach((set, idx) => {
       count[set.exerciseId] = (count[set.exerciseId] ?? 0) + (set.warmup ? 0 : 1);
       lines.push({
         t: 'cells', dim: set.warmup,
-        cells: [exercise(set.exerciseId)?.name ?? set.exerciseId, set.warmup ? 'W' : String(count[set.exerciseId]), `${set.implements === 2 ? '2 × ' : ''}${w(set.loadKg)}`, String(set.reps), set.rir === null ? '—' : String(set.rir), set.restSeconds ? `${Math.round(set.restSeconds)} s` : '—'],
+        cells: [exercise(set.exerciseId)?.name ?? set.exerciseId, set.warmup ? 'W' : String(count[set.exerciseId]), `${set.implements === 2 ? '2 × ' : ''}${w(set.loadKg)}`, String(set.reps), set.rir === null ? '—' : String(set.rir), restBefore(x.sets, idx) ? `${restBefore(x.sets, idx)} s` : '—'],
       });
-    }
+    });
     if (prs.length) lines.push({ t: 'meta', text: `Records: ${prs.map((p) => exercise(p.exerciseId)?.name).join(', ')}` });
     if (x.notes) lines.push({ t: 'meta', text: x.notes });
     lines.push({ t: 'gap' });
@@ -146,10 +146,13 @@ export function reportHtml(pages: Page[]) {
     return `<section class="page">${rows}<footer>Beyond · page ${i + 1} of ${pages.length}</footer></section>`;
   }).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><style>
-    @page { size: A4; margin: 0; }
+    @page { size: ${A4.w}pt ${A4.h}pt; margin: 0; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; color: #111827; font-size: 9.5pt; }
-    .page { width: ${A4.w}pt; height: ${A4.h}pt; padding: 36pt 40pt 40pt; position: relative; page-break-after: always; overflow: hidden; }
+    /* No fixed height: iOS may print on Letter (792 pt) instead of A4, and a page taller than the
+       sheet spills onto an almost blank one. Each page breaks after its content instead. */
+    .page { width: 100%; padding: 32pt 40pt 24pt; page-break-after: always; break-after: page; }
+    .page:last-child { page-break-after: auto; break-after: auto; }
     .title { font-size: 17pt; font-weight: 700; margin: 2pt 0 2pt; color: #0B1220; }
     .sub { font-size: 9pt; color: #6B7280; margin-bottom: 8pt; }
     .h { display: flex; justify-content: space-between; font-size: 11pt; font-weight: 650; margin: 8pt 0 4pt; padding-bottom: 3pt; border-bottom: 1.2pt solid #12B5C8; }
@@ -160,7 +163,7 @@ export function reportHtml(pages: Page[]) {
     .row.dim { color: #9CA3AF; }
     .meta { color: #4B5563; font-size: 8.5pt; padding: 2pt 0; }
     .gap { height: 6pt; }
-    footer { position: absolute; bottom: 18pt; left: 40pt; right: 40pt; text-align: center; font-size: 8pt; color: #9CA3AF; }
+    footer { margin-top: 14pt; text-align: center; font-size: 8pt; color: #9CA3AF; }
   </style></head><body>${body}</body></html>`;
 }
 

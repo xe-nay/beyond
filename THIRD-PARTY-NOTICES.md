@@ -6,6 +6,7 @@
 - **[free-exercise-db](https://github.com/yuhonas/free-exercise-db)**, Unlicense (public domain).
 - **Food data from [Open Food Facts](https://world.openfoodfacts.org)**, Open Database License (ODbL). Product images under their own Creative Commons licences.
 - **Basic foods** (eggs, rice, fruit, meat without a barcode) from [USDA FoodData Central](https://fdc.nal.usda.gov), SR Legacy, public domain, with their vitamins and minerals. Built by `scripts/build-basic-foods.py`.
+- **Branded products and extra foods** searched live from the [USDA FoodData Central API](https://fdc.nal.usda.gov/api-guide) (Branded, Foundation and FNDDS data), public domain (CC0). Used when Open Food Facts has no match.
 - **Supplement labels** from the [NIH Dietary Supplement Label Database](https://dsld.od.nih.gov) (Office of Dietary Supplements), US government work, public domain. Looked up on request.
 - Daily values for micronutrients: US FDA reference values for adults.
 

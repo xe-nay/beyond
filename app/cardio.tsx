@@ -5,6 +5,7 @@ import { ScrollView, TextInput, View } from 'react-native';
 import { Icon, type IconName } from '../src/components/Icon';
 import { Button, Card, Chip, Press, Row, Screen, Section, Segmented, Stepper, T } from '../src/components/ui';
 import { cardioKcal, formatClock, pace, timeline, totalSeconds } from '../src/domain/intervals';
+import { targetPace } from '../src/domain/track';
 import type { IntervalPlan } from '../src/domain/types';
 import { latestWeight, today, uid, useStore } from '../src/store';
 import { alpha, colors, radius, space } from '../src/theme';
@@ -62,10 +63,15 @@ export default function Cardio() {
               <Stepper label="Recover" value={plan.recoverySeconds} onChange={(recoverySeconds) => up({ recoverySeconds })} step={15} max={1800} format={formatClock} />
             </Row>
             <Row><Stepper label="Rounds" value={plan.rounds} onChange={(rounds) => up({ rounds })} min={1} max={50} big /></Row>
-            <Row>
-              <Cue label="Work cue" value={plan.workCue} onChange={(workCue) => up({ workCue })} placeholder="Pace, e.g. 4:30 /km" />
-              <Cue label="Recovery cue" value={plan.recoveryCue} onChange={(recoveryCue) => up({ recoveryCue })} placeholder="Easy jog" />
-            </Row>
+            <WorkTarget value={plan.workCue} onChange={(workCue) => up({ workCue })} gps={['Running', 'Walking', 'Cycling'].includes(plan.activity)} />
+            {plan.rounds > 1 && plan.recoverySeconds > 0 && (
+              <View style={{ gap: space.sm }}>
+                <T v="caption" color={colors.faint}>During recovery</T>
+                <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+                  {RECOVERY.map((r) => <Chip key={r} label={r} active={plan.recoveryCue === r} onPress={() => up({ recoveryCue: plan.recoveryCue === r ? '' : r })} />)}
+                </Row>
+              </View>
+            )}
             <View style={{ gap: space.sm }}>
               <T v="caption" color={colors.faint}>Beeps before each change</T>
               <Row gap={space.sm}>{[0, 3, 5, 10, 15].map((n) => <Chip key={n} label={n ? `${n}s` : 'Off'} active={plan.countdown === n} onPress={() => up({ countdown: n })} />)}</Row>
@@ -129,11 +135,44 @@ function ActivityPicker({ value, onChange }: { value: string; onChange: (v: stri
   );
 }
 
-function Cue({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
+const EFFORTS = ['Easy', 'Steady', 'Tempo', 'Hard', 'All out'];
+const RECOVERY = ['Walk', 'Easy jog', 'Light pace', 'Rest'];
+
+/**
+ * What work phases aim for: a pace (the voice says when you reach it) or an effort level. Saved as
+ * the work cue, so "4:30 /km" is what the pace coach reads.
+ */
+function WorkTarget({ value, onChange, gps }: { value: string; onChange: (v: string) => void; gps: boolean }) {
+  const paced = targetPace(value);
+  const mode: 'pace' | 'effort' | 'none' = paced ? 'pace' : value ? 'effort' : 'none';
+  const unit = /\/\s*mi/i.test(value) ? 'mi' : 'km';
+  const secs = paced ? Math.round(unit === 'mi' ? paced * 1.609344 : paced) : 330;
+  const setPace = (s: number, u = unit) => onChange(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} /${u}`);
   return (
-    <View style={{ flex: 1, gap: 6 }}>
-      <T v="caption" color={colors.faint}>{label}</T>
-      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={colors.faint} style={{ height: 44, borderRadius: radius.sm, backgroundColor: colors.surface2, color: colors.text, paddingHorizontal: space.md, fontSize: 15 }} />
+    <View style={{ gap: space.sm }}>
+      <T v="caption" color={colors.faint}>Work target</T>
+      <Segmented
+        options={[...(gps ? [{ value: 'pace', label: 'Pace' }] : []), { value: 'effort', label: 'Effort' }, { value: 'none', label: 'None' }]}
+        value={mode === 'pace' && !gps ? 'effort' : mode}
+        onChange={(m) => (m === 'pace' ? setPace(secs) : m === 'effort' ? onChange('Steady') : onChange(''))}
+      />
+      {mode === 'pace' && gps && (
+        <>
+          <Row>
+            <Stepper label={`Pace per ${unit}`} value={secs} onChange={(v) => setPace(v)} step={5} min={120} max={1200} format={(v) => `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`} big />
+          </Row>
+          <Row gap={space.sm}>
+            <Chip label="per km" active={unit === 'km'} onPress={() => setPace(secs, 'km')} />
+            <Chip label="per mile" active={unit === 'mi'} onPress={() => setPace(secs, 'mi')} />
+          </Row>
+          <T v="footnote" color={colors.dim}>A voice says "You're on pace" once each work phase when your GPS pace reaches it.</T>
+        </>
+      )}
+      {mode === 'effort' && (
+        <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+          {EFFORTS.map((e) => <Chip key={e} label={e} active={value === e} onPress={() => onChange(e)} />)}
+        </Row>
+      )}
     </View>
   );
 }

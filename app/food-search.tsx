@@ -6,6 +6,7 @@ import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { Icon } from '../src/components/Icon';
 import { Press, Row, T } from '../src/components/ui';
 import { basicFoods, searchBasics } from '../src/basicFoods';
+import { fdcSearch } from '../src/domain/fdc';
 import { searchFoods, SearchError } from '../src/domain/nutrition';
 import type { Food } from '../src/domain/types';
 import { useStore } from '../src/store';
@@ -31,7 +32,11 @@ export default function FoodSearch() {
       ctrl.current = new AbortController();
       setState('loading');
       try {
-        setResults(await searchFoods(query.trim(), ctrl.current.signal));
+        // Open Food Facts and USDA together; one of them failing still shows the other's results.
+        const sig = ctrl.current.signal;
+        const [off, usda] = await Promise.allSettled([searchFoods(query.trim(), sig), fdcSearch(query.trim(), sig)]);
+        if (off.status === 'rejected' && usda.status === 'rejected') throw off.reason;
+        setResults([...(off.status === 'fulfilled' ? off.value : []), ...(usda.status === 'fulfilled' ? usda.value : [])]);
         setState('idle');
       } catch (e: any) {
         if (e?.name !== 'AbortError') setState(e instanceof SearchError && e.kind === 'offline' ? 'offline' : 'down');

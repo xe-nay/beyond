@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { ActionSheetIOS, Platform, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
 import { exercise } from '../../src/catalog';
@@ -120,10 +120,12 @@ export default function Day() {
                         <T v="footnote" color={colors.dim} style={type.num}>{list.reduce((n, e) => n + e.nutrients.kcal, 0)} kcal</T>
                       </Row>
                       {list.map((e) => (
-                        <Row key={e.id} style={{ justifyContent: 'space-between' }}>
-                          <T v="callout" numberOfLines={1} style={{ flex: 1 }}>{e.name}</T>
-                          <T v="footnote" color={colors.faint} style={type.num}>{e.time ? `${e.time} · ` : ''}{Math.round(e.amount)} {e.basis} · {e.nutrients.kcal}</T>
-                        </Row>
+                        <Press key={e.id} haptic={false} onPress={() => router.push({ pathname: '/food/[id]', params: { id: e.foodId, entry: e.id } })}>
+                          <Row style={{ justifyContent: 'space-between' }}>
+                            <T v="callout" numberOfLines={1} style={{ flex: 1 }}>{e.name}</T>
+                            <T v="footnote" color={colors.faint} style={type.num}>{e.time ? `${e.time} · ` : ''}{Math.round(e.amount)} {e.basis} · {e.nutrients.kcal}</T>
+                          </Row>
+                        </Press>
                       ))}
                     </View>
                   );
@@ -144,6 +146,15 @@ export default function Day() {
             </Card>
           )}
         </>
+      )}
+      {/* Change what was logged: a workout's sets, or the day's food */}
+      {(past || isToday) && (
+        <Button kind="secondary" icon="pencil" title="Edit" onPress={() => {
+          const options = [...done.map((x) => ({ label: `Edit ${x.name}`, go: () => router.push({ pathname: '/session/[id]', params: { id: x.id, edit: '1' } }) })), { label: 'Edit food', go: () => router.navigate({ pathname: '/(tabs)/food', params: { date } }) }];
+          if (options.length === 1) return options[0].go();
+          if (Platform.OS !== 'ios') return options[0].go();
+          ActionSheetIOS.showActionSheetWithOptions({ options: [...options.map((o) => o.label), 'Cancel'], cancelButtonIndex: options.length }, (k) => k < options.length && options[k].go());
+        }} />
       )}
     </Screen>
   );

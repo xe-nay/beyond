@@ -237,3 +237,19 @@ test('records: first time, heavier, more reps above 10, nothing when matched', (
   const same = session('2026-10-25', [set(12, 45, 4, { exerciseId: 'leg-press' })]);
   assert.equal(personalRecords([s1, same], same).length, 0);
 });
+
+test('USDA branded food: macros, salt from sodium, vitamins as micronutrients', async () => {
+  const { fromFdc } = await import('./fdc.ts');
+  const f = fromFdc({
+    fdcId: 1, description: 'MULTIVITAMIN DRINK', brandOwner: 'Acme', gtinUpc: '0820213063520', dataType: 'Branded', servingSize: 250, servingSizeUnit: 'ml',
+    foodNutrients: [
+      { nutrientId: 1008, value: 40 }, { nutrientId: 1003, value: 0 }, { nutrientId: 1005, value: 10 }, { nutrientId: 1004, value: 0 },
+      { nutrientId: 1093, value: 20 }, { nutrientId: 1162, value: 24 }, { nutrientId: 1114, value: 1 },
+    ],
+  })!;
+  assert.equal(f.name, 'Multivitamin Drink');
+  assert.equal(f.basis, 'ml');
+  assert.equal(f.per100.kcal, 40);
+  assert.equal(f.per100.salt, 0.05);
+  assert.deepEqual(f.per100.micro, { sodium: 20, vitaminC: 24, vitaminD: 1 });
+});

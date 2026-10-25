@@ -88,6 +88,8 @@ interface Actions {
   logSet(sessionId: string, set: Omit<WorkoutSet, 'id' | 'completedAt' | 'restSeconds'>): WorkoutSet;
   updateSet(sessionId: string, setId: string, patch: Partial<WorkoutSet>): void;
   deleteSet(sessionId: string, setId: string): void;
+  /** Adds a set to a workout after the fact, right after the set it copies. */
+  addSet(sessionId: string, after: WorkoutSet): void;
   patchPlan(sessionId: string, index: number, patch: Partial<Prescription> | null): void;
   addPlanExercise(sessionId: string, exerciseId: string): void;
   patchSession(sessionId: string, patch: Partial<Session>): void;
@@ -206,7 +208,10 @@ export const useStore = create<State>((set, get) => ({
     const s = get();
     const session = s.sessions.find((x) => x.id === sessionId)!;
     const last = [...session.sets].reverse()[0];
-    const rest = s.rest.sessionId === sessionId && last ? Math.round((Date.now() - Date.parse(last.completedAt)) / 1000) : null;
+    // Rest is the time since the previous set, whether the timer ran out, was skipped or never
+    // started; over 30 minutes it was a break, not rest.
+    const since = last ? Math.round((Date.now() - Date.parse(last.completedAt)) / 1000) : null;
+    const rest = since !== null && since > 0 && since <= 1800 ? since : null;
     const entry: WorkoutSet = { ...input, id: uid(), completedAt: new Date().toISOString(), restSeconds: rest };
     set({ sessions: mapSession(s.sessions, sessionId, (x) => ({ ...x, sets: [...x.sets, entry] })) });
     return entry;
@@ -216,6 +221,15 @@ export const useStore = create<State>((set, get) => ({
   },
   deleteSet(sessionId, setId) {
     set((s) => ({ sessions: mapSession(s.sessions, sessionId, (x) => ({ ...x, sets: x.sets.filter((y) => y.id !== setId) })) }));
+  },
+  addSet(sessionId, after) {
+    const copy: WorkoutSet = { ...after, id: uid(), warmup: false, restSeconds: null, completedAt: new Date(Date.parse(after.completedAt) + 1000).toISOString() };
+    set((s) => ({
+      sessions: mapSession(s.sessions, sessionId, (x) => {
+        const i = x.sets.findIndex((y) => y.id === after.id);
+        return { ...x, sets: [...x.sets.slice(0, i + 1), copy, ...x.sets.slice(i + 1)] };
+      }),
+    }));
   },
   patchPlan(sessionId, index, patch) {
     set((s) => ({

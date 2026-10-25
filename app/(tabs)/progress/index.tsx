@@ -108,11 +108,14 @@ export default function Progress() {
 
       <Section title="Muscles">
         <Card style={{ alignItems: 'center' }}>
-          <SwipeBody width={inner} heat={heat} onSelect={setRegion} selected={region} />
+          <SwipeBody width={inner} heat={heat} onSelect={setRegion} selected={region} onClear={() => setRegion(null)} />
           {region ? (
             <View style={{ alignSelf: 'stretch', gap: 4 }}>
               <Row style={{ justifyContent: 'space-between' }}>
-                <T v="headline">{REGION_NAMES[region]}</T>
+                <Row gap={space.sm}>
+                  <T v="headline">{REGION_NAMES[region]}</T>
+                  <Chip label="Show all" icon="xmark" onPress={() => setRegion(null)} />
+                </Row>
                 <T v="headline" color={colors.cyan} style={type.num}>{sets[region].toFixed(1)} sets</T>
               </Row>
               <T v="label" color={colors.dim}>

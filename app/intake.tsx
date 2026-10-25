@@ -105,7 +105,7 @@ export default function IntakeSetup() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
       <T v="title">{existing ? 'Daily intake' : 'Add daily intake'}</T>
       {state !== 'idle' && (
         <Animated.View entering={FadeIn.duration(200)}>
@@ -282,7 +282,7 @@ function LabelValues({ values, energy, custom, onChange }: {
 
 const styles = StyleSheet.create({
   search: { height: 44, borderRadius: radius.md, backgroundColor: colors.surface3, paddingHorizontal: space.md },
-  value: { minWidth: 70, textAlign: 'right', color: colors.cyan, fontSize: 17, fontWeight: '600', padding: 0 },
+  value: { minWidth: 80, textAlign: 'right', color: colors.cyan, fontSize: 17, fontWeight: '600', paddingVertical: 6, paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: colors.surface3 },
   thumb: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.surface2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   name: { color: colors.text, fontSize: 22, fontWeight: '700', paddingVertical: 4 },
   line: { justifyContent: 'space-between', paddingVertical: 8 },

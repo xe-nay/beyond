@@ -34,7 +34,7 @@ export default function Export() {
     scheduleOnRN(setPage, Math.round(e.contentOffset.x / W));
   });
 
-  const pdf = async () => (await Print.printToFileAsync({ html: reportHtml(pages), width: A4.w, height: A4.h })).uri;
+  const pdf = async () => (await Print.printToFileAsync({ html: reportHtml(pages), width: A4.w, height: A4.h, margins: { left: 0, top: 0, right: 0, bottom: 0 } })).uri;
   const name = `Beyond ${from === '0000-01-01' ? 'all' : from} to ${to}.pdf`;
   const run = async (what: 'save' | 'share' | 'copy') => {
     setBusy(true);

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '../src/components/Icon';
 import { Button, Press, Row, T } from '../src/components/ui';
+import { fdcByBarcode } from '../src/domain/fdc';
 import { lookupBarcode } from '../src/domain/nutrition';
 import { useStore } from '../src/store';
 import { alpha, colors, radius, space } from '../src/theme';
@@ -67,6 +68,15 @@ export default function Scan() {
       }
       if (r.status === 'offline') offline = true;
       if (r.status === 'incomplete') name = r.name;
+    }
+    // Second source: USDA's branded products, many with full vitamin and mineral labels.
+    if (!offline) {
+      const usda = await fdcByBarcode(code).catch(() => null);
+      if (usda) {
+        saveFood({ ...usda, id: code, barcode: code });
+        if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        return open(code);
+      }
     }
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     setPhase(offline ? { kind: 'offline', code } : { kind: 'missing', code, name });

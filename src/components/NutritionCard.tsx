@@ -13,7 +13,7 @@ import type { Nutrients, NutritionTargets } from '../domain/types';
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon } from './Icon';
 import { MacroDonut, MacroLegend } from './Nutrition';
-import { PageDots, Press, Row, T } from './ui';
+import { PageDots, Press, Row, Segmented, T } from './ui';
 
 type Line = { label: string; value: number; unit: MicroUnit | 'g'; dv: number | null; limit?: boolean };
 const PAGES: { title: string; keys: string[] }[] = [
@@ -47,12 +47,15 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
   const [w, setW] = useState(0);
   const left = targets.kcal - n.kcal;
 
-  const flip = () => {
-    const to = turn.get() > 0.5 ? 0 : 1;
-    turn.set(reduced ? withTiming(to, { duration: 1 }) : withSpring(to, { duration: 650, dampingRatio: 0.8 }));
-    setBack(to === 1);
+  // The face shown is a choice, not a toggle of the animation's position, so quick taps never
+  // turn it the wrong way.
+  const show = (micros: boolean) => {
+    if (micros === back) return;
+    turn.set(reduced ? withTiming(micros ? 1 : 0, { duration: 1 }) : withSpring(micros ? 1 : 0, { duration: 650, dampingRatio: 0.8 }));
+    setBack(micros);
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
+  const flip = () => show(!back);
   // A clear vertical swipe turns the card; sideways is left to the pages on the back.
   const pan = Gesture.Pan()
     .activeOffsetY([-18, 18])
@@ -71,6 +74,8 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
   }));
 
   return (
+    <View style={{ gap: space.sm }}>
+    <Segmented options={[{ value: 'macros', label: 'Macros' }, { value: 'micros', label: 'Micros' }]} value={back ? 'micros' : 'macros'} onChange={(v) => show(v === 'micros')} />
     <GestureDetector gesture={pan}>
       <View style={{ height: H }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
         <Animated.View style={[styles.face, front]} pointerEvents={back ? 'none' : 'auto'}>
@@ -84,11 +89,9 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
               <MacroLegend n={n} targets={targets} />
             </View>
           </Press>
-          <Corner label="Micros" onPress={flip} />
         </Animated.View>
 
         <Animated.View style={[styles.face, rear]} pointerEvents={back ? 'auto' : 'none'}>
-          <Corner label="Macros" onPress={flip} />
           <ScrollView
             horizontal
             pagingEnabled
@@ -107,6 +110,7 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
         </Animated.View>
       </View>
     </GestureDetector>
+    </View>
   );
 }
 
@@ -129,14 +133,6 @@ function MicroRow({ l }: { l: Line }) {
   );
 }
 
-function Corner({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Press onPress={onPress} hitSlop={8} style={styles.corner}>
-      <Icon name="arrow.triangle.2.circlepath" size={11} color={colors.cyan} />
-      <T v="footnote" color={colors.cyan}>{label}</T>
-    </Press>
-  );
-}
 
 const styles = StyleSheet.create({
   face: {

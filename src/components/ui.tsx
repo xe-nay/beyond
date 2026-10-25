@@ -24,6 +24,7 @@ export function Screen({ children, style, padded = true }: { children: ReactNode
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={[padded && { padding: space.lg, paddingBottom: live ? 190 : 120, gap: space.lg }, style]}
       keyboardDismissMode="on-drag"
+      automaticallyAdjustKeyboardInsets
       keyboardShouldPersistTaps="handled">
       {children}
     </ScrollView>

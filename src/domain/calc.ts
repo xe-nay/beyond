@@ -263,3 +263,11 @@ export function personalRecords(sessions: Session[], session: Session): PR[] {
     return [];
   });
 }
+
+/** Rest before set i: as recorded, or worked out from the time since the previous set (up to 30 min). */
+export function restBefore(sets: WorkoutSet[], i: number) {
+  if (sets[i].restSeconds !== null && sets[i].restSeconds !== undefined) return sets[i].restSeconds;
+  if (i === 0) return null;
+  const s = (Date.parse(sets[i].completedAt) - Date.parse(sets[i - 1].completedAt)) / 1000;
+  return s > 0 && s <= 1800 ? Math.round(s) : null;
+}

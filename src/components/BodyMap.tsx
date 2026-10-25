@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import Body, { type ExtendedBodyPart, type Slug } from 'react-native-body-highlighter';
 
 import { REGION_NAMES } from '../domain/calc';
@@ -82,16 +82,20 @@ function Legend({ color, label }: { color: string; label: string }) {
 }
 
 /** Front and back as two pages: swipe sideways to turn the body around. */
-export function SwipeBody({ width, ...props }: { width: number; heat?: Partial<Record<Region, number>>; primary?: Region[]; onSelect?: (r: Region) => void; selected?: Region | null }) {
+export function SwipeBody({ width, onClear, ...props }: { width: number; heat?: Partial<Record<Region, number>>; primary?: Region[]; onSelect?: (r: Region) => void; selected?: Region | null; onClear?: () => void }) {
   const [page, setPage] = useState(0);
+  // A tap on a muscle and a tap on the space around the body arrive as one touch; the muscle wins.
+  const hit = useRef(0);
+  const select = (r: Region) => { hit.current = Date.now(); props.onSelect?.(r); };
+  const blank = () => setTimeout(() => { if (Date.now() - hit.current > 250) onClear?.(); }, 60);
   const scale = Math.min(1.25, width / 260);
   return (
     <View style={{ width, gap: space.sm }}>
       <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={32} onScroll={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}>
         {(['front', 'back'] as const).map((side) => (
-          <View key={side} style={{ width, alignItems: 'center' }}>
-            <BodyMap {...props} only={side} scale={scale} />
-          </View>
+          <Pressable key={side} onPress={blank} style={{ width, alignItems: 'center' }}>
+            <BodyMap {...props} onSelect={select} only={side} scale={scale} />
+          </Pressable>
         ))}
       </ScrollView>
       <Row style={{ justifyContent: 'center' }} gap={space.sm}>

@@ -49,7 +49,7 @@ export default function NewFood() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.md }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.md, paddingBottom: 120 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
       <T v="title">Create food</T>
       <T v="footnote" color={colors.dim}>{barcode ? `Linked to ${barcode}: scanning it next time opens this food. ` : ''}Type the values per 100 {basis} from the label.</T>
       <TextInput value={name} onChangeText={setName} placeholder="Name" placeholderTextColor={colors.faint} style={styles.input} />
@@ -84,7 +84,8 @@ export default function NewFood() {
 }
 
 const styles = StyleSheet.create({
-  input: { height: 48, borderRadius: radius.md, backgroundColor: colors.surface2, color: colors.text, paddingHorizontal: space.md, fontSize: 17 },
+  // Sized by padding, not a fixed height, so iOS keeps the text and placeholder centred.
+  input: { paddingVertical: 13, borderRadius: radius.md, backgroundColor: colors.surface2, color: colors.text, paddingHorizontal: space.md, fontSize: 17 },
   panel: { backgroundColor: colors.surface2, borderRadius: radius.lg, padding: space.lg, gap: space.md },
-  value: { minWidth: 70, height: 36, borderRadius: radius.sm, backgroundColor: colors.surface3, color: colors.text, textAlign: 'right', paddingHorizontal: 10, fontSize: 16, ...(type.num as object) },
+  value: { minWidth: 76, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.surface3, color: colors.text, textAlign: 'right', paddingHorizontal: 10, fontSize: 16, ...(type.num as object) },
 });

@@ -1,8 +1,10 @@
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { DailyIntake } from '../../../src/components/DailyIntake';
 import { Icon } from '../../../src/components/Icon';
@@ -18,6 +20,11 @@ export default function Food() {
   const reduced = useReducedMotion();
   const s = useStore();
   const [offset, setOffset] = useState(0);
+  // Opened from a day's Edit: show that day.
+  const { date: asked } = useLocalSearchParams<{ date?: string }>();
+  useEffect(() => {
+    if (asked) setOffset(Math.round((Date.parse(`${asked}T12:00:00`) - Date.parse(`${today()}T12:00:00`)) / 86400000));
+  }, [asked]);
   const d = new Date();
   d.setDate(d.getDate() + offset);
   const date = today(d);
@@ -25,12 +32,24 @@ export default function Food() {
   const total = eatenOn(s, date);
   const recent = Object.values(s.foods).sort((a, b) => Number(b.favorite) - Number(a.favorite) || b.lastUsed.localeCompare(a.lastUsed)).slice(0, 12);
 
+  // Swipe sideways anywhere on the page to change day (left: next, right: previous).
+  const go = (step: number) => setOffset((o) => Math.max(-365, Math.min(14, o + step)));
+  const swipe = Gesture.Pan()
+    .activeOffsetX([-28, 28])
+    .failOffsetY([-14, 14])
+    .onEnd((e) => {
+      if (e.translationX < -60 || e.velocityX < -600) scheduleOnRN(go, 1);
+      else if (e.translationX > 60 || e.velocityX > 600) scheduleOnRN(go, -1);
+    });
+
   return (
+    <GestureDetector gesture={swipe}>
+    <View style={{ flex: 1 }}>
     <Screen>
       {/* Day switcher */}
       <Row style={{ justifyContent: 'space-between', marginTop: -space.sm }}>
         <Press onPress={() => setOffset(offset - 1)} hitSlop={10}><Icon name="chevron.left" size={16} color={colors.dim} /></Press>
-        <T v="headline">{offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</T>
+        <Animated.View key={offset} entering={reduced ? undefined : FadeIn.duration(180)}><T v="headline">{offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</T></Animated.View>
         <Press onPress={() => setOffset(Math.min(14, offset + 1))} hitSlop={10} disabled={offset === 14}><Icon name="chevron.right" size={16} color={colors.dim} /></Press>
       </Row>
 
@@ -84,6 +103,8 @@ export default function Food() {
       })}
       <T v="caption" color={colors.faint} style={{ textAlign: 'center', textTransform: 'none' }}>Food data from Open Food Facts (ODbL)</T>
     </Screen>
+    </View>
+    </GestureDetector>
   );
 }
 
