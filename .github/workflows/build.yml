@@ -180,7 +180,7 @@ jobs:
             for EX in "$APP"/PlugIns/*.appex; do plutil -p "$EX/Info.plist" | grep -i -E "CFBundleIdentifier|NSExtensionPointIdentifier|MinimumOSVersion" || true; done
             echo "== log"
             xcrun simctl spawn "$DEVICE" log show --last 30m --style compact --info \
-              --predicate 'subsystem == "app.beyond.fitness" OR subsystem CONTAINS[c] "activitykit" OR process == "liveactivitiesd" OR process == "chronod" OR (process == "Beyond" AND messageType == error)' | tail -400
+              --predicate 'subsystem == "app.beyond.fitness" OR (process == "Beyond" AND subsystem CONTAINS[c] "activitykit") OR (process == "liveactivitiesd" AND eventMessage CONTAINS[c] "beyond")' | head -600
           } > maestro-output/live.log 2>&1 || true
 
       # Screenshots on their own, so they download in seconds; the large logs go separately.

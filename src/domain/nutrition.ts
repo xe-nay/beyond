@@ -66,7 +66,11 @@ export async function lookupBarcode(code: string, signal?: AbortSignal): Promise
 
 /** Why a search failed: no internet at all, or Open Food Facts not answering. */
 export class SearchError extends Error {
-  constructor(public kind: 'offline' | 'down') { super(kind); }
+  kind: 'offline' | 'down';
+  constructor(kind: 'offline' | 'down') {
+    super(kind);
+    this.kind = kind;
+  }
 }
 
 async function getJson(url: string, signal?: AbortSignal) {
