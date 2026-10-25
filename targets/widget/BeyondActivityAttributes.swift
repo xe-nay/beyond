@@ -3,6 +3,7 @@ import Foundation
 
 // The live session shown on the Lock Screen and in the Dynamic Island. Kept identical to the copy in
 // modules/live-activity/ios, which the app uses to start and update it.
+@available(iOS 16.1, *)
 struct BeyondActivityAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable {
     var mode: String // "lift", "rest", "cardio" or "paused"

@@ -1,8 +1,9 @@
+# The generated native projects only; native code inside modules/ is source and is committed.
 node_modules/
 .expo/
 dist/
-ios/
-android/
+/ios/
+/android/
 web-build/
 *.ipa
 *.apk

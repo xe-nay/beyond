@@ -39,7 +39,11 @@ export const endLive = () => native?.end().catch(fail) ?? Promise.resolve();
 
 /** Why the island may stay empty: not built in, turned off in Settings, or the last error from iOS. */
 export function liveStatus() {
-  if (!native) return { ok: false, text: 'Not in this build' };
+  if (!native) {
+    // Which native modules the app does see, to tell a missing registration from a broken bridge.
+    const seen = Object.keys((globalThis as any).expo?.modules ?? {});
+    return { ok: false, text: `Not in this build (app sees ${seen.length} modules${seen.length ? `: ${seen.filter((n) => /live|activ|audio|location/i.test(n)).join(', ') || seen.slice(0, 4).join(', ')}` : ''})` };
+  }
   try {
     const st = native.status();
     if (!st.supported) return { ok: false, text: 'Needs iOS 16.2 or later' };
