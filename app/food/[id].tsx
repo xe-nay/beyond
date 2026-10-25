@@ -43,8 +43,8 @@ export default function FoodSheet() {
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: space.xxl }} keyboardShouldPersistTaps="handled">
       {/* Product */}
-      <View style={styles.hero}>
-        {food.image ? <Image source={food.image} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" transition={200} /> : <Icon name="fork.knife" size={40} color={colors.faint} />}
+      <View style={[styles.hero, !food.image && { backgroundColor: colors.surface2 }]}>
+        {food.image ? <Image source={food.image} style={StyleSheet.absoluteFill} contentFit="contain" cachePolicy="disk" transition={200} /> : <Icon name="fork.knife" size={40} color={colors.dim} />}
         <Press onPress={() => s.toggleFavorite(food.id)} style={styles.fav}>
           <Icon name={food.favorite ? 'star.fill' : 'star'} size={18} color={food.favorite ? colors.amber : '#1B2233'} />
         </Press>

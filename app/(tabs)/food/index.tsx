@@ -60,8 +60,8 @@ export default function Food() {
             <View style={{ width: space.sm }} />
             {recent.map((f) => (
               <Press key={f.id} onPress={() => router.push({ pathname: '/food/[id]', params: { id: f.id, date } })} style={{ width: 104, gap: 6 }}>
-                <View style={{ width: 104, height: 104, borderRadius: radius.md, backgroundColor: '#F3F5F9', overflow: 'hidden' }}>
-                  {f.image && <Image source={f.image} style={{ flex: 1 }} contentFit="contain" cachePolicy="disk" />}
+                <View style={{ width: 104, height: 104, borderRadius: radius.md, backgroundColor: f.image ? '#F3F5F9' : colors.surface2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                  {f.image ? <Image source={f.image} style={{ width: 104, height: 104 }} contentFit="contain" cachePolicy="disk" /> : <Icon name="fork.knife" size={26} color={colors.dim} />}
                   {f.favorite && <View style={{ position: 'absolute', top: 6, right: 6 }}><Icon name="star.fill" size={12} color={colors.amber} /></View>}
                 </View>
                 <T v="label" numberOfLines={2}>{f.name}</T>

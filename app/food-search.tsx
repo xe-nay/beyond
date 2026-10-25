@@ -46,44 +46,54 @@ export default function FoodSearch() {
     router.replace({ pathname: '/food/[id]', params: { id, date: date ?? '', meal: meal ?? '' } });
   };
 
+  // The list is the sheet's root: iOS stretches a sheet's first list over the whole sheet, so the title
+  // and search field live in its sticky header instead of above it.
   return (
-    <View style={{ flex: 1, padding: space.xl, gap: space.md }}>
-      <T v="title">{barcode ? 'Find the product' : 'Search food'}</T>
-      <Row style={styles.search}>
-        <Icon name="magnifyingglass" size={16} color={colors.dim} />
-        <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Eggs, rice, chicken, a brand…" placeholderTextColor={colors.faint} style={{ flex: 1, color: colors.text, fontSize: 17 }} returnKeyType="search" />
-        {state === 'loading' && <T v="label" color={colors.dim}>…</T>}
-      </Row>
-      {state === 'error' && <T v="label" color={colors.amber}>Search needs a connection.</T>}
-      <FlatList
-        data={query.trim().length < 2
-          ? [...Object.values(s.foods).sort((a, b) => b.lastUsed.localeCompare(a.lastUsed)).slice(0, 8), ...basicFoods.filter((b) => !s.foods[b.id])]
-          : [...local, ...results.filter((r) => !local.some((l) => l.id === r.id))]}
-        keyExtractor={(x, i) => `${x.id}-${i}`}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ gap: 2, paddingBottom: space.xxl }}
-        renderItem={({ item }) => (
-          <Press onPress={() => choose(item)}>
-            <Row style={{ paddingVertical: space.sm }}>
-              <View style={styles.thumb}>{item.image ? <Image source={item.image} style={{ flex: 1 }} contentFit="contain" cachePolicy="disk" /> : <Icon name="fork.knife" size={16} color={colors.faint} />}</View>
-              <View style={{ flex: 1 }}>
-                <T v="headline" numberOfLines={1}>{item.name}</T>
-                <T v="label" color={colors.dim} numberOfLines={1}>{item.brand ?? 'Unbranded'}</T>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <T v="headline" style={type.num}>{item.per100.kcal}</T>
-                <T v="caption" color={colors.faint}>/100 {item.basis}</T>
-              </View>
-            </Row>
-          </Press>
-        )}
-        ListEmptyComponent={query.length > 1 && state === 'idle' ? <T v="label" color={colors.faint}>No matches yet.</T> : null}
-      />
-    </View>
+    <FlatList
+      style={{ flex: 1 }}
+      data={query.trim().length < 2
+        ? [...Object.values(s.foods).sort((a, b) => b.lastUsed.localeCompare(a.lastUsed)).slice(0, 8), ...basicFoods.filter((b) => !s.foods[b.id])]
+        : [...local, ...results.filter((r) => !local.some((l) => l.id === r.id))]}
+      keyExtractor={(x, i) => `${x.id}-${i}`}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      stickyHeaderIndices={[0]}
+      contentContainerStyle={{ paddingBottom: space.xxl }}
+      ListHeaderComponent={
+        <View style={styles.header}>
+          <T v="title">{barcode ? 'Find the product' : 'Search food'}</T>
+          <Row style={styles.search}>
+            <Icon name="magnifyingglass" size={16} color={colors.dim} />
+            <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Eggs, rice, chicken, a brand…" placeholderTextColor={colors.faint} style={{ flex: 1, color: colors.text, fontSize: 17 }} returnKeyType="search" />
+            {state === 'loading' && <T v="label" color={colors.dim}>…</T>}
+          </Row>
+          {state === 'error' && <T v="label" color={colors.amber}>Search needs a connection.</T>}
+        </View>
+      }
+      renderItem={({ item }) => (
+        <Press onPress={() => choose(item)} style={{ paddingHorizontal: space.xl }}>
+          <Row style={{ paddingVertical: space.sm }}>
+            <View style={[styles.thumb, !!item.image && { backgroundColor: '#F3F5F9' }]}>
+              {item.image ? <Image source={item.image} style={{ width: 48, height: 48 }} contentFit="contain" cachePolicy="disk" /> : <Icon name="fork.knife" size={18} color={colors.dim} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <T v="headline" numberOfLines={1}>{item.name}</T>
+              <T v="label" color={colors.dim} numberOfLines={1}>{item.brand ?? 'Unbranded'}</T>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <T v="headline" style={type.num}>{item.per100.kcal}</T>
+              <T v="caption" color={colors.faint}>/100 {item.basis}</T>
+            </View>
+          </Row>
+        </Press>
+      )}
+      ListEmptyComponent={query.length > 1 && state === 'idle' ? <T v="label" color={colors.faint} style={{ paddingHorizontal: space.xl }}>No matches yet.</T> : null}
+    />
   );
 }
 
 const styles = StyleSheet.create({
+  header: { padding: space.xl, paddingBottom: space.md, gap: space.md, backgroundColor: colors.surface },
   search: { height: 50, borderRadius: radius.md, backgroundColor: colors.surface2, paddingHorizontal: space.md },
-  thumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: '#F3F5F9', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  thumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: colors.surface2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
 });
