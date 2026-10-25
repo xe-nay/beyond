@@ -1,4 +1,5 @@
 // Open Food Facts lookup (free, ODbL, no key), portion math and starting targets.
+import { addMicros, microsFromOff, scaleMicros } from './micros.ts';
 import type { Food, Nutrients, NutritionTargets, Profile } from './types.ts';
 
 const UA = 'Beyond/1.0 (personal iPhone app)';
@@ -33,6 +34,7 @@ export function fromOff(p: any): Food | null {
       fiber: num(n.fiber_100g),
       salt: num(n.salt_100g),
       satFat: num(n['saturated-fat_100g']),
+      micro: microsFromOff(n),
     },
     servingSize: num(p.serving_quantity),
     servingLabel: p.serving_size ?? null,
@@ -80,11 +82,16 @@ export async function searchFoods(query: string, signal?: AbortSignal): Promise<
 export function scale(n: Nutrients, amount: number): Nutrients {
   const f = amount / 100;
   const r = (v: number | null | undefined, d = 1) => (v === null || v === undefined ? null : Math.round(v * f * 10 ** d) / 10 ** d);
-  return { kcal: Math.round(n.kcal * f), protein: r(n.protein)!, carbs: r(n.carbs)!, fat: r(n.fat)!, sugar: r(n.sugar), fiber: r(n.fiber), salt: r(n.salt, 2), satFat: r(n.satFat) };
+  return { kcal: Math.round(n.kcal * f), protein: r(n.protein)!, carbs: r(n.carbs)!, fat: r(n.fat)!, sugar: r(n.sugar), fiber: r(n.fiber), salt: r(n.salt, 2), satFat: r(n.satFat), micro: scaleMicros(n.micro, f) };
 }
 
+const add = (a: number | null | undefined, b: number | null | undefined) => (a ?? 0) + (b ?? 0);
 export const sum = (list: Nutrients[]): Nutrients =>
-  list.reduce((a, b) => ({ kcal: a.kcal + b.kcal, protein: a.protein + b.protein, carbs: a.carbs + b.carbs, fat: a.fat + b.fat }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+  list.reduce((a, b) => ({
+    kcal: a.kcal + b.kcal, protein: a.protein + b.protein, carbs: a.carbs + b.carbs, fat: a.fat + b.fat,
+    fiber: add(a.fiber, b.fiber), sugar: add(a.sugar, b.sugar), satFat: add(a.satFat, b.satFat), salt: add(a.salt, b.salt),
+    micro: addMicros(a.micro, b.micro),
+  }), { kcal: 0, protein: 0, carbs: 0, fat: 0 } as Nutrients);
 
 /** Share of energy from each macro (4/4/9 kcal per gram). */
 export function macroSplit(n: Nutrients) {
@@ -121,4 +128,11 @@ export async function lookupProduct(code: string, signal?: AbortSignal): Promise
     if (e?.name === 'AbortError') throw e;
     return { status: 'offline' };
   }
+}
+
+/** Raw products by name, for supplements read by supplementFromOff (which, unlike food, may lack energy). */
+export async function searchProducts(query: string, signal?: AbortSignal): Promise<any[]> {
+  const res = await fetch(`https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&page_size=20&fields=${FIELDS}`, { headers: { 'User-Agent': UA }, signal });
+  const body = await res.json();
+  return body.hits ?? [];
 }

@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import { exercise } from '../catalog';
-import { buzz, cancelEnd, playCountdown, playVoice, scheduleEnd, stopCue } from '../sound';
+import { buzz, cancelEnd, playCountdown, playVoice, preloadVoices, scheduleEnd, stopCue } from '../sound';
 import { useStore } from '../store';
 import { VOICE_LEAD } from '../voices';
 
@@ -27,7 +27,8 @@ export function RestEngine() {
       return;
     }
     const name = rest.exerciseId ? exercise(rest.exerciseId)?.name : null;
-    scheduleEnd(rest.endsAt, 'Rest over', name ? `Next set: ${name}` : 'Time for the next set');
+    scheduleEnd(rest.endsAt, 'Rest over', name ? `Next set: ${name}` : 'Time for the next set', cue === 'beeps' ? countdown : VOICE_LEAD, 'end');
+    preloadVoices(cue);
     const lead = cue === 'beeps' ? countdown : VOICE_LEAD;
     const tick = () => {
       const remaining = (rest.endsAt! - Date.now()) / 1000;

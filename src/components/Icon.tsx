@@ -80,6 +80,8 @@ const preview: Partial<Record<IconName, string>> = {
   'pills.fill': 'medication',
   circle: 'radio_button_unchecked',
   'calendar.badge.clock': 'event',
+  clock: 'schedule',
+  'doc.richtext': 'picture_as_pdf',
 };
 
 type Props = { name: IconName; size?: number; color?: ColorValue; weight?: SymbolWeight; style?: StyleProp<ViewStyle> };

@@ -34,6 +34,15 @@ name: First run, workout, food, progress and cardio
     visible: ".*Complete set 1.*"
     timeout: 10000
 - takeScreenshot: 06-workout
+# The live activity: lifting shows a dumbbell and the session time in the Dynamic Island
+- pressKey: Home
+- waitForAnimationToEnd
+- takeScreenshot: 06b-island-lifting
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible: ".*Complete set 1.*"
+    timeout: 10000
 - scroll
 - takeScreenshot: 07-barbell
 - tapOn: ".*Complete set 1.*"
@@ -41,6 +50,13 @@ name: First run, workout, food, progress and cardio
     text: "Allow"
     optional: true
 - takeScreenshot: 08-rest
+# Resting: the island turns into a countdown
+- pressKey: Home
+- waitForAnimationToEnd
+- takeScreenshot: 08b-island-rest
+- launchApp:
+    stopApp: false
+- waitForAnimationToEnd
 - tapOn: "Finish"
 - extendedWaitUntil:
     visible: ".*Save workout.*"

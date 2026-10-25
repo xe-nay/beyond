@@ -59,6 +59,7 @@ export interface TimerSettings {
   cue: Cue; // what plays near the end of a rest
   defaultRest?: number; // seconds, for exercises added outside a program
   muted?: string[]; // voice clips the user removed from rotation
+  pauseMusic?: boolean; // pause other audio during voice clips instead of lowering it
 }
 
 export interface Prescription {
@@ -152,6 +153,7 @@ export interface Nutrients {
   fiber?: number | null;
   salt?: number | null;
   satFat?: number | null;
+  micro?: Record<string, number>; // by micros.ts key, in that nutrient's unit
 }
 
 export interface Food {
@@ -184,6 +186,7 @@ export interface FoodEntry {
   basis: 'g' | 'ml';
   nutrients: Nutrients; // for the eaten amount, frozen at log time
   loggedAt: string;
+  time?: string; // "HH:MM" when it was eaten, or will be: a later time is a planned meal
 }
 
 export interface NutritionTargets {
@@ -228,7 +231,9 @@ export interface Supplement {
   time: string | null; // "HH:MM" daily reminder, or null for none
   per100: Nutrients | null; // per 100 g/ml when the label has it
   servingG: number | null; // grams in one capsule/tablet/scoop, from the label
-  micros: Micro[];
+  micros: Micro[]; // label values from Open Food Facts, in grams (older entries)
+  serving?: Record<string, number>; // per one capsule, tablet or scoop (or servingG grams), by micronutrient key
+  custom?: Record<string, number>; // per daily dose, typed by the user; wins over the label
   createdAt: string;
 }
 

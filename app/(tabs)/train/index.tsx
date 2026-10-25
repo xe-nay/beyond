@@ -6,7 +6,8 @@ import { Icon, type IconName } from '../../../src/components/Icon';
 import { Button, Card, Empty, Press, Row, Screen, Section, T } from '../../../src/components/ui';
 import { volumeLoad, working } from '../../../src/domain/calc';
 import { toDisplay } from '../../../src/domain/plates';
-import { activeProgram, useStore } from '../../../src/store';
+import { formatClock, totalSeconds } from '../../../src/domain/intervals';
+import { activeProgram, today, useStore } from '../../../src/store';
 import { alpha, colors, plural, radius, space } from '../../../src/theme';
 
 const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -16,7 +17,12 @@ export default function Train() {
   const s = useStore();
   const program = activeProgram(s);
   const history = s.sessions.filter((x) => x.finishedAt).sort((a, b) => b.finishedAt!.localeCompare(a.finishedAt!));
-  const planned = s.sessions.filter((x) => !x.finishedAt && !x.startedAt).sort((a, b) => a.date.localeCompare(b.date));
+  const now = today();
+  // Workouts and cardio planned from today on, in date order.
+  const planned = [
+    ...s.sessions.filter((x) => !x.finishedAt && !x.startedAt && x.date >= now).map((x) => ({ kind: 'strength' as const, id: x.id, date: x.date, name: x.name, detail: plural(x.plan.length, 'exercise') })),
+    ...s.cardio.filter((c) => !c.completed && c.plan && c.date >= now).map((c) => ({ kind: 'cardio' as const, id: c.id, date: c.date, name: c.activity, detail: formatClock(totalSeconds(c.plan!)) + (c.plan!.rounds > 1 ? ` · ${c.plan!.rounds} rounds` : '') })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
   const start = (input: Parameters<typeof s.startSession>[0]) => {
     s.startSession(input);
     router.push('/workout');
@@ -65,13 +71,18 @@ export default function Train() {
 
       {planned.length > 0 && (
         <Section title="Planned">
-          {planned.slice(0, 6).map((x) => (
-            <Card key={x.id} onPress={() => start({ sessionId: x.id })} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ flex: 1 }}>
-                <T v="headline">{x.name}</T>
-                <T v="label" color={colors.dim}>{new Date(`${x.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · {x.plan.length} exercises</T>
+          {planned.slice(0, 8).map((x) => (
+            <Card key={x.id} onPress={() => router.push(`/day/${x.date}`)} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(x.kind === 'cardio' ? colors.lime : colors.cyan, 0.14) }}>
+                <Icon name={x.kind === 'cardio' ? 'figure.run' : 'dumbbell.fill'} size={15} color={x.kind === 'cardio' ? colors.lime : colors.cyan} />
               </View>
-              <Icon name="play.fill" size={14} color={colors.cyan} />
+              <View style={{ flex: 1 }}>
+                <T v="headline" numberOfLines={1}>{x.name}</T>
+                <T v="label" color={colors.dim}>{x.date === now ? 'Today' : new Date(`${x.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · {x.detail}</T>
+              </View>
+              {x.date === now && x.kind === 'strength' ? (
+                <Press onPress={() => start({ sessionId: x.id })} hitSlop={8}><Icon name="play.fill" size={16} color={colors.cyan} /></Press>
+              ) : <Icon name="chevron.right" size={14} color={colors.faint} />}
             </Card>
           ))}
         </Section>

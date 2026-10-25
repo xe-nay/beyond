@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RestEngine } from '../src/components/RestEngine';
 import '../src/gps'; // registers the background location task before iOS delivers updates
 import '../src/reminders'; // plans daily intake reminders and handles their buttons
+import '../src/live'; // the Lock Screen and Dynamic Island view of a live session
 import { screenOptions, sheet } from '../src/nav';
 import { prepareAudio } from '../src/sound';
 import { useStore } from '../src/store';
@@ -75,6 +76,7 @@ export default function RootLayout() {
           <Stack.Screen name="timer-settings" options={{ ...sheet, sheetAllowedDetents: [0.6] }} />
           <Stack.Screen name="intake" options={{ ...sheet, sheetAllowedDetents: [0.92] }} />
           <Stack.Screen name="day/[date]" options={{ title: '' }} />
+          <Stack.Screen name="export" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
         <Gate />
         <RestEngine />

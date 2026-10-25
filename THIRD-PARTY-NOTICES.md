@@ -5,7 +5,9 @@
 - **Exercise data by [RepDB](https://repdb.co)** (free tier). Used in the app with this attribution; the dataset is downloaded at build time and is not redistributed in this repository.
 - **[free-exercise-db](https://github.com/yuhonas/free-exercise-db)**, Unlicense (public domain).
 - **Food data from [Open Food Facts](https://world.openfoodfacts.org)**, Open Database License (ODbL). Product images under their own Creative Commons licences.
-- **Basic foods** (eggs, rice, fruit, meat without a barcode) from [USDA FoodData Central](https://fdc.nal.usda.gov), SR Legacy, public domain. Built by `scripts/build-basic-foods.py`.
+- **Basic foods** (eggs, rice, fruit, meat without a barcode) from [USDA FoodData Central](https://fdc.nal.usda.gov), SR Legacy, public domain, with their vitamins and minerals. Built by `scripts/build-basic-foods.py`.
+- **Supplement labels** from the [NIH Dietary Supplement Label Database](https://dsld.od.nih.gov) (Office of Dietary Supplements), US government work, public domain. Looked up on request.
+- Daily values for micronutrients: US FDA reference values for adults.
 
 ## Audio
 

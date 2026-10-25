@@ -6,11 +6,11 @@ import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-nati
 
 import { DailyIntake } from '../../../src/components/DailyIntake';
 import { Icon } from '../../../src/components/Icon';
-import { MacroDonut, MacroLegend } from '../../../src/components/Nutrition';
+import { NutritionCard } from '../../../src/components/NutritionCard';
 import { Card, Press, Row, Screen, Section, T } from '../../../src/components/ui';
 import type { FoodEntry } from '../../../src/domain/types';
 import { MEALS } from '../../../src/meals';
-import { eatenOn, today, useStore } from '../../../src/store';
+import { eatenOn, isPlanned, today, useStore } from '../../../src/store';
 import { alpha, colors, radius, space, type } from '../../../src/theme';
 
 export default function Food() {
@@ -23,7 +23,6 @@ export default function Food() {
   const date = today(d);
   const entries = s.entries.filter((e) => e.date === date);
   const total = eatenOn(s, date);
-  const left = s.targets.kcal - total.kcal;
   const recent = Object.values(s.foods).sort((a, b) => Number(b.favorite) - Number(a.favorite) || b.lastUsed.localeCompare(a.lastUsed)).slice(0, 12);
 
   return (
@@ -31,22 +30,13 @@ export default function Food() {
       {/* Day switcher */}
       <Row style={{ justifyContent: 'space-between', marginTop: -space.sm }}>
         <Press onPress={() => setOffset(offset - 1)} hitSlop={10}><Icon name="chevron.left" size={16} color={colors.dim} /></Press>
-        <T v="headline">{offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</T>
-        <Press onPress={() => setOffset(Math.min(0, offset + 1))} hitSlop={10} disabled={offset === 0}><Icon name="chevron.right" size={16} color={colors.dim} /></Press>
+        <T v="headline">{offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</T>
+        <Press onPress={() => setOffset(Math.min(14, offset + 1))} hitSlop={10} disabled={offset === 14}><Icon name="chevron.right" size={16} color={colors.dim} /></Press>
       </Row>
 
       <DailyIntake date={date} />
 
-      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.xl }} onPress={() => router.push('/targets')}>
-        <MacroDonut n={total} size={136} label={`of ${s.targets.kcal}`} />
-        <View style={{ flex: 1, gap: space.md }}>
-          <View>
-            <T v="caption" color={colors.faint}>{left >= 0 ? 'Remaining' : 'Over'}</T>
-            <T v="title" color={left >= 0 ? colors.lime : colors.amber} style={type.num}>{Math.abs(left)} kcal</T>
-          </View>
-          <MacroLegend n={total} targets={s.targets} />
-        </View>
-      </Card>
+      <NutritionCard n={total} targets={s.targets} onPress={() => router.push('/targets')} />
 
       {/* The one action: scan */}
       <Press onPress={() => router.push({ pathname: '/scan', params: { date } })} style={{ height: 76, borderRadius: radius.xl, backgroundColor: colors.cyan, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.md }}>
@@ -73,8 +63,8 @@ export default function Food() {
       )}
 
       {MEALS.map((m) => {
-        const list = entries.filter((e) => e.meal === m.value);
-        const kcal = list.reduce((n, e) => n + e.nutrients.kcal, 0);
+        const list = entries.filter((e) => e.meal === m.value).sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
+        const kcal = list.filter((e) => !isPlanned(e)).reduce((n, e) => n + e.nutrients.kcal, 0);
         return (
           <Section key={m.value} title={m.label} action={<T v="label" color={colors.dim} style={type.num}>{kcal ? `${kcal} kcal` : ''}</T>}>
             <Card style={{ padding: list.length ? space.sm : space.md, gap: 0 }}>
@@ -98,15 +88,16 @@ export default function Food() {
 }
 
 function EntryRow({ e, onPress }: { e: FoodEntry; onPress: () => void }) {
+  const planned = isPlanned(e);
   return (
-    <Press onPress={onPress} haptic={false}>
+    <Press onPress={onPress} haptic={false} style={planned ? { opacity: 0.6 } : undefined}>
       <Row style={{ padding: space.sm }}>
         <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: '#F3F5F9', overflow: 'hidden' }}>
           {e.image ? <Image source={e.image} style={{ flex: 1 }} contentFit="contain" cachePolicy="disk" /> : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.cyan, 0.15) }}><Icon name="fork.knife" size={16} color={colors.cyan} /></View>}
         </View>
         <View style={{ flex: 1 }}>
           <T v="headline" numberOfLines={1}>{e.name}</T>
-          <T v="label" color={colors.dim} numberOfLines={1}>{[e.brand, `${Math.round(e.amount)} ${e.basis}`].filter(Boolean).join(' · ')}</T>
+          <T v="label" color={planned ? colors.amber : colors.dim} numberOfLines={1}>{[planned ? `Planned ${e.time}` : e.time, e.brand, `${Math.round(e.amount)} ${e.basis}`].filter(Boolean).join(' · ')}</T>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <T v="headline" style={type.num}>{e.nutrients.kcal}</T>

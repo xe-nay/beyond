@@ -106,6 +106,14 @@ WANT = [
 ]
 
 NUTR = {'1008': 'kcal', '1003': 'protein', '1004': 'fat', '1005': 'carbs', '1079': 'fiber', '2000': 'sugar', '1258': 'satFat', '1093': 'sodium'}
+# Micronutrients by the app's keys (src/domain/micros.ts), in USDA's own units (mg, ug, g); ids are summed.
+MICRO = {
+    'sodium': ['1093'], 'potassium': ['1092'], 'calcium': ['1087'], 'magnesium': ['1090'], 'iron': ['1089'], 'zinc': ['1095'],
+    'phosphorus': ['1091'], 'selenium': ['1103'], 'vitaminA': ['1106'], 'vitaminC': ['1162'], 'vitaminD': ['1114'],
+    'vitaminE': ['1109'], 'vitaminK': ['1185'], 'b1': ['1165'], 'b2': ['1166'], 'b3': ['1167'], 'b6': ['1175'],
+    'folate': ['1190'], 'b12': ['1178'], 'cholesterol': ['1253'], 'omega3': ['1404', '1278', '1272'], 'caffeine': ['1057'],
+}
+MICRO_IDS = {i: k for k, ids in MICRO.items() for i in ids}
 picked = {}
 for name, rx, serving, label in WANT:
     hit = next((fid for fid, d in foods.items() if re.search(rx, d)), None)
@@ -115,9 +123,15 @@ for name, rx, serving, label in WANT:
     picked[hit] = (name, serving, label)
 
 values = {fid: {} for fid in picked}
+micros = {fid: {} for fid in picked}
 for r in csv.DictReader(open(B + 'food_nutrient.csv', encoding='utf-8')):
-    if r['fdc_id'] in values and r['nutrient_id'] in NUTR:
+    if r['fdc_id'] not in values:
+        continue
+    if r['nutrient_id'] in NUTR:
         values[r['fdc_id']][NUTR[r['nutrient_id']]] = float(r['amount'])
+    if r['nutrient_id'] in MICRO_IDS and float(r['amount']) > 0:
+        k = MICRO_IDS[r['nutrient_id']]
+        micros[r['fdc_id']][k] = micros[r['fdc_id']].get(k, 0) + float(r['amount'])
 
 out = []
 for fid, (name, serving, label) in picked.items():
@@ -130,7 +144,8 @@ for fid, (name, serving, label) in picked.items():
         'id': f'usda-{fid}', 'name': name, 'source': foods[fid],
         'per100': {'kcal': round(v['kcal']), 'protein': r1('protein') or 0, 'carbs': r1('carbs') or 0, 'fat': r1('fat') or 0,
                    'sugar': r1('sugar'), 'fiber': r1('fiber'), 'satFat': r1('satFat'),
-                   'salt': round(v['sodium'] * 2.5 / 1000, 2) if 'sodium' in v else None},
+                   'salt': round(v['sodium'] * 2.5 / 1000, 2) if 'sodium' in v else None,
+                   'micro': {k: round(x, 3) for k, x in micros[fid].items()}},
         'serving': serving, 'servingLabel': label,
     })
 out.sort(key=lambda x: x['name'])

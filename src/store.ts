@@ -14,6 +14,10 @@ export const today = (d = new Date()) => {
   const x = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return x.toISOString().slice(0, 10);
 };
+/** Local time as "HH:MM". */
+export const clock = (d = new Date()) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+/** A food entry set later than now is a planned meal: shown, reminded, not yet counted. */
+export const isPlanned = (e: Pick<FoodEntry, 'date' | 'time'>, now = new Date()) => `${e.date}T${e.time ?? '00:00'}` > `${today(now)}T${clock(now)}`;
 export const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 export interface Rest { endsAt: number | null; total: number; paused: number | null; exerciseId: string | null; sessionId: string | null }
@@ -92,7 +96,7 @@ interface Actions {
   stopRest(): void;
   saveFood(food: Food): void;
   toggleFavorite(id: string): void;
-  logFood(food: Food, amount: number, meal: Meal, date: string, nutrients: FoodEntry['nutrients']): void;
+  logFood(food: Food, amount: number, meal: Meal, date: string, nutrients: FoodEntry['nutrients'], time?: string): void;
   deleteEntry(id: string): void;
   saveSupplement(x: Supplement): void;
   deleteSupplement(id: string): void;
@@ -251,13 +255,20 @@ export const useStore = create<State>((set, get) => ({
 
   saveFood(food) { set((s) => ({ foods: { ...s.foods, [food.id]: { ...s.foods[food.id], ...food, favorite: s.foods[food.id]?.favorite ?? food.favorite } } })); },
   toggleFavorite(id) { set((s) => (s.foods[id] ? { foods: { ...s.foods, [id]: { ...s.foods[id], favorite: !s.foods[id].favorite } } } : {})); },
-  logFood(food, amount, meal, date, nutrients) {
+  logFood(food, amount, meal, date, nutrients, time = clock()) {
     get().saveFood({ ...food, lastUsed: new Date().toISOString() });
-    const entry: FoodEntry = { id: uid(), date, meal, foodId: food.id, name: food.name, brand: food.brand, image: food.image, amount, basis: food.basis, nutrients, loggedAt: new Date().toISOString() };
+    const entry: FoodEntry = { id: uid(), date, meal, foodId: food.id, name: food.name, brand: food.brand, image: food.image, amount, basis: food.basis, nutrients, loggedAt: new Date().toISOString(), time };
     set((s) => ({ entries: [...s.entries, entry] }));
   },
   deleteEntry(id) { set((s) => ({ entries: s.entries.filter((e) => e.id !== id) })); },
-  saveSupplement(x) { set((s) => ({ supplements: [...s.supplements.filter((y) => y.id !== x.id), x] })); },
+  saveSupplement(x) {
+    // Today's and later ticks take the new dose and label values; earlier days keep what was recorded.
+    const from = today();
+    set((s) => ({
+      supplements: [...s.supplements.filter((y) => y.id !== x.id), x],
+      intakes: s.intakes.map((i) => (i.supplementId === x.id && i.date >= from ? { ...i, name: x.name, dose: formatDose(x), nutrients: doseNutrients(x) } : i)),
+    }));
+  },
   deleteSupplement(id) { set((s) => ({ supplements: s.supplements.filter((y) => y.id !== id), intakes: s.intakes.filter((i) => i.supplementId !== id || i.date < today()) })); },
   toggleIntake(supplementId, date) {
     const s = get();
@@ -290,6 +301,6 @@ useStore.subscribe((s) => s.ready && persist(s));
 export const activeProgram = (s: State) => s.programs.find((p) => p.id === s.activeProgram) ?? null;
 /** Everything eaten on a date: logged food plus supplements ticked as taken. */
 export const eatenOn = (s: Data, date: string) =>
-  sum([...s.entries.filter((e) => e.date === date).map((e) => e.nutrients), ...s.intakes.filter((i) => i.date === date && i.nutrients).map((i) => i.nutrients!)]);
+  sum([...s.entries.filter((e) => e.date === date && !isPlanned(e)).map((e) => e.nutrients), ...s.intakes.filter((i) => i.date === date && i.nutrients).map((i) => i.nutrients!)]);
 export const finished = (s: State) => s.sessions.filter((x) => x.finishedAt);
 export const latestWeight = (s: State) => [...s.body].reverse().find((b) => b.weightKg)?.weightKg ?? null;

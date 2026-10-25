@@ -172,7 +172,7 @@ export function strengthTrend(sessions: Session[], exerciseId: string) {
     .filter((s) => s.finishedAt)
     .sort((a, b) => a.finishedAt!.localeCompare(b.finishedAt!))
     .flatMap((s) => {
-      const v = working(s.sets).filter((x) => x.exerciseId === exerciseId).map((x) => e1rm(totalLoad(x), x.reps)).filter((x): x is number => x !== null);
+      const v = working(s.sets).filter((x) => x.exerciseId === exerciseId).map((x) => strength(totalLoad(x), x.reps)).filter((x) => x > 0);
       return v.length ? [{ date: s.date, value: Math.max(...v) }] : [];
     });
 }
@@ -219,12 +219,47 @@ export function progression(sessions: Session[], p: Prescription, stepKg = 2.5):
   return { kind: 'reps', title: `Stay at ${load} kg, add reps`, basis: `Aim for ${p.maxReps} reps on every set before adding load.`, nextKg: load };
 }
 
-/** Personal records set by a session, compared with everything before it. */
-export function personalRecords(sessions: Session[], session: Session) {
-  const prior = sessions.filter((s) => s.id !== session.id && s.finishedAt && s.date <= session.date);
+export type PRKind = 'first' | 'weight' | 'e1rm' | 'reps' | 'volume';
+export interface PR { exerciseId: string; kind: PRKind; value: number; previous: number | null; reps: number; loadKg: number }
+
+/** Epley for comparing sets, accepted up to 15 reps (records only; e1rm() stays strict at 10). */
+export const strength = (load: number, reps: number) => (load > 0 && reps >= 1 && reps <= 15 ? (reps === 1 ? load : load * (1 + reps / 30)) : 0);
+
+/**
+ * Records a session sets, against every finished session before it (earlier dates, or earlier the same
+ * day). Each exercise gets at most one record, the strongest kind it earned:
+ * - first: the exercise was never logged before (a baseline)
+ * - weight: heavier than any earlier set
+ * - e1rm: a better estimated max (Epley, up to 15 reps)
+ * - reps: more reps than ever at this weight or heavier
+ * - volume: the best single set, weight x reps
+ * Dumbbell weights count both bells; warm-ups are ignored.
+ */
+export function personalRecords(sessions: Session[], session: Session): PR[] {
+  const end = session.finishedAt ?? '9999';
+  const prior = sessions.filter((s) => s.id !== session.id && s.finishedAt && (s.date < session.date || (s.date === session.date && s.finishedAt < end)));
   return groupByExercise(working(session.sets)).flatMap(({ exerciseId, sets }) => {
-    const best = Math.max(...sets.map((x) => e1rm(totalLoad(x), x.reps) ?? 0));
-    const before = bestSet(prior, exerciseId);
-    return best > 0 && before && best > before.e1rm + 0.01 ? [{ exerciseId, e1rm: best, previous: before.e1rm }] : [];
+    const done = sets.filter((x) => x.reps > 0);
+    if (!done.length) return [];
+    const before = prior.flatMap((s) => working(s.sets).filter((x) => x.exerciseId === exerciseId && x.reps > 0));
+    const top = done.reduce((a, b) => (totalLoad(b) > totalLoad(a) || (totalLoad(b) === totalLoad(a) && b.reps > a.reps) ? b : a));
+    const pr = (kind: PRKind, value: number, previous: number | null, x = top): PR[] => [{ exerciseId, kind, value, previous, reps: x.reps, loadKg: totalLoad(x) }];
+    if (!before.length) return pr('first', totalLoad(top), null);
+
+    const heaviest = Math.max(...before.map(totalLoad));
+    if (totalLoad(top) > heaviest + 0.01) return pr('weight', totalLoad(top), heaviest);
+
+    const bestE = Math.max(...before.map((x) => strength(totalLoad(x), x.reps)));
+    const e = done.reduce((a, b) => (strength(totalLoad(b), b.reps) > strength(totalLoad(a), a.reps) ? b : a));
+    if (strength(totalLoad(e), e.reps) > bestE + 0.01) return pr('e1rm', strength(totalLoad(e), e.reps), bestE || null, e);
+
+    for (const x of done) {
+      const most = Math.max(0, ...before.filter((y) => totalLoad(y) >= totalLoad(x) - 0.01).map((y) => y.reps));
+      if (x.reps > most) return pr('reps', x.reps, most || null, x);
+    }
+    const bestV = Math.max(...before.map((x) => totalLoad(x) * x.reps));
+    const v = done.reduce((a, b) => (totalLoad(b) * b.reps > totalLoad(a) * a.reps ? b : a));
+    if (totalLoad(v) * v.reps > bestV + 0.01) return pr('volume', totalLoad(v) * v.reps, bestV, v);
+    return [];
   });
 }

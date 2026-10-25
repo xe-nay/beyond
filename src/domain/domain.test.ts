@@ -213,9 +213,11 @@ test('supplements: label values, dose maths and reminders skip ticked days', asy
   const p = supplementFromOff({ code: '123', product_name: 'Multi', brands: 'Acme', nutriments: { 'vitamin-c_serving': 0.08, 'vitamin-c_unit': 'mg', 'vitamin-d_100g': 0.0005 }, serving_quantity: 1 })!;
   const multi = { ...p, id: 'm', dose: 1, unit: 'tablet' as const, time: '08:00', createdAt: '2026-01-01T00:00:00Z' };
   assert.equal(formatDose(multi), '1 tablet');
-  assert.deepEqual(doseMicros(multi), [{ label: 'Vitamin D', amount: 5, unit: 'µg' }, { label: 'Vitamin C', amount: 80, unit: 'mg' }]);
-  assert.equal(doseNutrients(multi), null);
-  const whey = { ...multi, id: 'w', name: 'Whey', unit: 'g' as const, dose: 30, per100: { kcal: 400, protein: 80, carbs: 6, fat: 6 }, micros: [], time: '08:00' };
+  assert.deepEqual(doseMicros(multi), [{ key: 'vitaminC', label: 'Vitamin C', amount: 80, unit: 'mg' }, { key: 'vitaminD', label: 'Vitamin D', amount: 5, unit: 'µg' }]);
+  assert.deepEqual(doseNutrients(multi)?.micro, { vitaminC: 80, vitaminD: 5 }); // vitamins count even with no energy
+  const creatine = { ...multi, id: 'c', name: 'Creatine Monohydrate', unit: 'g' as const, dose: 3, per100: null, serving: undefined, micros: [] };
+  assert.deepEqual(doseNutrients(creatine)?.micro, { creatine: 3 }); // a creatine powder counts its own grams
+  const whey = { ...multi, id: 'w', name: 'Whey', unit: 'g' as const, dose: 30, per100: { kcal: 400, protein: 80, carbs: 6, fat: 6 }, micros: [], serving: undefined, time: '08:00' };
   assert.deepEqual(doseNutrients(whey), { kcal: 120, protein: 24, carbs: 1.8, fat: 1.8 });
   const now = new Date(2026, 0, 10, 9, 0);
   const plan = reminderPlan([multi, whey], [], now, 3);
@@ -223,4 +225,15 @@ test('supplements: label values, dose maths and reminders skip ticked days', asy
   assert.match(plan[0].body, /Multi · 1 tablet\nWhey · 30 g/);
   const ticked = [{ id: 'i', date: '2026-01-11', supplementId: 'm', name: 'Multi', dose: '1 tablet', takenAt: '', nutrients: null }];
   assert.doesNotMatch(reminderPlan([multi, whey], ticked, now, 3)[0].body, /Multi/);
+});
+
+test('records: first time, heavier, more reps above 10, nothing when matched', () => {
+  const s1 = session('2026-10-21', [set(12, 35, 4, { exerciseId: 'leg-press' }), set(12, 45, 4, { exerciseId: 'leg-press' })]);
+  assert.deepEqual(personalRecords([s1], s1).map((p) => p.kind), ['first']);
+  const heavier = session('2026-10-25', [set(12, 50, 4, { exerciseId: 'leg-press' })]);
+  assert.deepEqual(personalRecords([s1, heavier], heavier).map((p) => [p.kind, p.value]), [['weight', 50]]);
+  const moreReps = session('2026-10-25', [set(15, 45, 3, { exerciseId: 'leg-press' })]);
+  assert.deepEqual(personalRecords([s1, moreReps], moreReps).map((p) => p.kind), ['e1rm']);
+  const same = session('2026-10-25', [set(12, 45, 4, { exerciseId: 'leg-press' })]);
+  assert.equal(personalRecords([s1, same], same).length, 0);
 });

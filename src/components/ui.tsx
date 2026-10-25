@@ -4,6 +4,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp
 import Animated, { cubicBezier, Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withSpring, withTiming, useReducedMotion } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
+import { useStore } from '../store';
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon, type IconName } from './Icon';
 
@@ -15,11 +16,13 @@ export const tap = () => Platform.OS !== 'web' && Haptics.selectionAsync().catch
 export const thud = () => Platform.OS !== 'web' && Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
 export function Screen({ children, style, padded = true }: { children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean }) {
+  // Room for the tab bar, and for the live session dock above it while a session is open.
+  const live = useStore((s) => !!s.cardioRun || s.sessions.some((x) => x.id === s.activeSession && !x.finishedAt));
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.black }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={[padded && { padding: space.lg, paddingBottom: 120, gap: space.lg }, style]}
+      contentContainerStyle={[padded && { padding: space.lg, paddingBottom: live ? 190 : 120, gap: space.lg }, style]}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled">
       {children}
@@ -253,3 +256,20 @@ export const styles = StyleSheet.create({
   emptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.cyanSoft, alignItems: 'center', justifyContent: 'center' },
   step: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface3, alignItems: 'center', justifyContent: 'center' },
 });
+
+/** Page dots: the current page's dot stretches into a pill. */
+export function PageDots({ count, index, color = colors.text }: { count: number; index: number; color?: string }) {
+  return (
+    <Row gap={6} style={{ justifyContent: 'center' }}>
+      {Array.from({ length: count }, (_, i) => (
+        <View
+          key={i}
+          style={[{
+            height: 6, borderRadius: 3, width: i === index ? 18 : 6, backgroundColor: i === index ? color : alpha(color, 0.25),
+            transitionProperty: ['width', 'backgroundColor'], transitionDuration: 260, transitionTimingFunction: UI_EASE,
+          } as any]}
+        />
+      ))}
+    </Row>
+  );
+}

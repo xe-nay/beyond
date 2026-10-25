@@ -1,19 +1,19 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import Body, { type ExtendedBodyPart, type Slug } from 'react-native-body-highlighter';
 
 import { REGION_NAMES } from '../domain/calc';
 import type { Region } from '../domain/types';
 import { alpha, colors, space } from '../theme';
-import { Row, Segmented, T } from './ui';
+import { PageDots, Row, Segmented, T } from './ui';
 
 const SKIN: Slug[] = ['head', 'hair', 'hands', 'feet', 'ankles', 'knees'];
 const ALL: Slug[] = [...SKIN, 'abs', 'adductors', 'biceps', 'calves', 'chest', 'deltoids', 'forearm', 'gluteal', 'hamstring', 'lower-back', 'neck', 'obliques', 'quadriceps', 'tibialis', 'trapezius', 'triceps', 'upper-back'];
 const BACK: Region[] =['trapezius', 'upper-back', 'lower-back', 'gluteal', 'hamstring', 'triceps', 'calves'];
 
 /** Front/back muscle map. Either primary/secondary targets, or a heat value per region (0–1). */
-export function BodyMap({ primary = [], secondary = [], heat, onSelect, selected, scale = 0.9, toggle = true, showBoth = false }: {
-  primary?: Region[]; secondary?: Region[]; heat?: Partial<Record<Region, number>>; onSelect?: (r: Region) => void; selected?: Region | null; scale?: number; toggle?: boolean; showBoth?: boolean;
+export function BodyMap({ primary = [], secondary = [], heat, onSelect, selected, scale = 0.9, toggle = true, showBoth = false, only }: {
+  primary?: Region[]; secondary?: Region[]; heat?: Partial<Record<Region, number>>; onSelect?: (r: Region) => void; selected?: Region | null; scale?: number; toggle?: boolean; showBoth?: boolean; only?: 'front' | 'back';
 }) {
   const prefersBack = [...primary].some((r) => BACK.includes(r)) && !primary.some((r) => !BACK.includes(r));
   const [side, setSide] = useState<'front' | 'back'>(prefersBack ? 'back' : 'front');
@@ -50,6 +50,8 @@ export function BodyMap({ primary = [], secondary = [], heat, onSelect, selected
     />
   );
 
+  if (only) return body(only);
+
   return (
     <View style={{ alignItems: 'center', gap: space.md }}>
       {showBoth ? (
@@ -76,5 +78,26 @@ function Legend({ color, label }: { color: string; label: string }) {
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
       <T v="label" color={colors.dim}>{label}</T>
     </Row>
+  );
+}
+
+/** Front and back as two pages: swipe sideways to turn the body around. */
+export function SwipeBody({ width, ...props }: { width: number; heat?: Partial<Record<Region, number>>; primary?: Region[]; onSelect?: (r: Region) => void; selected?: Region | null }) {
+  const [page, setPage] = useState(0);
+  const scale = Math.min(1.25, width / 260);
+  return (
+    <View style={{ width, gap: space.sm }}>
+      <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={32} onScroll={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}>
+        {(['front', 'back'] as const).map((side) => (
+          <View key={side} style={{ width, alignItems: 'center' }}>
+            <BodyMap {...props} only={side} scale={scale} />
+          </View>
+        ))}
+      </ScrollView>
+      <Row style={{ justifyContent: 'center' }} gap={space.sm}>
+        <T v="footnote" color={colors.faint}>{page ? 'Back' : 'Front'}</T>
+        <PageDots count={2} index={page} color={colors.cyan} />
+      </Row>
+    </View>
   );
 }

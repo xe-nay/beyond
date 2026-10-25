@@ -5,7 +5,7 @@ import type { Food } from './domain/types';
 
 interface Basic { id: string; name: string; per100: Food['per100']; serving: number | null; servingLabel: string | null }
 
-export const basicFoods: Food[] = (raw as Basic[]).map((b) => ({
+export const basicFoods: Food[] = (raw as unknown as Basic[]).map((b) => ({
   id: b.id,
   barcode: null,
   name: b.name,

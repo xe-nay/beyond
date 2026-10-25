@@ -22,7 +22,10 @@
         "CADisableMinimumFrameDurationOnPhone": true,
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Beyond measures the distance of your runs, walks and rides. Locations stay on this iPhone.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Beyond measures the distance of your runs, walks and rides. Locations stay on this iPhone. Always lets it keep counting while the phone is locked."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Beyond measures the distance of your runs, walks and rides. Locations stay on this iPhone. Always lets it keep counting while the phone is locked.",
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "NSSupportsLiveActivities": true
       }
     },
     "web": {
@@ -64,7 +67,9 @@
           "imageWidth": 140,
           "backgroundColor": "#000000"
         }
-      ]
+      ],
+      "expo-asset",
+      "@bacons/apple-targets"
     ],
     "android": {
       "package": "app.beyond.fitness",

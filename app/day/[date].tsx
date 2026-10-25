@@ -15,7 +15,8 @@ import { cardioKcal, formatClock, pace, totalSeconds } from '../../src/domain/in
 import { formatWeight } from '../../src/domain/plates';
 import type { CardioSession, Prescription } from '../../src/domain/types';
 import { MEALS } from '../../src/meals';
-import { activeProgram, eatenOn, latestWeight, today, useStore } from '../../src/store';
+import { plannedFor } from '../../src/schedule';
+import { eatenOn, latestWeight, today, useStore } from '../../src/store';
 import { alpha, colors, plural, space, type } from '../../src/theme';
 
 const ACTIVITY_ICON: Record<string, IconName> = {
@@ -41,16 +42,8 @@ export default function Day() {
   const now = today();
   const past = date < now;
   const isToday = date === now;
-  const weekday = (new Date(`${date}T12:00:00`).getDay() + 6) % 7;
-  const program = activeProgram(s);
-
-  const done = s.sessions.filter((x) => x.finishedAt && x.date === date);
+  const { sessions: imported, programDay, program, cardio: cardioPlanned, done, cardioDone } = plannedFor(s, date, now);
   const open = isToday ? s.sessions.find((x) => x.id === s.activeSession && !x.finishedAt) : undefined;
-  const imported = s.sessions.filter((x) => !x.startedAt && x.date === date);
-  // The program's day for this weekday, unless it was already done that day or a dated plan replaces it.
-  const programDay = !past && !imported.length ? program?.days.find((d) => d.weekday === weekday && !done.some((x) => x.dayId === d.id)) : undefined;
-  const cardioDone = s.cardio.filter((c) => c.completed && c.date === date);
-  const cardioPlanned = s.cardio.filter((c) => !c.completed && c.plan && c.date === date);
   const prs = useMemo(() => Object.fromEntries(done.map((x) => [x.id, personalRecords(s.sessions, x)])), [s.sessions, date]);
   const entries = s.entries.filter((e) => e.date === date);
   const eaten = eatenOn(s, date);
@@ -142,7 +135,7 @@ export default function Day() {
                       {list.map((e) => (
                         <Row key={e.id} style={{ justifyContent: 'space-between' }}>
                           <T v="callout" numberOfLines={1} style={{ flex: 1 }}>{e.name}</T>
-                          <T v="footnote" color={colors.faint} style={type.num}>{Math.round(e.amount)} {e.basis} · {e.nutrients.kcal}</T>
+                          <T v="footnote" color={colors.faint} style={type.num}>{e.time ? `${e.time} · ` : ''}{Math.round(e.amount)} {e.basis} · {e.nutrients.kcal}</T>
                         </Row>
                       ))}
                     </View>

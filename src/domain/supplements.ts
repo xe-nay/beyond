@@ -1,15 +1,6 @@
 // Daily supplements: what a dose holds, how it reads, and when to remind. Pure functions.
+import { fromGrams, MICRO, MICROS, microsFromOff } from './micros.ts';
 import type { DoseUnit, Intake, Micro, Nutrients, Supplement } from './types.ts';
-
-/** Label values worth showing for supplements, as Open Food Facts names them. */
-const MICROS: [key: string, label: string, unit: string][] = [
-  ['vitamin-a', 'Vitamin A', 'µg'], ['vitamin-d', 'Vitamin D', 'µg'], ['vitamin-e', 'Vitamin E', 'mg'], ['vitamin-k', 'Vitamin K', 'µg'],
-  ['vitamin-c', 'Vitamin C', 'mg'], ['vitamin-b1', 'Vitamin B1', 'mg'], ['vitamin-b2', 'Vitamin B2', 'mg'], ['vitamin-pp', 'Vitamin B3', 'mg'],
-  ['pantothenic-acid', 'Vitamin B5', 'mg'], ['vitamin-b6', 'Vitamin B6', 'mg'], ['biotin', 'Biotin', 'µg'], ['vitamin-b9', 'Folate', 'µg'],
-  ['vitamin-b12', 'Vitamin B12', 'µg'], ['calcium', 'Calcium', 'mg'], ['magnesium', 'Magnesium', 'mg'], ['zinc', 'Zinc', 'mg'],
-  ['iron', 'Iron', 'mg'], ['potassium', 'Potassium', 'mg'], ['selenium', 'Selenium', 'µg'], ['iodine', 'Iodine', 'µg'],
-  ['omega-3-fat', 'Omega-3', 'g'], ['caffeine', 'Caffeine', 'mg'],
-];
 
 export const UNITS: DoseUnit[] = ['g', 'mg', 'ml', 'capsule', 'tablet', 'scoop', 'drop'];
 const COUNTED: DoseUnit[] = ['capsule', 'tablet', 'scoop', 'drop'];
@@ -17,24 +8,24 @@ const COUNTED: DoseUnit[] = ['capsule', 'tablet', 'scoop', 'drop'];
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : null);
 
 /** What the label tells us about a scanned supplement. Unlike food, it may have no energy value at all. */
-export function supplementFromOff(p: any): Pick<Supplement, 'name' | 'brand' | 'image' | 'barcode' | 'per100' | 'servingG' | 'micros'> & { servingLabel: string | null } | null {
+export function supplementFromOff(p: any): Pick<Supplement, 'name' | 'brand' | 'image' | 'barcode' | 'per100' | 'servingG' | 'micros' | 'serving'> & { servingLabel: string | null } | null {
   const name = (p?.product_name || p?.product_name_en || p?.generic_name || '').trim();
   if (!name) return null;
   const n = p.nutriments ?? {};
   const kcal = num(n['energy-kcal_100g']) ?? (num(n['energy_100g']) !== null ? num(n['energy_100g'])! / 4.184 : null);
-  const per100 = kcal === null && num(n.proteins_100g) === null ? null : {
-    kcal: Math.round(kcal ?? 0), protein: num(n.proteins_100g) ?? 0, carbs: num(n.carbohydrates_100g) ?? 0, fat: num(n.fat_100g) ?? 0,
+  const micro100 = microsFromOff(n);
+  const per100 = kcal === null && num(n.proteins_100g) === null && !micro100 ? null : {
+    kcal: Math.round(kcal ?? 0), protein: num(n.proteins_100g) ?? 0, carbs: num(n.carbohydrates_100g) ?? 0, fat: num(n.fat_100g) ?? 0, micro: micro100,
   };
-  const micros: Micro[] = MICROS.flatMap(([key, label, unit]) => {
-    const per100 = num(n[`${key}_100g`]);
-    const perServing = num(n[`${key}_serving`]);
-    const shown = typeof n[`${key}_unit`] === 'string' && ['g', 'mg', 'µg'].includes(n[`${key}_unit`]) ? n[`${key}_unit`] : unit;
-    return per100 !== null || perServing !== null ? [{ key, label, unit: shown, per100, perServing }] : [];
-  });
+  const serving: Record<string, number> = {};
+  for (const m of MICROS) {
+    const v = m.off ? num(n[`${m.off}_serving`]) : null;
+    if (v !== null && v > 0) serving[m.key] = fromGrams(v, m.unit);
+  }
   const brand = Array.isArray(p.brands) ? p.brands[0] : (p.brands ?? '').split(',')[0]?.trim() || null;
   return {
     name, brand, image: p.image_front_url ?? p.image_front_small_url ?? null, barcode: p.code ? String(p.code) : null,
-    per100, servingG: num(p.serving_quantity), micros, servingLabel: p.serving_size ?? null,
+    per100, servingG: num(p.serving_quantity), micros: [], serving: Object.keys(serving).length ? serving : undefined, servingLabel: p.serving_size ?? null,
   };
 }
 
@@ -45,24 +36,40 @@ export function doseGrams(x: Pick<Supplement, 'dose' | 'unit' | 'servingG'>) {
   return x.servingG ? x.servingG * x.dose : null;
 }
 
-/** Energy and macros in one dose, added to the day when it is ticked. */
-export function doseNutrients(x: Supplement): Nutrients | null {
+/** Every label value in one daily dose, by micronutrient key, in that nutrient's unit. */
+export function doseValues(x: Supplement): Record<string, number> {
   const g = doseGrams(x);
-  if (!x.per100 || g === null) return null;
-  const f = g / 100;
-  return { kcal: Math.round(x.per100.kcal * f), protein: +(x.per100.protein * f).toFixed(1), carbs: +(x.per100.carbs * f).toFixed(1), fat: +(x.per100.fat * f).toFixed(1) };
+  const out: Record<string, number> = {};
+  const servings = COUNTED.includes(x.unit) ? x.dose : g !== null && x.servingG ? g / x.servingG : null;
+  if (x.serving && servings !== null) for (const [k, v] of Object.entries(x.serving)) out[k] = v * servings;
+  if (x.per100?.micro && g !== null) for (const [k, v] of Object.entries(x.per100.micro)) out[k] ??= (v * g) / 100;
+  // Older entries kept Open Food Facts values in grams.
+  for (const m of x.micros ?? []) {
+    const def = MICROS.find((d) => d.off === m.key);
+    if (!def || out[def.key] !== undefined) continue;
+    const grams = COUNTED.includes(x.unit) && m.perServing !== null ? m.perServing * x.dose : m.per100 !== null && g !== null ? (m.per100 * g) / 100 : null;
+    if (grams !== null && grams > 0) out[def.key] = fromGrams(grams, def.unit);
+  }
+  // A creatine powder is creatine: the dose in grams is the creatine taken.
+  if (out.creatine === undefined && /creatin/i.test(x.name) && g !== null) out.creatine = g;
+  Object.assign(out, x.custom ?? {});
+  for (const k of Object.keys(out)) if (!(out[k] > 0)) delete out[k];
+  return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, v >= 10 ? Math.round(v) : +v.toPrecision(3)]));
 }
 
-/** Vitamins and minerals in one dose, in the label's units. */
-export function doseMicros(x: Supplement) {
+/** What one dose adds to the day: energy and macros when the label has them, and every label value. */
+export function doseNutrients(x: Supplement): Nutrients | null {
   const g = doseGrams(x);
-  const scale = (unit: string) => (unit === 'mg' ? 1e3 : unit === 'µg' ? 1e6 : 1);
-  return x.micros.flatMap((m) => {
-    const grams = COUNTED.includes(x.unit) && m.perServing !== null ? m.perServing * x.dose : m.per100 !== null && g !== null ? (m.per100 * g) / 100 : null;
-    if (grams === null || grams <= 0) return [];
-    const amount = grams * scale(m.unit);
-    return [{ label: m.label, amount: amount >= 10 ? Math.round(amount) : +amount.toPrecision(2), unit: m.unit }];
-  });
+  const micro = doseValues(x);
+  const f = x.per100 && g !== null ? g / 100 : 0;
+  const macros = { kcal: Math.round((x.per100?.kcal ?? 0) * f), protein: +((x.per100?.protein ?? 0) * f).toFixed(1), carbs: +((x.per100?.carbs ?? 0) * f).toFixed(1), fat: +((x.per100?.fat ?? 0) * f).toFixed(1) };
+  if (!Object.keys(micro).length && !macros.kcal && !macros.protein) return null;
+  return Object.keys(micro).length ? { ...macros, micro } : macros;
+}
+
+/** Label values in one dose, for showing. */
+export function doseMicros(x: Supplement) {
+  return Object.entries(doseValues(x)).flatMap(([k, amount]) => (MICRO[k] ? [{ key: k, label: MICRO[k].label, amount, unit: MICRO[k].unit }] : []));
 }
 
 export function formatDose(x: Pick<Supplement, 'dose' | 'unit'>) {

@@ -5,11 +5,11 @@ import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Icon } from '../../src/components/Icon';
 import { MacroDonut, MacroLegend, NutriScore } from '../../src/components/Nutrition';
-import { Button, Chip, Divider, Press, Row, Segmented, T, tap } from '../../src/components/ui';
+import { Button, Chip, Divider, Press, Row, Segmented, Stepper, T, tap } from '../../src/components/ui';
 import { scale } from '../../src/domain/nutrition';
 import type { Meal } from '../../src/domain/types';
-import { MEALS, mealNow } from '../../src/meals';
-import { today, useStore } from '../../src/store';
+import { dayLabel, MEALS, mealNow } from '../../src/meals';
+import { clock, isPlanned, today, useStore } from '../../src/store';
 import { alpha, colors, radius, space, type } from '../../src/theme';
 
 export default function FoodSheet() {
@@ -24,14 +24,33 @@ export default function FoodSheet() {
   const [servings, setServings] = useState(entry && serving ? entry.amount / serving : 1);
   const [grams, setGrams] = useState(entry?.amount ?? serving ?? 100);
   const [meal, setMeal] = useState<Meal>((entry?.meal ?? (params.meal as Meal)) || mealNow());
+  const [mealPicked, setMealPicked] = useState(!!entry || !!params.meal);
+  const [date, setDate] = useState(entry?.date ?? (params.date || today()));
+  const [time, setTime] = useState(entry?.time ?? clock());
+  const [when, setWhen] = useState(false);
+  const [h, m] = time.split(':').map(Number);
+  const pad = (v: number) => String(v).padStart(2, '0');
+  // The meal follows the time until one is picked by hand.
+  const setClock = (hh: number, mm: number) => {
+    setTime(`${pad(hh)}:${pad(mm)}`);
+    if (!mealPicked) setMeal(hh < 11 ? 'breakfast' : hh < 15 ? 'lunch' : hh < 18 ? 'snack' : 'dinner');
+  };
+  const shiftDay = (d: number) => {
+    const x = new Date(`${date}T12:00:00`);
+    x.setDate(x.getDate() + d);
+    setDate(today(x));
+  };
+  const planned = isPlanned({ date, time });
   const amount = mode === 'serving' && serving ? servings * serving : grams;
+  const shown = String(Math.round((mode === 'serving' ? servings : grams) * 100) / 100);
+  const digitSize = shown.length <= 3 ? 64 : shown.length === 4 ? 52 : 42;
   const n = useMemo(() => (food ? scale(food.per100, amount) : null), [food, amount]);
   if (!food || !n) return null;
   const unit = food.basis;
 
   const save = () => {
     if (entry) s.deleteEntry(entry.id);
-    s.logFood(food, Math.round(amount * 10) / 10, meal, entry?.date ?? (params.date || today()), n);
+    s.logFood(food, Math.round(amount * 10) / 10, meal, date, n, time);
     router.back();
   };
 
@@ -75,10 +94,11 @@ export default function FoodSheet() {
             <Press onPress={() => (mode === 'serving' ? setServings(Math.max(0.25, servings - 0.5)) : setGrams(Math.max(1, grams - 10)))} style={styles.step}><Icon name="minus" size={18} /></Press>
             <Row gap={6} style={{ alignItems: 'baseline' }}>
               <TextInput
-                value={String(Math.round((mode === 'serving' ? servings : grams) * 100) / 100)}
+                value={shown}
                 onChangeText={(t) => { const v = parseFloat(t.replace(',', '.')); if (Number.isFinite(v)) (mode === 'serving' ? setServings(v) : setGrams(v)); }}
                 keyboardType="decimal-pad" selectTextOnFocus
-                style={[type.hero as any, { color: colors.text, width: 120, textAlign: 'center', padding: 0 }]}
+                // Sized to its digits: a fixed width cut "230" down to "23" once the keyboard closed.
+                style={[type.hero as any, { color: colors.text, fontSize: digitSize, lineHeight: digitSize * 1.15, width: shown.length * digitSize * 0.64 + 16, textAlign: 'center', padding: 0 }]}
               />
               <T v="headline" color={colors.dim}>{mode === 'serving' ? (servings === 1 ? 'serving' : 'servings') : unit}</T>
             </Row>
@@ -93,10 +113,38 @@ export default function FoodSheet() {
         </View>
 
         <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
-          {MEALS.map((m) => <Chip key={m.value} label={m.label} active={meal === m.value} onPress={() => { tap(); setMeal(m.value); }} />)}
+          {MEALS.map((x) => <Chip key={x.value} label={x.label} active={meal === x.value} onPress={() => { tap(); setMeal(x.value); setMealPicked(true); }} />)}
         </Row>
 
-        <Button kind="lime" icon={entry ? 'checkmark' : 'plus'} title={entry ? 'Update' : `Add ${n.kcal} kcal`} onPress={save} />
+        {/* When it was eaten, or when it is planned */}
+        <View style={styles.panel}>
+          <Press onPress={() => setWhen(!when)} haptic={false}>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <Row gap={space.sm}>
+                <Icon name="clock" size={16} color={planned ? colors.amber : colors.cyan} />
+                <T v="headline">{dayLabel(date)} · {time}</T>
+              </Row>
+              <T v="footnote" color={planned ? colors.amber : colors.faint}>{planned ? 'Planned meal' : 'Eaten'}</T>
+            </Row>
+          </Press>
+          {when && (
+            <View style={{ gap: space.md }}>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Press onPress={() => shiftDay(-1)} style={styles.step}><Icon name="chevron.left" size={16} /></Press>
+                <T v="headline">{new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}</T>
+                <Press onPress={() => shiftDay(1)} style={styles.step}><Icon name="chevron.right" size={16} /></Press>
+              </Row>
+              <Row>
+                <Stepper label="Hour" value={h} onChange={(v) => setClock(v, m)} min={0} max={23} format={pad} />
+                <Stepper label="Minute" value={m} onChange={(v) => setClock(h, v)} step={5} min={0} max={55} format={pad} />
+              </Row>
+              <Chip label="Now" onPress={() => { const d = new Date(); setDate(today(d)); setClock(d.getHours(), d.getMinutes()); }} />
+              {planned && <T v="footnote" color={colors.dim}>Counted once its time comes; you get a reminder then.</T>}
+            </View>
+          )}
+        </View>
+
+        <Button kind="lime" icon={entry ? 'checkmark' : planned ? 'clock' : 'plus'} title={entry ? 'Update' : planned ? `Plan ${n.kcal} kcal` : `Add ${n.kcal} kcal`} onPress={save} />
         {entry && <Button kind="danger" icon="trash" title="Remove from diary" onPress={() => { s.deleteEntry(entry.id); router.back(); }} />}
 
         {/* Facts */}

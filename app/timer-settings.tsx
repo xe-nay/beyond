@@ -101,6 +101,13 @@ export default function TimerSettings() {
               );
             })}
           </View>
+          <Row style={{ justifyContent: 'space-between', paddingVertical: 4 }}>
+            <View style={{ flex: 1 }}>
+              <T v="headline">Pause music for voices</T>
+              <T v="footnote" color={colors.dim}>For clips too quiet to hear over lowered music</T>
+            </View>
+            <Toggle value={!!t.pauseMusic} onChange={(pauseMusic) => s.setTimer({ pauseMusic })} />
+          </Row>
         </View>
       )}
 

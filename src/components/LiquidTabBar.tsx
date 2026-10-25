@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '../theme';
 import { Icon, type IconName } from './Icon';
+import { WorkoutDock } from './WorkoutDock';
 
 const ICONS: Record<string, IconName> = {
   today: 'sun.max.fill', train: 'dumbbell.fill', food: 'fork.knife', progress: 'chart.xyaxis.line', profile: 'person.crop.circle',
@@ -98,6 +99,7 @@ export function LiquidTabBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: Math.max(insets.bottom - 6, 10) }]}>
+      <View style={styles.dockWrap}><WorkoutDock /></View>
       {glass ? (
         <GlassView glassEffectStyle="regular" colorScheme="dark" isInteractive style={styles.bar}>{body}</GlassView>
       ) : Platform.OS === 'ios' ? (
@@ -111,6 +113,8 @@ export function LiquidTabBar({ state, navigation }: BottomTabBarProps) {
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 40, right: 40 },
+  // The dock is wider than the bar, like a mini player above it.
+  dockWrap: { marginHorizontal: -28 },
   bar: { height: 60, borderRadius: 30, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.14)' },
   webGlass: { backgroundColor: 'rgba(28, 32, 42, 0.72)', backdropFilter: 'blur(24px) saturate(180%)' } as any,
   row: { flex: 1, flexDirection: 'row', paddingHorizontal: 4 },

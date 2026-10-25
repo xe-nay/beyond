@@ -5,11 +5,12 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import type { Cue } from './domain/types';
 import { downloadVoice, voiceUri } from './storage';
 import { useStore } from './store';
+import { countdownSound, installSounds } from './notifySounds';
 import { pack, type Clip } from './voices';
 
 const S = {
@@ -50,17 +51,35 @@ function player(key: string, source: number | string) {
   return p;
 }
 
-function start(key: string, source: number | string, seconds?: number) {
+/** Plays once the file is loaded: a clip asked for before it is ready would otherwise stay silent. */
+function whenLoaded(p: AudioPlayer, go: () => void) {
+  if ((p as any).isLoaded !== false) return go();
+  let done = false;
+  const once = () => {
+    if (done) return;
+    done = true;
+    sub.remove();
+    go();
+  };
+  const sub = p.addListener('playbackStatusUpdate', (st: any) => st?.isLoaded && once());
+  setTimeout(once, 1500);
+}
+
+function start(key: string, source: number | string, seconds?: number, full = false) {
   const { sound, volume } = useStore.getState().timer;
   if (!sound || volume <= 0) return;
   try {
     current?.pause();
     const p = player(key, source);
-    p.volume = volume;
+    // Voices are recorded far quieter than the beeps, so they always play at full volume.
+    p.volume = full ? 1 : volume;
     current = p;
     if (cap) clearTimeout(cap);
     cap = seconds ? setTimeout(() => current === p && stopCue(), seconds * 1000) : null;
-    p.seekTo(0).then(() => p.play()).catch(() => p.play());
+    whenLoaded(p, () => {
+      if (current !== p) return;
+      p.seekTo(0).then(() => p.play()).catch(() => p.play());
+    });
   } catch {}
 }
 
@@ -111,9 +130,33 @@ export function keptClips(cue: Cue) {
   return kept.length ? kept : p.clips;
 }
 
-function playClipNow(cue: Cue, clip: Clip) {
-  const source = pack(cue).remote ? voiceUri(clip.id) ?? (clip.source as string) : clip.source;
-  start(clip.id, source, clip.seconds);
+function clipSource(cue: Cue, clip: Clip) {
+  const local = pack(cue).remote ? voiceUri(clip.id) : null;
+  // The key changes once a clip is downloaded, so a player made from the web address is not reused.
+  return { key: `${clip.id}:${local ? 'file' : 'src'}`, source: local ?? clip.source };
+}
+
+let restoreMix: ReturnType<typeof setTimeout> | null = null;
+async function playClipNow(cue: Cue, clip: Clip) {
+  const { key, source } = clipSource(cue, clip);
+  if (useStore.getState().timer.pauseMusic) {
+    // Music pauses for the clip and comes back when the session is released after it.
+    try { await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix', shouldPlayInBackground: true }); } catch {}
+    if (restoreMix) clearTimeout(restoreMix);
+    restoreMix = setTimeout(() => {
+      setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'duckOthers', shouldPlayInBackground: true }).catch(() => {});
+    }, ((clip.seconds ?? 4) + 0.5) * 1000);
+  }
+  start(key, source, clip.seconds, true);
+}
+
+/** Loads the kept clips of a pack ahead of time, so the one picked plays the moment it is due. */
+export function preloadVoices(cue: Cue) {
+  if (cue === 'beeps') return;
+  for (const clip of keptClips(cue)) {
+    const { key, source } = clipSource(cue, clip);
+    try { player(key, source); } catch {}
+  }
 }
 
 /** A random kept clip from the chosen voice pack: the downloaded copy when there is one. */
@@ -146,21 +189,32 @@ export async function downloadPack(cue: Cue, progress?: (done: number, total: nu
 }
 
 // A notification is the backstop when the phone is locked or the app is in the background.
+// Timer notifications are the backstop for a locked phone: in the app the timer beeps itself, so they
+// stay silent there. Reminders always show.
 Notifications.setNotificationHandler?.({
-  handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: false, shouldPlaySound: true, shouldSetBadge: false }),
+  handleNotification: async (n) => {
+    const timer = (n.request.content.data as any)?.kind === 'timer' && AppState.currentState === 'active';
+    return { shouldShowBanner: !timer, shouldShowList: !timer, shouldPlaySound: !timer, shouldSetBadge: false };
+  },
 });
 
 let scheduled: string | null = null;
-export async function scheduleEnd(at: number, title: string, body: string) {
+/**
+ * A notification that sounds the countdown so it ends exactly at `at`: it fires `lead` seconds early
+ * (rounded down to a countdown length that exists) with that countdown as its sound.
+ */
+export async function scheduleEnd(at: number, title: string, body: string, lead = 5, ending: 'end' | 'phase' = 'end') {
   if (Platform.OS === 'web') return;
   await cancelEnd();
-  const seconds = Math.round((at - Date.now()) / 1000);
+  const sound = countdownSound(lead, ending);
+  const seconds = Math.round((at - Date.now()) / 1000) - sound.seconds;
   if (seconds < 2) return;
   try {
+    await installSounds();
     const perm = await Notifications.getPermissionsAsync();
     if (!perm.granted && perm.canAskAgain) await Notifications.requestPermissionsAsync();
     scheduled = await Notifications.scheduleNotificationAsync({
-      content: { title, body, sound: true },
+      content: { title, body, sound: sound.file, data: { kind: 'timer' }, interruptionLevel: 'timeSensitive' },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
     });
   } catch {}

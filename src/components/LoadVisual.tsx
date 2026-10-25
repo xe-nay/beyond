@@ -300,18 +300,83 @@ export function KettlebellView({ kg, unit, count = 1 }: { kg: number; unit: Unit
 }
 
 /** Pin-loaded stack: the pin slides to the selected plate. */
-export function StackView({ kg, unit }: { kg: number; unit: Unit }) {
+const PLATE = 22; // plate height in points
+const GAP = 3;
+const SHOWN = 11; // plates visible at once; the column scrolls to keep the pin in view
+
+/**
+ * A selectorised machine stack: numbered plates, the pin on the plate that sets the weight, the
+ * plates it lifts lit. Tap a plate to move the pin there. A weight between two plates shows as the
+ * add-on on the top cap, like the small dial on a real stack.
+ */
+export function StackView({ kg, unit, onPick, pulse = 0 }: { kg: number; unit: Unit; onPick?: (kg: number) => void; pulse?: number }) {
+  const reduced = useReducedMotion();
   const v = toDisplay(kg, unit);
   const step = unit === 'kg' ? 5 : 10;
-  const n = 14;
-  const pin = Math.min(n, Math.max(1, Math.round(v / step)));
+  const pinned = Math.max(0, Math.floor((v + 0.01) / step)); // plates on the pin
+  const addOn = Math.round((v - pinned * step) * 10) / 10;
+  const n = Math.min(60, Math.max(20, pinned + 6));
+  const row = PLATE + GAP;
+  const first = Math.max(0, Math.min(n - SHOWN, pinned - SHOWN + 3)); // keep the pin near the bottom of the window
+
+  const pinY = useSharedValue(Math.max(0, pinned - 1) * row);
+  const scroll = useSharedValue(first * row);
+  const lift = useSharedValue(0);
+  useEffect(() => {
+    const spring = { duration: 420, dampingRatio: 0.78 };
+    pinY.set(reduced ? Math.max(0, pinned - 1) * row : withSpring(Math.max(0, pinned - 1) * row, spring));
+    scroll.set(reduced ? first * row : withSpring(first * row, spring));
+  }, [pinned, first]);
+  // A completed set lifts the selected plates and sets them down again.
+  useEffect(() => {
+    if (!pulse || reduced) return;
+    lift.set(withSequence(withTiming(-10, { duration: 260, easing: EASE_OUT }), withTiming(0, { duration: 420, easing: Easing.bezier(0.5, 0, 0.75, 0) })));
+  }, [pulse]);
+
+  const column = useAnimatedStyle(() => ({ transform: [{ translateY: -scroll.get() }] }));
+  const pinStyle = useAnimatedStyle(() => ({ transform: [{ translateY: pinY.get() + lift.get() }] }));
+  const lifted = useAnimatedStyle(() => ({ transform: [{ translateY: lift.get() }] }));
+
+  const plate = (i: number) => {
+    const on = i < pinned;
+    const w = step * (i + 1);
+    return (
+      <Pressable
+        key={i}
+        onPress={() => { tap(); onPick?.(toKg(w, unit)); }}
+        style={[styles.stackPlate, on && { backgroundColor: '#20323A', borderColor: alpha(colors.cyan, 0.45) }]}
+        accessibilityLabel={`${w} ${unit}`}>
+        <T style={[styles.plateNum, on && { color: colors.text }]}>{w}</T>
+        <View style={[styles.hole, i === pinned - 1 && { backgroundColor: colors.black }]} />
+        <T style={[styles.plateNum, { textAlign: 'right' }, on && { color: alpha(colors.cyan, 0.9) }]}>{w}</T>
+      </Pressable>
+    );
+  };
+
   return (
-    <View style={{ alignItems: 'center', gap: 3 }}>
-      {Array.from({ length: n }, (_, i) => {
-        const active = i < pin;
-        return <View key={i} style={[styles.stackPlate, active && { backgroundColor: alpha(colors.cyan, 0.18 + 0.5 * (i / n)), borderColor: alpha(colors.cyan, 0.5) }]} />;
-      })}
-      <Animated.View style={[styles.pin, { top: (pin - 1) * 9 - 2, transitionProperty: 'top', transitionDuration: 220 } as any]} />
+    <View style={{ alignItems: 'center' }}>
+      {/* Top cap with the cable rod, and the add-on weight when there is one */}
+      <Animated.View style={[{ alignItems: 'center' }, lifted]}>
+        <View style={styles.rod} />
+        <View style={styles.cap}>
+          <View style={[styles.addOn, addOn > 0 && { backgroundColor: colors.lime }]}>
+            <T style={{ fontSize: 10, fontWeight: '800', color: addOn > 0 ? colors.black : colors.faint }}>{addOn > 0 ? `+${addOn}` : unit}</T>
+          </View>
+        </View>
+      </Animated.View>
+      <View style={{ height: SHOWN * row, overflow: 'hidden', width: 210, alignItems: 'center' }}>
+        <Animated.View style={column}>
+          <Animated.View style={lifted}>{Array.from({ length: Math.min(pinned, n) }, (_, i) => plate(i))}</Animated.View>
+          {Array.from({ length: n - Math.min(pinned, n) }, (_, i) => plate(i + pinned))}
+          {/* The pin, in the hole of the last lifted plate */}
+          {pinned > 0 && (
+            <Animated.View pointerEvents="none" style={[styles.pin, pinStyle]}>
+              <View style={styles.pinHead} />
+              <View style={styles.pinShaft} />
+            </Animated.View>
+          )}
+        </Animated.View>
+      </View>
     </View>
   );
 }
@@ -336,7 +401,7 @@ export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count =
       {kind !== 'dumbbell' && <View style={{ minHeight: H + 30, justifyContent: 'center' }}>
         {kind === 'barbell' && <BarbellView kg={kg} unit={unit} />}
         {kind === 'kettlebell' && <KettlebellView kg={kg} unit={unit} count={count} />}
-        {kind === 'stack' && <StackView kg={kg} unit={unit} />}
+        {kind === 'stack' && <StackView kg={kg} unit={unit} onPick={onChange} pulse={pulse} />}
         {kind === 'bodyweight' && (
           <View style={{ alignItems: 'center', gap: space.sm }}>
             <Icon name="figure.strengthtraining.traditional" size={64} color={colors.cyan} weight="light" />
@@ -359,7 +424,12 @@ export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count =
               }}
               keyboardType="decimal-pad"
               selectTextOnFocus
-              style={[type.hero as any, { color: colors.text, textAlign: 'center', width: 150, padding: 0 }]}
+              style={[type.hero as any, (() => {
+                // Sized to its digits so "102.5" never loses a character.
+                const len = String(text ?? label).length;
+                const size = len <= 3 ? 64 : len === 4 ? 56 : 46;
+                return { color: colors.text, textAlign: 'center', fontSize: size, lineHeight: size * 1.15, width: Math.max(90, len * size * 0.64 + 16), padding: 0 };
+              })()]}
             />
             <T v="headline" color={colors.dim}>{unit}</T>
           </Row>
@@ -408,7 +478,17 @@ const styles = StyleSheet.create({
   dbGrip: { width: 36, height: 11, borderRadius: 3, backgroundColor: '#6E7A8C' },
   kbHandle: { borderWidth: 9, borderColor: '#26344F', borderBottomWidth: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
   kbBody: { backgroundColor: '#1E2A40', alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairlineStrong },
-  stackPlate: { width: 130, height: 6, borderRadius: 2, backgroundColor: colors.surface3, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline },
-  pin: { position: 'absolute', right: -14, width: 22, height: 10, borderRadius: 5, backgroundColor: colors.lime },
+  stackPlate: {
+    width: 170, height: PLATE, marginBottom: GAP, borderRadius: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10,
+    backgroundColor: '#1A1D24', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.10)', borderTopColor: 'rgba(255,255,255,0.18)',
+  },
+  plateNum: { width: 34, fontSize: 11, fontWeight: '800', color: colors.faint, fontVariant: ['tabular-nums'] },
+  hole: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#0B0D11', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.15)' },
+  rod: { width: 6, height: 18, borderRadius: 3, backgroundColor: '#8A93A3' },
+  cap: { width: 120, height: 26, borderRadius: 8, marginBottom: GAP, backgroundColor: '#2B303A', alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.16)' },
+  addOn: { minWidth: 34, height: 18, paddingHorizontal: 6, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface3 },
+  pin: { position: 'absolute', top: (PLATE - 14) / 2, left: 105 - 7, flexDirection: 'row', alignItems: 'center' },
+  pinHead: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.lime, borderWidth: 2, borderColor: '#E9FFC2' },
+  pinShaft: { width: 56, height: 8, marginLeft: -2, borderTopRightRadius: 4, borderBottomRightRadius: 4, backgroundColor: '#C9CED8' },
   bigStep: { width: 52, height: 52, borderRadius: radius.pill, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline },
 });

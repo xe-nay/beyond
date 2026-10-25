@@ -1,21 +1,24 @@
-// Week strip that pages through weeks with a swipe. The month above follows the visible week; a
-// double tap on the strip or the month comes back to today. Tapping a day opens it: what was done, or what is planned.
+// A strip of days that scrolls one day at a time, today in the middle. The month above follows the
+// day in the centre; a double tap on the strip or the month brings today back to the middle.
+// Tapping a day opens it: what was done, or what is planned.
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Platform, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { weekStart } from '../domain/calc';
+import { importedUntil } from '../schedule';
 import { activeProgram, today, useStore } from '../store';
 import { alpha, colors, space, type } from '../theme';
 import { Icon } from './Icon';
 import { Press, Row, T } from './ui';
 
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const BACK = 104; // weeks reachable in the past
-const AHEAD = 52;
-const WEEKS = Array.from({ length: BACK + AHEAD + 1 }, (_, i) => i - BACK);
+const LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const BACK = 730; // days reachable in the past
+const AHEAD = 365;
+const DAYS = Array.from({ length: BACK + AHEAD + 1 }, (_, i) => i - BACK);
+const VISIBLE = 7;
+const MID = Math.floor(VISIBLE / 2);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const addDays = (d: Date, n: number) => {
@@ -24,32 +27,27 @@ const addDays = (d: Date, n: number) => {
   return x;
 };
 
-/** "October 2026", or "Oct – Nov 2026" for a week across two months. */
-function monthLabel(monday: Date) {
-  const sunday = addDays(monday, 6);
-  if (monday.getMonth() === sunday.getMonth()) return { month: MONTHS[monday.getMonth()], year: monday.getFullYear() };
-  return { month: `${MONTHS[monday.getMonth()].slice(0, 3)} – ${MONTHS[sunday.getMonth()].slice(0, 3)}`, year: sunday.getFullYear() };
-}
-
 export function WeekCalendar() {
   const router = useRouter();
   const s = useStore();
   const program = activeProgram(s);
   const [width, setWidth] = useState(0);
-  const [offset, setOffset] = useState(0); // weeks from this one
+  const [offset, setOffset] = useState(0); // days from today at the centre
   const list = useRef<FlatList<number>>(null);
   const lastTap = useRef(0);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jumping = useRef(0);
 
-  const thisMonday = weekStart();
+  const cell = width / VISIBLE;
+  const base = new Date();
+  base.setHours(12, 0, 0, 0);
   const todayIso = today();
-  const monday = addDays(thisMonday, offset * 7);
-  const label = monthLabel(monday);
+  const centre = addDays(base, offset);
+  const until = importedUntil(s);
 
   const goToday = () => {
     jumping.current = Date.now();
-    list.current?.scrollToIndex({ index: BACK, animated: true });
+    list.current?.scrollToOffset({ offset: (BACK - MID) * cell, animated: true });
     setOffset(0);
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
@@ -67,83 +65,79 @@ export function WeekCalendar() {
     if (single) pending.current = setTimeout(() => { pending.current = null; single(); }, 300);
   };
 
-  // The month follows the week most in view, already while swiping.
-  const settle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!width) return;
-    const next = Math.round(e.nativeEvent.contentOffset.x / width) - BACK;
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!cell) return;
+    const next = Math.round(e.nativeEvent.contentOffset.x / cell) + MID - BACK;
     if (next !== offset) {
       setOffset(next);
-      // No tick per week passed while flying back to today.
+      // A light tick per day while scrolling by hand, none while flying back to today.
       if (Platform.OS !== 'web' && Date.now() - jumping.current > 800) Haptics.selectionAsync().catch(() => {});
     }
   };
 
-  const renderWeek = useCallback(({ item }: { item: number }) => {
-    const start = addDays(thisMonday, item * 7);
-    return (
-      <Row style={{ width, justifyContent: 'space-between' }}>
-        {DAYS.map((d, i) => {
-          const day = addDays(start, i);
-          const iso = today(day);
-          const session = s.sessions.find((x) => x.finishedAt && x.date === iso);
-          const trained = !!session || s.cardio.some((c) => c.completed && c.date === iso);
-          const planned = iso >= todayIso && (program?.days.some((p) => p.weekday === i) || s.sessions.some((x) => !x.startedAt && x.date === iso) || s.cardio.some((c) => !c.completed && c.date === iso));
-          const isToday = iso === todayIso;
-          const first = day.getDate() === 1;
-          return (
-            <Press key={i} haptic={false} onPress={() => tap(() => router.push(`/day/${iso}`))}>
-              <View style={{ alignItems: 'center', gap: 6 }}>
-                <T v="caption" color={isToday ? colors.cyan : colors.faint}>{first ? MONTHS[day.getMonth()].slice(0, 3) : d}</T>
-                <View style={{
-                  width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: trained ? colors.lime : isToday ? colors.cyanSoft : colors.surface,
-                  borderWidth: planned && !trained ? 1.5 : 0, borderColor: isToday ? colors.cyan : colors.hairlineStrong,
-                }}>
-                  {trained ? <Icon name="checkmark" size={14} color={colors.black} /> : <T v="label" color={isToday ? colors.cyan : iso < todayIso ? colors.faint : colors.dim} style={type.num}>{day.getDate()}</T>}
-                </View>
-              </View>
-            </Press>
-          );
-        })}
-      </Row>
+  const renderDay = useCallback(({ item }: { item: number }) => {
+    const day = addDays(base, item);
+    const iso = today(day);
+    const wd = (day.getDay() + 6) % 7;
+    const trained = s.sessions.some((x) => x.finishedAt && x.date === iso) || s.cardio.some((c) => c.completed && c.date === iso);
+    const planned = iso >= todayIso && (
+      s.sessions.some((x) => !x.startedAt && x.date === iso) ||
+      s.cardio.some((c) => !c.completed && c.plan && c.date === iso) ||
+      (!!program?.days.some((p) => p.weekday === wd) && (!until || iso > until))
     );
-  }, [width, s.sessions, s.cardio, program, todayIso]);
+    const isToday = iso === todayIso;
+    const first = day.getDate() === 1;
+    return (
+      <Press haptic={false} onPress={() => tap(() => router.push(`/day/${iso}`))} style={{ width: cell, alignItems: 'center', gap: 6 }}>
+        <T v="caption" color={isToday ? colors.cyan : first ? colors.dim : colors.faint}>{first ? MONTHS[day.getMonth()].slice(0, 3) : LETTERS[wd]}</T>
+        <View style={{
+          width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center',
+          backgroundColor: trained ? colors.lime : isToday ? colors.cyanSoft : colors.surface,
+          borderWidth: !trained && (isToday || planned) ? 1.5 : 0,
+          borderColor: isToday ? colors.cyan : colors.hairlineStrong,
+        }}>
+          {trained ? <Icon name="checkmark" size={14} color={colors.black} /> : <T v="label" color={isToday ? colors.cyan : iso < todayIso ? colors.faint : colors.dim} style={type.num}>{day.getDate()}</T>}
+        </View>
+      </Press>
+    );
+  }, [cell, s.sessions, s.cardio, program, todayIso, until]);
 
+  const away = Math.abs(offset) > MID || centre.getMonth() !== base.getMonth();
   return (
     <View style={{ gap: space.md }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <Press haptic={false} onPress={() => tap()}>
         <Row style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <Animated.View key={`${label.month}${label.year}`} entering={FadeIn.duration(180)}>
+          <Animated.View key={`${centre.getMonth()}-${centre.getFullYear()}`} entering={FadeIn.duration(180)}>
             <Row gap={6} style={{ alignItems: 'baseline' }}>
-              <T v="title3">{label.month}</T>
-              <T v="headline" color={colors.faint} style={type.num}>{label.year}</T>
+              <T v="title3">{MONTHS[centre.getMonth()]}</T>
+              <T v="headline" color={colors.faint} style={type.num}>{centre.getFullYear()}</T>
             </Row>
           </Animated.View>
-          {offset !== 0 && (
+          {away ? (
             <Press haptic={false} onPress={goToday} style={{ paddingHorizontal: 12, height: 28, borderRadius: 14, justifyContent: 'center', backgroundColor: alpha(colors.cyan, 0.14) }}>
               <T v="footnote" color={colors.cyan}>Today</T>
             </Press>
-          )}
+          ) : null}
         </Row>
       </Press>
-      {width > 0 ? (
+      {cell > 0 ? (
         <FlatList
           ref={list}
-          data={WEEKS}
-          keyExtractor={(w) => String(w)}
+          data={DAYS}
+          keyExtractor={(d) => String(d)}
           horizontal
-          pagingEnabled
           showsHorizontalScrollIndicator={false}
-          initialScrollIndex={BACK}
-          getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-          onScroll={settle}
+          snapToInterval={cell}
+          decelerationRate="fast"
+          initialScrollIndex={BACK - MID}
+          getItemLayout={(_, index) => ({ length: cell, offset: cell * index, index })}
+          onScroll={onScroll}
           scrollEventThrottle={32}
-          renderItem={renderWeek}
-          extraData={renderWeek}
-          // The browser preview snaps only to rendered weeks, so it renders them all; the phone pages natively.
-          windowSize={Platform.OS === 'web' ? WEEKS.length : 5}
-          initialNumToRender={Platform.OS === 'web' ? WEEKS.length : 1}
-          maxToRenderPerBatch={3}
+          renderItem={renderDay}
+          extraData={renderDay}
+          initialNumToRender={VISIBLE + 2}
+          windowSize={Platform.OS === 'web' ? 41 : 7}
+          maxToRenderPerBatch={14}
         />
       ) : (
         <View style={{ height: 62 }} />

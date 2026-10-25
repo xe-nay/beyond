@@ -9,7 +9,7 @@ import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedVal
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { byId, exercise } from '../catalog';
-import { groupByExercise, REGION_NAMES, volumeLoad, working } from '../domain/calc';
+import { groupByExercise, REGION_NAMES, volumeLoad, working, type PR, type PRKind } from '../domain/calc';
 import { formatClock } from '../domain/intervals';
 import { formatWeight, toDisplay } from '../domain/plates';
 import type { Region, Session, Unit } from '../domain/types';
@@ -18,7 +18,17 @@ import { BodyMap } from './BodyMap';
 import { Icon } from './Icon';
 import { Row, T } from './ui';
 
-export interface PR { exerciseId: string; e1rm: number; previous: number }
+export type { PR };
+
+const KIND: Record<PRKind, string> = { first: 'First', weight: 'Heaviest', e1rm: 'Best max', reps: 'Most reps', volume: 'Best set' };
+/** What a record says, in the units the user reads. */
+export function describePR(p: PR, unit: Unit) {
+  const w = (kg: number) => `${formatWeight(kg, unit)} ${unit}`;
+  if (p.kind === 'reps') return `${p.reps} reps · ${w(p.loadKg)}`;
+  if (p.kind === 'e1rm') return `≈${w(p.value)} max`;
+  if (p.kind === 'volume') return `${w(p.loadKg)} × ${p.reps}`;
+  return `${w(p.loadKg)} × ${p.reps}`;
+}
 
 const settle = () => Platform.OS !== 'web' && Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
@@ -128,8 +138,11 @@ export function SummaryCard({ session, prs, unit, width }: { session: Session; p
                 prs.slice(0, 4).map((p) => (
                   <Row key={p.exerciseId} style={{ paddingVertical: 3 }}>
                     <Icon name="trophy.fill" size={13} color={colors.lime} />
-                    <T v="body" numberOfLines={1} style={{ flex: 1 }}>{exercise(p.exerciseId)?.name}</T>
-                    <T v="headline" color={colors.lime} style={type.num}>{formatWeight(p.e1rm, unit)} {unit}</T>
+                    <View style={{ flex: 1 }}>
+                      <T v="body" numberOfLines={1}>{exercise(p.exerciseId)?.name}</T>
+                      <T v="footnote" color={colors.faint}>{KIND[p.kind]}</T>
+                    </View>
+                    <T v="headline" color={colors.lime} style={type.num}>{describePR(p, unit)}</T>
                   </Row>
                 ))
               ) : (

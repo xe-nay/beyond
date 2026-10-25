@@ -101,7 +101,7 @@ export default function CardioRun() {
   useEffect(() => {
     if (!run || run.resumedAt === null || !pos.phase) return void cancelEnd();
     const next = phases[pos.index + 1];
-    scheduleEnd(Date.now() + pos.remaining * 1000, next ? LABEL[next.kind] : 'Done', next?.cue || run.plan.activity);
+    scheduleEnd(Date.now() + pos.remaining * 1000, next ? LABEL[next.kind] : 'Done', next?.cue || run.plan.activity, run.plan.countdown, next ? 'phase' : 'end');
   }, [pos.index, run?.resumedAt]);
 
   if (!run) return <View style={{ flex: 1, backgroundColor: colors.black }} />;

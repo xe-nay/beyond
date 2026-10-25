@@ -1,15 +1,17 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { byId, exercise } from '../../../src/catalog';
-import { BodyMap } from '../../../src/components/BodyMap';
+import { SwipeBody } from '../../../src/components/BodyMap';
+import { ExerciseImage } from '../../../src/components/ExerciseImage';
+import { Radar } from '../../../src/components/Radar';
 import { BarChart, LineChart } from '../../../src/components/Charts';
 import { Icon } from '../../../src/components/Icon';
 import { Button, Card, Chip, Press, Row, Screen, Section, Segmented, Stat, T } from '../../../src/components/ui';
 import {
-  effortSummary, fatigueReport, groupByExercise, regionSets, REGION_NAMES, repDrop, rirToRpe, strengthTrend, weekStart, weeklySeries, working,
+  effortSummary, fatigueReport, groupByExercise, regionSets, REGION_NAMES, REGIONS, repDrop, rirToRpe, sessionMinutes, strengthTrend, volumeLoad, weekStart, weeklySeries, working,
 } from '../../../src/domain/calc';
 import { formatClock } from '../../../src/domain/intervals';
 import { formatWeight, toDisplay } from '../../../src/domain/plates';
@@ -22,6 +24,17 @@ const LEVELS = [
 ] as const;
 const rank = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
 const DAY = 86400000;
+const PERIODS = [{ value: 'week', label: 'This week' }, { value: 'last', label: 'Last week' }, { value: 'month', label: '4 weeks' }, { value: 'all', label: 'All' }] as const;
+// The basic spider: muscles grouped the way most programs count them.
+const GROUPS: { key: string; label: string; regions: Region[] }[] = [
+  { key: 'chest', label: 'Chest', regions: ['chest'] },
+  { key: 'back', label: 'Back', regions: ['upper-back', 'trapezius', 'lower-back'] },
+  { key: 'shoulders', label: 'Shoulders', regions: ['deltoids'] },
+  { key: 'arms', label: 'Arms', regions: ['biceps', 'triceps', 'forearm'] },
+  { key: 'core', label: 'Core', regions: ['abs', 'obliques'] },
+  { key: 'glutes', label: 'Glutes', regions: ['gluteal'] },
+  { key: 'legs', label: 'Legs', regions: ['quadriceps', 'hamstring', 'adductors', 'calves', 'tibialis'] },
+];
 
 export default function Progress() {
   const router = useRouter();
@@ -29,20 +42,31 @@ export default function Progress() {
   const unit = s.profile.unit;
   const level = rank[s.analyticsLevel];
   const done = useMemo(() => s.sessions.filter((x) => x.finishedAt), [s.sessions]);
-  const [period, setPeriod] = useState<'week' | 'last' | 'month'>('week');
+  const [period, setPeriod] = useState<'week' | 'last' | 'month' | 'all'>('week');
   const [region, setRegion] = useState<Region | null>(null);
+  const [detail, setDetail] = useState<'basic' | 'detailed'>('basic');
+  const { width } = useWindowDimensions();
+  const inner = width - space.lg * 4;
 
   const monday = weekStart().getTime();
-  const range = period === 'week' ? [monday, Date.now() + DAY] : period === 'last' ? [monday - 7 * DAY, monday] : [Date.now() - 28 * DAY, Date.now() + DAY];
+  const range = period === 'week' ? [monday, Date.now() + DAY] : period === 'last' ? [monday - 7 * DAY, monday] : period === 'month' ? [Date.now() - 28 * DAY, Date.now() + DAY] : [0, Date.now() + DAY];
   const inRange = done.filter((x) => { const t = Date.parse(x.finishedAt!); return t >= range[0] && t < range[1]; });
   const sets = regionSets(inRange, byId);
-  const weeks = period === 'month' ? 4 : 1;
+  const first = done.reduce((t, x) => Math.min(t, Date.parse(x.finishedAt!)), Date.now());
+  const weeks = period === 'month' ? 4 : period === 'all' ? Math.max(1, Math.ceil((Date.now() - first) / (7 * DAY))) : 1;
+  const volume = inRange.reduce((n, x) => n + volumeLoad(x.sets), 0);
+  const minutes = inRange.reduce((n, x) => n + (sessionMinutes(x) ?? 0), 0);
+  const target = 10 * weeks; // about 10 hard sets per muscle a week
+  const axes = detail === 'basic'
+    ? GROUPS.map((g) => ({ key: g.key, label: g.label, value: Math.round(g.regions.reduce((n, r) => n + sets[r], 0) * 10) / 10 }))
+    : REGIONS.filter((r) => r !== 'neck').map((r) => ({ key: r, label: REGION_NAMES[r], value: Math.round(sets[r] * 10) / 10 }));
+  const radarMax = Math.max(target * 1.4, ...axes.map((a) => a.value));
   const maxSets = Math.max(10 * weeks, ...Object.values(sets));
   const heat = Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, v / maxSets])) as Record<Region, number>;
 
   const series = weeklySeries(done, 8);
   const consistency = series.filter((w) => w.sessions > 0).length;
-  const freq = groupByExercise(done.flatMap((x) => working(x.sets))).sort((a, b) => b.sets.length - a.sets.length).slice(0, 6);
+  const freq = groupByExercise(done.flatMap((x) => working(x.sets))).sort((a, b) => b.sets.length - a.sets.length).slice(0, 12);
   const [lift, setLift] = useState<string | null>(null);
   const liftId = lift ?? freq[0]?.exerciseId;
   const trend = liftId ? strengthTrend(done, liftId) : [];
@@ -65,18 +89,26 @@ export default function Progress() {
     <Screen>
       <Segmented options={LEVELS as any} value={s.analyticsLevel} onChange={(v) => s.set({ analyticsLevel: v as any })} />
 
+      <Segmented options={PERIODS as any} value={period} onChange={(v) => setPeriod(v as any)} />
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
-          <Stat small label="This week" value={series[7].sessions} unit="sessions" />
-          <Stat small label="Sets" value={series[7].sets} />
-          <Stat small label="Consistency" value={`${consistency}/8`} unit="wks" color={consistency >= 6 ? colors.lime : undefined} />
+          <Stat small label="Workouts" value={inRange.length} />
+          <Stat small label="Sets" value={inRange.reduce((n, x) => n + working(x.sets).length, 0)} />
+          <Stat small label="Time" value={minutes >= 120 ? (minutes / 60).toFixed(1) : Math.round(minutes)} unit={minutes >= 120 ? 'h' : 'min'} />
         </Row>
+        <View style={{ gap: 2 }}>
+          <T v="caption" color={colors.faint}>Total volume lifted</T>
+          <Row gap={6} style={{ alignItems: 'baseline' }}>
+            <T v="big" color={colors.cyan} style={type.num}>{Math.round(toDisplay(volume, unit)).toLocaleString()}</T>
+            <T v="headline" color={colors.dim}>{unit}</T>
+          </Row>
+          <T v="footnote" color={colors.faint}>Weight × reps over every working set; two dumbbells count twice. Consistency {consistency}/8 weeks.</T>
+        </View>
       </Card>
 
       <Section title="Muscles">
         <Card style={{ alignItems: 'center' }}>
-          <Segmented style={{ alignSelf: 'stretch' }} options={[{ value: 'week', label: 'This week' }, { value: 'last', label: 'Last week' }, { value: 'month', label: '4 weeks' }]} value={period} onChange={(v) => setPeriod(v as any)} />
-          <BodyMap heat={heat} showBoth scale={0.62} onSelect={setRegion} selected={region} />
+          <SwipeBody width={inner} heat={heat} onSelect={setRegion} selected={region} />
           {region ? (
             <View style={{ alignSelf: 'stretch', gap: 4 }}>
               <Row style={{ justifyContent: 'space-between' }}>
@@ -90,13 +122,16 @@ export default function Progress() {
           ) : (
             <T v="label" color={colors.faint} style={{ textAlign: 'center' }}>Tap a muscle. Primary target = 1 set, supporting = ½ (an approximation).</T>
           )}
-          {level >= 2 && (
-            <Row style={{ flexWrap: 'wrap', alignSelf: 'stretch' }} gap={6}>
-              {(Object.entries(sets) as [Region, number][]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([r, v]) => (
-                <Chip key={r} label={`${REGION_NAMES[r]} ${v % 1 ? v.toFixed(1) : v}`} active={region === r} onPress={() => setRegion(region === r ? null : r)} />
-              ))}
-            </Row>
-          )}
+        </Card>
+      </Section>
+
+      <Section title="Sets per muscle" action={<Segmented style={{ width: 170 }} options={[{ value: 'basic', label: 'Basic' }, { value: 'detailed', label: 'Detailed' }]} value={detail} onChange={(v) => setDetail(v as any)} />}>
+        <Card style={{ alignItems: 'center' }}>
+          <Radar axes={axes} target={target} max={radarMax} size={Math.min(inner + space.lg, 380)} selected={region} onSelect={(k) => REGIONS.includes(k as Region) && setRegion(k as Region)} />
+          <Row gap={space.lg}>
+            <Row gap={6}><View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: alpha(colors.cyan, 0.5), borderWidth: 1.5, borderColor: colors.cyan }} /><T v="footnote" color={colors.dim}>Sets done</T></Row>
+            <Row gap={6}><View style={{ width: 14, height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: colors.lime }} /><T v="footnote" color={colors.dim}>{target} sets target</T></Row>
+          </Row>
         </Card>
       </Section>
 
@@ -112,9 +147,7 @@ export default function Progress() {
         <Card>
           {freq.length ? (
             <>
-              <Row gap={6} style={{ flexWrap: 'wrap' }}>
-                {freq.map((f) => <Chip key={f.exerciseId} label={exercise(f.exerciseId)?.name ?? f.exerciseId} active={f.exerciseId === liftId} onPress={() => setLift(f.exerciseId)} />)}
-              </Row>
+              <LiftCarousel ids={freq.map((f) => f.exerciseId)} selected={liftId} onSelect={setLift} done={done} unit={unit} />
               {trend.length ? (
                 <>
                   <Row style={{ justifyContent: 'space-between' }}>
@@ -122,7 +155,7 @@ export default function Progress() {
                     {trend.length > 1 && <Stat small label="Change" value={`${trend[trend.length - 1].value >= trend[0].value ? '+' : ''}${formatWeight(trend[trend.length - 1].value - trend[0].value, unit)}`} unit={unit} color={trend[trend.length - 1].value >= trend[0].value ? colors.lime : colors.amber} />}
                   </Row>
                   <LineChart data={trend.map((t) => toDisplay(t.value, unit))} />
-                  <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0 }}>Epley estimate from sets of 10 reps or fewer. Not a tested max.</T>
+                  <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0 }}>Epley estimate from sets of 15 reps or fewer. Not a tested max.</T>
                 </>
               ) : <T v="label" color={colors.faint}>Log weighted sets of 1–10 reps to see a trend.</T>}
             </>
@@ -216,5 +249,32 @@ export default function Progress() {
       )}
       <View style={{ height: 1, backgroundColor: alpha(colors.cyan, 0) }} />
     </Screen>
+  );
+}
+
+/** Lifts as swipeable cards: picture, estimated max, change and a small trend line. */
+function LiftCarousel({ ids, selected, onSelect, done, unit }: { ids: string[]; selected?: string; onSelect: (id: string) => void; done: Parameters<typeof strengthTrend>[0]; unit: 'kg' | 'lb' }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={152} decelerationRate="fast" contentContainerStyle={{ gap: space.sm, paddingRight: space.lg }} style={{ marginHorizontal: -space.lg, paddingLeft: space.lg }}>
+      {ids.map((id) => {
+        const e = exercise(id);
+        const t = strengthTrend(done, id);
+        const last = t[t.length - 1]?.value ?? 0;
+        const change = t.length > 1 ? last - t[0].value : 0;
+        const on = id === selected;
+        return (
+          <Press key={id} onPress={() => onSelect(id)} style={{ width: 144, padding: space.sm, gap: 6, borderRadius: radius.lg, backgroundColor: on ? alpha(colors.cyan, 0.12) : colors.surface2, borderWidth: 1, borderColor: on ? alpha(colors.cyan, 0.6) : 'transparent' }}>
+            {e && <ExerciseImage exercise={e} thumb style={{ width: 128, height: 72 }} />}
+            <T v="footnote" numberOfLines={2} style={{ minHeight: 32 }}>{e?.name ?? id}</T>
+            <Row gap={4} style={{ alignItems: 'baseline' }}>
+              <T v="headline" color={on ? colors.cyan : colors.text} style={type.num}>{last ? formatWeight(last, unit) : '—'}</T>
+              <T v="footnote" color={colors.faint}>{last ? unit : ''}</T>
+              {t.length > 1 && <T v="footnote" color={change >= 0 ? colors.lime : colors.amber} style={type.num}>{change >= 0 ? '+' : ''}{formatWeight(change, unit)}</T>}
+            </Row>
+            {t.length > 1 ? <LineChart data={t.map((x) => toDisplay(x.value, unit))} height={26} color={on ? colors.cyan : colors.dim} /> : <View style={{ height: 26 }} />}
+          </Press>
+        );
+      })}
+    </ScrollView>
   );
 }

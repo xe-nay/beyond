@@ -94,6 +94,7 @@ export default function Profile() {
 
       <Section title="Data">
         <Card style={{ padding: 0, gap: 0 }}>
+          <Item icon="doc.richtext" label="Export as PDF" detail="Workouts, food, body" onPress={() => router.push('/export')} />
           <Item icon="square.and.arrow.up" label="Export backup" onPress={exportAll} />
           <Divider />
           <Item icon="square.and.arrow.down" label="Restore backup" onPress={importAll} />
