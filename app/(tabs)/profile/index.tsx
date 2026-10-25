@@ -27,6 +27,17 @@ export default function Profile() {
     const uri = cacheText(`beyond-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ format: 'beyond-backup', ...data }));
     if (Platform.OS !== 'web') await Sharing.shareAsync(uri, { mimeType: 'application/json', UTI: 'public.json' });
   };
+  const resetApp = () => {
+    const go = () => {
+      useStore.getState().reset();
+      router.replace('/onboarding');
+    };
+    if (Platform.OS === 'web') return go();
+    Alert.alert('Reset Beyond?', 'All workouts, food, body data and settings on this iPhone are erased, and the app starts again from the welcome screen. Export a backup first if you want to keep them.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reset', style: 'destructive', onPress: go },
+    ]);
+  };
   const importAll = async () => {
     const r = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
     if (r.canceled) return;
@@ -86,6 +97,8 @@ export default function Profile() {
           <Item icon="square.and.arrow.up" label="Export backup" onPress={exportAll} />
           <Divider />
           <Item icon="square.and.arrow.down" label="Restore backup" onPress={importAll} />
+          <Divider />
+          <Item icon="arrow.counterclockwise" label="Reset app" danger onPress={resetApp} />
         </Card>
         {msg && <T v="label" color={colors.cyan} style={{ paddingHorizontal: 4 }}>{msg}</T>}
         <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0, paddingHorizontal: 4 }}>
@@ -105,14 +118,14 @@ export default function Profile() {
   );
 }
 
-function Item({ icon, label, detail, onPress }: { icon: IconName; label: string; detail?: string; onPress: () => void }) {
+function Item({ icon, label, detail, onPress, danger }: { icon: IconName; label: string; detail?: string; onPress: () => void; danger?: boolean }) {
   return (
     <Press onPress={onPress} haptic={false}>
       <Row style={{ padding: space.lg }}>
         <View style={{ width: 30, height: 30, borderRadius: radius.sm, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name={icon} size={15} color={colors.cyan} />
+          <Icon name={icon} size={15} color={danger ? colors.red : colors.cyan} />
         </View>
-        <T v="headline" style={{ flex: 1 }}>{label}</T>
+        <T v="headline" color={danger ? colors.red : undefined} style={{ flex: 1 }}>{label}</T>
         {detail && <T v="label" color={colors.dim}>{detail}</T>}
         <Icon name="chevron.right" size={13} color={colors.faint} />
       </Row>

@@ -2,28 +2,73 @@
 // the rest become scheduled sessions. Also reads the earlier "kinetic-training" v1 files.
 import type { CardioSession, Exercise, IntervalPlan, Prescription, Session, WorkoutSet } from './types.ts';
 
+/** Something already in the app on the same date and of the same type as an imported entry. */
+export interface Clash { id: string; name: string; kind: 'plan' | 'history' }
+export interface ImportRow {
+  id: string; // id the entry gets in the app
+  date: string;
+  name: string;
+  type: 'strength' | 'cardio';
+  kind: 'plan' | 'history';
+  status: 'new' | 'same' | 'changed'; // changed: this entry was imported before and differs now
+  clashes: Clash[];
+}
+
 export interface ImportResult {
   sessions: Session[];
   cardio: CardioSession[];
-  rows: { date: string; name: string; type: 'strength' | 'cardio'; kind: 'plan' | 'history'; status: 'new' | 'same' }[];
+  rows: ImportRow[];
   errors: string[];
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-/** Finds an exercise by our id, a free-exercise-db id, or its name. */
+/** Everyday names that would otherwise land on a variant. */
+const ALIASES: Record<string, string> = {
+  'squat': 'squat', 'back-squat': 'squat', 'deadlift': 'deadlift', 'bench': 'bench-press', 'bench-press': 'bench-press',
+  'overhead-press': 'ohp', 'military-press': 'ohp', 'shoulder-press': 'ohp', 'ohp': 'ohp',
+  'barbell-row': 'barbell-row', 'bent-over-row': 'barbell-row', 'row': 'barbell-row',
+  'hip-thrust': 'hip-thrust', 'bicep-curl': 'bicep-curl', 'biceps-curl': 'bicep-curl', 'curl': 'bicep-curl',
+  'dip': 'dips', 'dips': 'dips', 'chin-up': 'chin-ups', 'chin-ups': 'chin-ups', 'calf-raise': 'machine-calf-raise',
+  'lateral-raise': 'lateral-raise', 'lateral-raises': 'lateral-raise', 'side-lateral-raise': 'lateral-raise',
+  'pull-up': 'pull-up', 'pull-ups': 'pull-up', 'pullups': 'pull-up', 'push-up': 'push-up', 'push-ups': 'push-up', 'pushups': 'push-up',
+};
+
+const words = (s: string) => slug(s).split('-').filter(Boolean).map((w) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w));
+
+/** Finds an exercise by our id, a free-exercise-db id, its name, or failing that the shortest name holding every word ("bench press" → Barbell Bench Press). */
 export function resolver(all: Exercise[]) {
   const byId = new Map(all.map((e) => [e.id, e]));
   const byName = new Map(all.map((e) => [slug(e.name), e]));
-  return (ref: string) => byId.get(ref) ?? byId.get(`f-${slug(ref)}`) ?? byName.get(slug(ref)) ?? null;
+  const indexed = all.map((e) => ({ e, w: words(e.name) }));
+  // Extra words cost 1 each; a plain equipment word costs less, and the main catalog wins ties.
+  const cost = (w: string[], want: string[], id: string) =>
+    w.filter((x) => !want.includes(x)).reduce((n, x) => n + (x === 'barbell' ? 0.3 : x === 'dumbbell' ? 0.5 : 1), 0) + (id.startsWith('f-') ? 0.1 : 0);
+  return (ref: string) => {
+    const key = ALIASES[slug(ref)] ?? ref;
+    const hit = byId.get(key) ?? byId.get(slug(key)) ?? byId.get(`f-${slug(key)}`) ?? byName.get(slug(key));
+    if (hit) return hit;
+    const want = words(key);
+    if (!want.length) return null;
+    let best: { e: Exercise; c: number } | null = null;
+    for (const x of indexed) {
+      if (!want.every((w) => x.w.includes(w))) continue;
+      const c = cost(x.w, want, x.e.id);
+      if (!best || c < best.c) best = { e: x.e, c };
+    }
+    return best?.e ?? null;
+  };
 }
 
 export function parseTrainingFile(text: string, all: Exercise[], existing: { sessions: Session[]; cardio: CardioSession[] }): ImportResult {
   const out: ImportResult = { sessions: [], cardio: [], rows: [], errors: [] };
   let file: any;
   try {
-    file = JSON.parse(text);
+    // Tolerates a reply pasted from a chat: code fences or a sentence around the JSON.
+    const a = text.indexOf('{');
+    const b = text.lastIndexOf('}');
+    file = JSON.parse(a >= 0 && b > a ? text.slice(a, b + 1) : text);
   } catch {
     return { ...out, errors: ['The file is not valid JSON.'] };
   }
@@ -68,9 +113,10 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
         avgHr: done ? p.avgHr ?? null : null,
         completed: done,
       };
-      const same = existing.cardio.some((x) => x.id === id && JSON.stringify(x) === JSON.stringify(c));
+      const prev = existing.cardio.find((x) => x.id === id);
+      const clashes = existing.cardio.filter((x) => x.id !== id && x.date === c.date).map((x) => ({ id: x.id, name: x.activity, kind: x.completed ? 'history' as const : 'plan' as const }));
       out.cardio.push(c);
-      out.rows.push({ date: c.date, name: entry.name ?? c.activity, type: 'cardio', kind: done ? 'history' : 'plan', status: same ? 'same' : 'new' });
+      out.rows.push({ id, date: c.date, name: entry.name ?? c.activity, type: 'cardio', kind: done ? 'history' : 'plan', status: !prev ? 'new' : JSON.stringify(prev) === JSON.stringify(c) ? 'same' : 'changed', clashes });
       return;
     }
 
@@ -94,9 +140,9 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
     if (done) {
       const p = entry.performed;
       sets = (p.sets ?? []).map((s: any, n: number) => {
-        const e = find(s.exerciseId ?? '');
+        const e = find(s.exerciseId ?? s.name ?? '');
         return e && {
-          id: `${id}-s${n}`, exerciseId: e.id, reps: +s.reps || 0, loadKg: +s.loadKg || 0, rir: s.rir ?? null,
+          id: `${id}-s${n}`, exerciseId: e.id, reps: +s.reps || 0, loadKg: +s.loadKg || 0, rir: s.rir ?? null, implements: s.implements === 2 ? 2 : undefined,
           warmup: !!s.warmup, completedAt: s.completedAt ?? `${entry.date}T12:00:00Z`, restSeconds: s.actualRestSeconds ?? null,
         };
       });
@@ -112,11 +158,37 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
     const prev = existing.sessions.find((x) => x.id === id);
     if (prev && prev.startedAt && !prev.finishedAt) return out.errors.push(`${where}: already in progress in the app.`);
     out.sessions.push(session);
-    out.rows.push({ date: session.date, name: session.name, type: 'strength', kind: done ? 'history' : 'plan', status: prev && JSON.stringify(prev) === JSON.stringify(session) ? 'same' : 'new' });
+    // Sessions on that date that hold something: logged sets, a finished workout or a plan.
+    const clashes = existing.sessions
+      .filter((x) => x.id !== id && x.date === session.date && !(x.startedAt && !x.finishedAt) && (x.sets.length || x.finishedAt || !x.startedAt))
+      .map((x) => ({ id: x.id, name: x.name, kind: x.finishedAt || x.sets.length ? 'history' as const : 'plan' as const }));
+    out.rows.push({ id, date: session.date, name: session.name, type: 'strength', kind: done ? 'history' : 'plan', status: !prev ? 'new' : JSON.stringify(prev) === JSON.stringify(session) ? 'same' : 'changed', clashes });
   });
 
   out.rows.sort((a, b) => a.date.localeCompare(b.date));
   return out;
+}
+
+export type Choice = 'mine' | 'import' | 'both';
+/** A row needs a decision when it would overwrite or sit next to something already logged. */
+export const needsChoice = (r: ImportRow) => r.status === 'changed' || (r.status === 'new' && r.clashes.length > 0);
+
+/** What to add and what to remove, given the user's choice for each conflicting row (default: keep mine). */
+export function applyChoices(result: ImportResult, choices: Record<string, Choice>) {
+  const take = new Set<string>();
+  const remove = new Set<string>();
+  for (const r of result.rows) {
+    if (r.status === 'same') continue;
+    const c = needsChoice(r) ? choices[r.id] ?? 'mine' : 'import';
+    if (c === 'mine') continue;
+    take.add(r.id);
+    if (c === 'import') r.clashes.forEach((x) => remove.add(x.id));
+  }
+  return {
+    sessions: result.sessions.filter((x) => take.has(x.id)),
+    cardio: result.cardio.filter((x) => take.has(x.id)),
+    remove: [...remove],
+  };
 }
 
 /** A blank week template from a program, to edit and re-import. */

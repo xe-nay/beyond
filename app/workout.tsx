@@ -128,7 +128,7 @@ export default function Workout() {
         <Press onPress={() => router.back()} style={styles.round} hitSlop={8}><Icon name="chevron.down" size={18} /></Press>
         <View style={{ alignItems: 'center' }}>
           <T v="headline" numberOfLines={1}>{session.name}</T>
-          <T v="label" color={colors.cyan} style={type.num}>{formatClock(elapsed)}</T>
+          <T v="footnote" color={colors.cyan} style={[type.num, { fontWeight: "600" }]}>{formatClock(elapsed)}</T>
         </View>
         <Button small kind="lime" title="Finish" onPress={() => router.push('/finish')} />
       </Row>
@@ -156,8 +156,9 @@ export default function Workout() {
             </Press>
           );
         })}
-        <Press onPress={() => router.push({ pathname: '/library', params: { pick: 'session' } })} style={[styles.chip, { paddingHorizontal: space.md }]}>
-          <Icon name="plus" size={16} color={colors.cyan} />
+        <Press onPress={() => router.push({ pathname: '/library', params: { pick: 'session' } })} style={[styles.chip, styles.addChip]}>
+          <View style={styles.addIcon}><Icon name="plus" size={14} color={colors.black} /></View>
+          <T v="footnote" color={colors.cyan} style={{ fontWeight: '600' }}>Add</T>
         </Press>
       </ScrollView>
 
@@ -357,7 +358,9 @@ const styles = StyleSheet.create({
   round: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
   progressTrack: { height: 3, borderRadius: 2, backgroundColor: colors.surface3, overflow: 'hidden' },
   progressFill: { height: 3, borderRadius: 2, backgroundColor: colors.lime },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: 6, paddingRight: space.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.hairline },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: 6, paddingRight: space.md, height: 46, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.hairline },
+  addChip: { borderStyle: 'dashed', borderColor: alpha(colors.cyan, 0.45), backgroundColor: alpha(colors.cyan, 0.06) },
+  addIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: colors.cyan, alignItems: 'center', justifyContent: 'center' },
   chipOn: { borderColor: alpha(colors.cyan, 0.6), backgroundColor: alpha(colors.cyan, 0.08) },
   heroBar: { marginTop: space.md, gap: space.sm, alignItems: 'center' },
   setHead: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xs },

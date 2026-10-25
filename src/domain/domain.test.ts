@@ -138,3 +138,54 @@ test('two dumbbells count double in volume and e1RM', async () => {
   const t = strengthTrend([session('2026-10-01', [pair])], 'bench-press');
   assert.ok(Math.abs(t[0].value - 40 * (1 + 10 / 30)) < 1e-9);
 });
+
+test('imports never delete other data and ask about days that already have logs', async () => {
+  const { applyChoices, needsChoice } = await import('./importer.ts');
+  const all = [{ id: 'bench-press', name: 'Barbell Bench Press' }, { id: 'squat', name: 'Barbell Back Squat' }] as Exercise[];
+  const mine = session('2026-09-14', [set(8, 80)], { id: 'mine-1', name: 'My push day' });
+  const other = session('2026-09-20', [set(5, 100)], { id: 'mine-2' });
+  const text = '```json\n' + JSON.stringify({
+    format: 'beyond-training', version: 1, id: 'history',
+    entries: [
+      { id: 'a', date: '2026-09-14', type: 'strength', name: 'Push', performed: { sets: [{ name: 'Bench Press', reps: 6, loadKg: 85 }] } },
+      { id: 'b', date: '2026-09-15', type: 'strength', name: 'Legs', performed: { sets: [{ name: 'squat', reps: 5, loadKg: 100 }] } },
+    ],
+  }) + '\n```';
+  const r = parseTrainingFile(text, all, { sessions: [mine, other], cardio: [] });
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.sessions[0].sets[0].exerciseId, 'bench-press');
+  assert.deepEqual(r.rows.map(needsChoice), [true, false]);
+  assert.equal(r.rows[0].clashes[0].id, 'mine-1');
+  // Default keeps mine: only the clash-free day comes in, nothing is removed.
+  const keep = applyChoices(r, {});
+  assert.deepEqual(keep.sessions.map((x) => x.id), ['imp-history-b']);
+  assert.deepEqual(keep.remove, []);
+  const take = applyChoices(r, { 'imp-history-a': 'import' });
+  assert.deepEqual(take.remove, ['mine-1']);
+  const both = applyChoices(r, { 'imp-history-a': 'both' });
+  assert.equal(both.sessions.length, 2);
+  assert.deepEqual(both.remove, []);
+});
+
+test('GPS distance ignores jitter and jumps; pace and target parsing', async () => {
+  const { step, haversine, rollingPace, targetPace, onPace, formatPace } = await import('./track.ts');
+  const at = (m: number, s: number, accuracy = 5) => ({ lat: 48.85 + m / 111195, lon: 2.35, t: s * 1000, accuracy });
+  assert.ok(Math.abs(haversine(at(0, 0), at(1000, 0)) - 1000) < 1);
+  // 1 km in 5 min of good fixes every 10 s
+  let anchor = null as Parameters<typeof step>[0], meters = 0;
+  const samples: { t: number; m: number }[] = [];
+  for (let s = 0; s <= 300; s += 10) {
+    const r = step(anchor, at((s / 300) * 1000, s), 'Running')!;
+    anchor = r.anchor; meters += r.add; samples.push({ t: s * 1000, m: meters });
+  }
+  assert.ok(Math.abs(meters - 1000) < 1);
+  assert.equal(step(anchor, at(1001, 301), 'Running')!.add, 0); // 1 m of jitter
+  assert.equal(step(anchor, at(1500, 302), 'Running'), null); // 500 m in a second
+  assert.equal(step(anchor, at(1010, 305, 80), 'Running'), null); // imprecise fix
+  assert.ok(Math.abs(rollingPace(samples, 300000)! - 300) < 1);
+  assert.equal(targetPace('4:30 /km'), 270);
+  assert.ok(Math.abs(targetPace('8:03/mi')! - 300.1) < 0.5);
+  assert.equal(targetPace('Easy jog'), null);
+  assert.ok(onPace(275, 270) && !onPace(290, 270));
+  assert.equal(formatPace(299.6), '5:00');
+});

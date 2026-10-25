@@ -48,7 +48,7 @@ export interface Profile {
   onboarded: boolean;
 }
 
-export type Cue = 'beeps' | 'letsgo' | 'drill' | 'goggins' | 'ronnie';
+export type Cue = 'beeps' | 'letsgo' | 'drill' | 'goggins' | 'ronnie' | 'sulek';
 
 export interface TimerSettings {
   autoStart: boolean;
@@ -58,6 +58,7 @@ export interface TimerSettings {
   haptics: boolean;
   cue: Cue; // what plays near the end of a rest
   defaultRest?: number; // seconds, for exercises added outside a program
+  muted?: string[]; // voice clips the user removed from rotation
 }
 
 export interface Prescription {

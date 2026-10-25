@@ -118,7 +118,13 @@ export default function Scan() {
           </Animated.View>
         )}
         {phase.kind === 'scanning' && typed === null && (
-          <T v="headline" color={colors.dim} style={{ textAlign: 'center' }}>{permission && !permission.granted ? 'Allow camera access in Settings' : 'Point at a barcode'}</T>
+          <View style={{ alignItems: 'center', gap: space.md }}>
+            <T v="headline" color={colors.dim} style={{ textAlign: 'center' }}>{permission && !permission.granted ? 'Allow camera access in Settings' : 'Point at a barcode'}</T>
+            <Press onPress={() => router.replace({ pathname: '/food-search', params: { date: date ?? '', meal: meal ?? '' } })} style={styles.searchPill}>
+              <Icon name="magnifyingglass" size={16} />
+              <T v="headline">No barcode? Search food</T>
+            </Press>
+          </View>
         )}
         {phase.kind === 'looking' && (
           <Animated.View entering={reduced ? undefined : FadeIn.duration(150)} style={styles.card}>
@@ -158,6 +164,7 @@ const styles = StyleSheet.create({
   br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 14 },
   line: { position: 'absolute', left: 12, right: 12, top: 2, height: 2, borderRadius: 1, backgroundColor: colors.cyan, shadowColor: colors.cyan, shadowOpacity: 0.9, shadowRadius: 8 },
   round: { width: 40, height: 40, borderRadius: 20, backgroundColor: alpha('#000000', 0.55), alignItems: 'center', justifyContent: 'center' },
+  searchPill: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 50, paddingHorizontal: space.xl, borderRadius: radius.pill, backgroundColor: alpha('#FFFFFF', 0.14), borderWidth: StyleSheet.hairlineWidth, borderColor: alpha('#FFFFFF', 0.25) },
   card: { backgroundColor: colors.surface2, borderRadius: radius.xl, padding: space.lg, gap: space.md },
   input: { height: 50, borderRadius: radius.md, backgroundColor: colors.surface3, color: colors.text, paddingHorizontal: space.md, fontSize: 20, fontWeight: '600', letterSpacing: 2 },
 });

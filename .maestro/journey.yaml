@@ -19,6 +19,16 @@ name: First run, workout, food, progress and cardio
     visible: ".*Start workout.*"
     timeout: 15000
 - takeScreenshot: 05-today
+- swipe:
+    start: "15%, 25%"
+    end: "90%, 25%"
+    duration: 300
+- waitForAnimationToEnd
+- takeScreenshot: 05b-calendar-previous-week
+- doubleTapOn:
+    point: "20%, 20%"
+- waitForAnimationToEnd
+- takeScreenshot: 05c-calendar-back-to-today
 - tapOn: ".*Start workout.*"
 - extendedWaitUntil:
     visible: ".*Complete set 1.*"
@@ -53,6 +63,9 @@ name: First run, workout, food, progress and cardio
 - tapOn: ".*Cardio.*"
 - takeScreenshot: 15-cardio-plan
 - tapOn: ".*Start ·.*"
+- tapOn:
+    text: "Allow While Using App"
+    optional: true
 - waitForAnimationToEnd
 - takeScreenshot: 16-cardio-warmup
 - tapOn:

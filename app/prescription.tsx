@@ -1,8 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { exercise } from '../src/catalog';
-import { Button, Chip, Row, Stepper, T } from '../src/components/ui';
+import { ExerciseImage } from '../src/components/ExerciseImage';
+import { Icon } from '../src/components/Icon';
+import { Button, Chip, Press, Row, Stepper, T } from '../src/components/ui';
+import { REGION_NAMES } from '../src/domain/calc';
 import { formatClock } from '../src/domain/intervals';
 import type { Prescription } from '../src/domain/types';
 import { useStore } from '../src/store';
@@ -13,16 +18,48 @@ export default function PrescriptionSheet() {
   const { session: sessionId, index, program, day } = useLocalSearchParams<{ session?: string; index: string; program?: string; day?: string }>();
   const router = useRouter();
   const s = useStore();
+  const [howTo, setHowTo] = useState(false);
   const i = Number(index);
   const p = sessionId
     ? s.sessions.find((x) => x.id === sessionId)?.plan[i]
     : s.programs.find((x) => x.id === program)?.days.find((d) => d.id === day)?.exercises[i];
   if (!p) return null;
+  const e = exercise(p.exerciseId);
   const patch = (x: Partial<Prescription> | null) => (sessionId ? s.patchPlan(sessionId, i, x) : s.updatePrescription(program!, day!, i, x));
 
   return (
     <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.xl }}>
-      <T v="title">{exercise(p.exerciseId)?.name}</T>
+      {e && (
+        <View style={{ gap: space.md }}>
+          {/* The demonstration loops start and peak frames of the movement. */}
+          <ExerciseImage exercise={e} style={{ height: 220 }} />
+          <View style={{ gap: 4 }}>
+            <T v="title">{e.name}</T>
+            <T v="footnote" color={colors.dim}>{e.primary.map((r) => REGION_NAMES[r]).join(' · ')}</T>
+          </View>
+          {e.steps.length > 0 && (
+            <View style={{ gap: space.sm }}>
+              <Press onPress={() => setHowTo(!howTo)}>
+                <Row style={{ justifyContent: 'space-between' }}>
+                  <T v="headline" color={colors.cyan}>How to</T>
+                  <Icon name={howTo ? 'chevron.down' : 'chevron.right'} size={14} color={colors.cyan} />
+                </Row>
+              </Press>
+              {howTo && (
+                <Animated.View entering={FadeIn.duration(180)} style={{ gap: space.sm }}>
+                  {e.steps.map((step, n) => (
+                    <Row key={n} style={{ alignItems: 'flex-start' }}>
+                      <T v="headline" color={colors.cyan} style={{ width: 22 }}>{n + 1}</T>
+                      <T v="callout" color={colors.dim} style={{ flex: 1 }}>{step}</T>
+                    </Row>
+                  ))}
+                  <Press onPress={() => router.push(`/exercise/${e.id}`)}><T v="footnote" color={colors.faint}>Muscles, history and alternatives</T></Press>
+                </Animated.View>
+              )}
+            </View>
+          )}
+        </View>
+      )}
       <Row>
         <Stepper label="Sets" value={p.sets} onChange={(sets) => patch({ sets })} min={1} max={10} />
         <Stepper label="Warm-ups" value={p.warmupSets ?? 0} onChange={(warmupSets) => patch({ warmupSets })} min={0} max={5} />

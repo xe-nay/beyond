@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -6,31 +7,47 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { exercises } from '../src/catalog';
 import { Icon } from '../src/components/Icon';
-import { Button, Card, Row, T } from '../src/components/ui';
-import { parseTrainingFile, type ImportResult } from '../src/domain/importer';
+import { Button, Card, Row, Segmented, T } from '../src/components/ui';
+import { applyChoices, needsChoice, parseTrainingFile, type Choice, type ImportResult, type ImportRow } from '../src/domain/importer';
+import { IMPORT_GUIDE } from '../src/importGuide';
 import { readUri } from '../src/storage';
 import { useStore } from '../src/store';
-import { colors, space } from '../src/theme';
+import { colors, plural, space } from '../src/theme';
 
 /** One dated file for plans and history: past entries with results become history, the rest the plan. */
 export default function Import() {
   const router = useRouter();
   const s = useStore();
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [choices, setChoices] = useState<Record<string, Choice>>({});
+  const [copied, setCopied] = useState<'guide' | 'names' | null>(null);
 
-  const pick = async () => {
-    const r = await DocumentPicker.getDocumentAsync({ type: ['application/json', 'text/plain', '*/*'], copyToCacheDirectory: true });
-    if (r.canceled) return;
-    const text = await readUri(r.assets[0].uri);
+  const read = (text: string) => {
+    setChoices({});
     setResult(parseTrainingFile(text, exercises, { sessions: s.sessions, cardio: s.cardio }));
   };
+  const pick = async () => {
+    const r = await DocumentPicker.getDocumentAsync({ type: ['application/json', 'text/plain', '*/*'], copyToCacheDirectory: true });
+    if (!r.canceled) read(await readUri(r.assets[0].uri));
+  };
+  const paste = async () => read(await Clipboard.getStringAsync());
+  const copy = async (what: 'guide' | 'names') => {
+    await Clipboard.setStringAsync(what === 'guide' ? IMPORT_GUIDE : exercises.map((e) => e.name).join('\n'));
+    setCopied(what);
+  };
 
-  const fresh = result?.rows.filter((x) => x.status === 'new').length ?? 0;
+  const plan = result && !result.errors.length ? applyChoices(result, choices) : null;
+  const count = plan ? plan.sessions.length + plan.cardio.length : 0;
+  const conflicts = result?.rows.filter(needsChoice) ?? [];
+
   return (
-    <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }}>
+    <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }} keyboardShouldPersistTaps="handled">
       <T v="title">Import training</T>
-      <T v="label" color={colors.dim}>A JSON file with dated strength and cardio entries. Entries with results go to your history; the others are planned on their date.</T>
-      <Button icon="doc.badge.plus" title={result ? 'Choose another file' : 'Choose file'} kind={result ? 'secondary' : 'primary'} onPress={pick} />
+      <T v="label" color={colors.dim}>Plans and past workouts from one JSON file or a reply copied from an AI chat. Nothing already in the app is deleted.</T>
+      <Row gap={space.sm}>
+        <Button icon="doc.on.clipboard" title="Paste" kind={result ? 'secondary' : 'primary'} onPress={paste} style={{ flex: 1 }} />
+        <Button icon="doc.badge.plus" title="File" kind="secondary" onPress={pick} style={{ flex: 1 }} />
+      </Row>
 
       {result && (
         <Animated.View entering={FadeIn.duration(200)} style={{ gap: space.md }}>
@@ -41,32 +58,63 @@ export default function Import() {
             </Card>
           ) : (
             <>
+              {conflicts.length > 0 && (
+                <View style={{ gap: 4 }}>
+                  <T v="headline" color={colors.amber}>{plural(conflicts.length, 'day')} already {conflicts.length === 1 ? 'has' : 'have'} logs</T>
+                  <T v="label" color={colors.dim}>Choose which version to keep for each. Yours stays unless you change it.</T>
+                </View>
+              )}
               <Card style={{ padding: 0, gap: 0 }}>
                 {result.rows.map((r, i) => (
-                  <Row key={i} style={{ padding: space.md, borderTopWidth: i ? 0.5 : 0, borderTopColor: colors.hairline }}>
-                    <Icon name={r.type === 'cardio' ? 'figure.run' : 'dumbbell.fill'} size={16} color={r.kind === 'history' ? colors.lime : colors.cyan} />
-                    <View style={{ flex: 1 }}>
-                      <T v="headline" numberOfLines={1}>{r.name}</T>
-                      <T v="label" color={colors.dim}>{r.date} · {r.kind === 'history' ? 'History' : 'Planned'}</T>
-                    </View>
-                    {r.status === 'same' && <T v="caption" color={colors.faint}>Already in</T>}
-                  </Row>
+                  <Entry key={r.id} row={r} first={i === 0} choice={choices[r.id] ?? 'mine'} onChoose={(c) => setChoices({ ...choices, [r.id]: c })} />
                 ))}
               </Card>
-              <Button kind="lime" icon="checkmark" title={fresh ? `Import ${fresh} entr${fresh === 1 ? 'y' : 'ies'}` : 'Nothing new'} disabled={!fresh} onPress={() => { s.importData(result.sessions, result.cardio); router.back(); }} />
+              <Button
+                kind="lime" icon="checkmark" disabled={!count}
+                title={count ? `Import ${plural(count, 'entry', 'entries')}` : 'Nothing new'}
+                onPress={() => { s.importData(plan!.sessions, plan!.cardio, plan!.remove); router.back(); }}
+              />
             </>
           )}
         </Animated.View>
       )}
 
-      <Card style={{ gap: 6 }}>
-        <T v="caption" color={colors.faint}>Format</T>
-        <T v="label" color={colors.dim} style={{ fontFamily: 'Menlo' }}>{`{ "format": "beyond-training", "version": 1, "id": "week-1",
-  "entries": [{ "id": "d1", "date": "2026-10-27", "type": "strength",
-    "name": "Upper A", "exercises": [{ "exerciseId": "bench-press",
-    "sets": 3, "minReps": 6, "maxReps": 10, "rir": 2, "restSeconds": 150 }] }] }`}</T>
-        <T v="label" color={colors.dim}>Add "performed": {'{'} "sets": [...] {'}'} for past results, or "type": "cardio" with "intervals". Kinetic files work too. Export a ready template from Program → share.</T>
+      <Card style={{ gap: space.md }}>
+        <Row><Icon name="wand.and.stars" size={18} color={colors.cyan} /><T v="headline">Write it with an AI chat</T></Row>
+        <T v="label" color={colors.dim}>Copy the guide into any AI chat, then describe your plan or past workouts with their dates. Copy the reply and tap Paste.</T>
+        <Button icon={copied === 'guide' ? 'checkmark' : 'square.on.square'} kind="secondary" title={copied === 'guide' ? 'Guide copied' : 'Copy the guide'} onPress={() => copy('guide')} />
+        <Button icon={copied === 'names' ? 'checkmark' : 'list.bullet'} kind="ghost" title={copied === 'names' ? `${exercises.length} names copied` : 'Copy exercise names'} onPress={() => copy('names')} />
       </Card>
     </ScrollView>
+  );
+}
+
+function Entry({ row: r, first, choice, onChoose }: { row: ImportRow; first: boolean; choice: Choice; onChoose: (c: Choice) => void }) {
+  const ask = needsChoice(r);
+  return (
+    <View style={{ padding: space.md, gap: space.sm, borderTopWidth: first ? 0 : 0.5, borderTopColor: colors.hairline }}>
+      <Row>
+        <Icon name={r.type === 'cardio' ? 'figure.run' : 'dumbbell.fill'} size={16} color={r.kind === 'history' ? colors.lime : colors.cyan} />
+        <View style={{ flex: 1 }}>
+          <T v="headline" numberOfLines={1}>{r.name}</T>
+          <T v="footnote" color={colors.dim}>{r.date} · {r.kind === 'history' ? 'History' : 'Planned'}</T>
+        </View>
+        {r.status === 'same' && <T v="footnote" color={colors.faint}>Already in</T>}
+      </Row>
+      {ask && (
+        <>
+          <T v="footnote" color={colors.amber}>
+            {r.status === 'changed' ? 'Imported before with different data' : `In the app: ${r.clashes.map((c) => c.name).join(', ')}`}
+          </T>
+          <Segmented<Choice>
+            value={choice}
+            onChange={onChoose}
+            options={r.status === 'changed'
+              ? [{ value: 'mine', label: 'Keep mine' }, { value: 'import', label: 'Use import' }]
+              : [{ value: 'mine', label: 'Mine' }, { value: 'import', label: 'Import' }, { value: 'both', label: 'Both' }]}
+          />
+        </>
+      )}
+    </View>
   );
 }

@@ -16,10 +16,13 @@
         "NSCameraUsageDescription": "Beyond uses the camera to scan food barcodes.",
         "NSPhotoLibraryUsageDescription": "Beyond saves the progress photos you choose, privately on this iPhone.",
         "UIBackgroundModes": [
-          "audio"
+          "audio",
+          "location"
         ],
         "CADisableMinimumFrameDurationOnPhone": true,
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Beyond measures the distance of your runs, walks and rides. Locations stay on this iPhone.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Beyond measures the distance of your runs, walks and rides. Locations stay on this iPhone. Always lets it keep counting while the phone is locked."
       }
     },
     "web": {
@@ -31,6 +34,15 @@
       "expo-image",
       "expo-sharing",
       "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Beyond measures the distance of your runs, walks and rides. Locations stay on this iPhone.",
+          "locationAlwaysAndWhenInUsePermission": "Beyond measures the distance of your runs, walks and rides. Locations stay on this iPhone. Always lets it keep counting while the phone is locked.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
       [
         "expo-camera",
         {

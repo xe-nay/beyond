@@ -42,13 +42,13 @@ export default function Onboarding() {
 
   const steps = [
     <View key="name" style={styles.step}>
-      <T v="big">Welcome to Beyond</T>
+      <T v="largeTitle">Welcome to Beyond</T>
       <T color={colors.dim}>What should we call you?</T>
       <TextInput value={p.name} onChangeText={(name) => up({ name })} placeholder="Your name" placeholderTextColor={colors.faint} style={styles.input} autoFocus returnKeyType="next" onSubmitEditing={() => setStep(1)} />
       <Segmented options={[{ value: 'kg', label: 'Kilograms' }, { value: 'lb', label: 'Pounds' }]} value={p.unit} onChange={(unit) => up({ unit: unit as Unit })} />
     </View>,
     <View key="goal" style={styles.step}>
-      <T v="big">Your goal</T>
+      <T v="largeTitle">Your goal</T>
       <View style={styles.grid}>
         {GOALS.map((g) => (
           <Press key={g.value} onPress={() => up({ goal: g.value })} style={[styles.tile, p.goal === g.value && styles.tileOn]}>
@@ -59,7 +59,7 @@ export default function Onboarding() {
       </View>
     </View>,
     <View key="level" style={styles.step}>
-      <T v="big">Experience</T>
+      <T v="largeTitle">Experience</T>
       {LEVELS.map((l) => (
         <Press key={l.value} onPress={() => up({ experience: l.value })} style={[styles.option, p.experience === l.value && styles.tileOn]}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -71,7 +71,7 @@ export default function Onboarding() {
       ))}
     </View>,
     <View key="week" style={styles.step}>
-      <T v="big">Your week</T>
+      <T v="largeTitle">Your week</T>
       <View style={styles.panel}>
         <Stepper label="Days per week" value={p.days} onChange={(days) => up({ days })} min={1} max={7} big />
       </View>
@@ -80,7 +80,7 @@ export default function Onboarding() {
       </View>
     </View>,
     <View key="gear" style={styles.step}>
-      <T v="big">Equipment</T>
+      <T v="largeTitle">Equipment</T>
       <T color={colors.dim}>Only what you can use. Programs and swaps follow this.</T>
       <Row style={{ flexWrap: 'wrap' }} gap={space.sm}>
         {EQUIPMENT.map((e) => {
@@ -94,7 +94,7 @@ export default function Onboarding() {
       </Row>
     </View>,
     <View key="body" style={styles.step}>
-      <T v="big">About you</T>
+      <T v="largeTitle">About you</T>
       <T color={colors.dim}>Optional. Used only to estimate a starting calorie target.</T>
       <Segmented options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} value={p.sex ?? 'male'} onChange={(sex) => up({ sex: sex as 'male' | 'female' })} />
       <View style={styles.panel}>

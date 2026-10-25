@@ -5,14 +5,13 @@ import { View } from 'react-native';
 import { byId, exercise } from '../../../src/catalog';
 import { BodyMap } from '../../../src/components/BodyMap';
 import { Icon } from '../../../src/components/Icon';
+import { WeekCalendar } from '../../../src/components/WeekCalendar';
 import { Button, Card, Ring, Row, Screen, Section, T } from '../../../src/components/ui';
 import { fatigueReport, progression, weekStart } from '../../../src/domain/calc';
 import { sum } from '../../../src/domain/nutrition';
 import type { Region } from '../../../src/domain/types';
 import { activeProgram, today, useStore } from '../../../src/store';
 import { alpha, colors, plural, space, type } from '../../../src/theme';
-
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export default function Today() {
   const router = useRouter();
@@ -43,29 +42,7 @@ export default function Today() {
           {greeting()}{s.profile.name ? `, ${s.profile.name}` : ''}
         </T>
 
-        {/* Week strip */}
-        <Row style={{ justifyContent: 'space-between' }}>
-          {DAYS.map((d, i) => {
-            const day = new Date(monday);
-            day.setDate(monday.getDate() + i);
-            const iso = today(day);
-            const trained = done.some((x) => x.date === iso) || s.cardio.some((c) => c.completed && c.date === iso);
-            const planned = program?.days.some((p) => p.weekday === i);
-            const isToday = i === weekday;
-            return (
-              <View key={i} style={{ alignItems: 'center', gap: 6 }}>
-                <T v="caption" color={isToday ? colors.cyan : colors.faint}>{d}</T>
-                <View style={{
-                  width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: trained ? colors.lime : isToday ? colors.cyanSoft : colors.surface,
-                  borderWidth: planned && !trained ? 1.5 : 0, borderColor: isToday ? colors.cyan : colors.hairlineStrong,
-                }}>
-                  {trained ? <Icon name="checkmark" size={14} color={colors.black} /> : <T v="label" color={isToday ? colors.cyan : colors.dim} style={type.num}>{day.getDate()}</T>}
-                </View>
-              </View>
-            );
-          })}
-        </Row>
+        <WeekCalendar />
 
         {/* Next session */}
         {open ? (

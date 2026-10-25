@@ -156,6 +156,7 @@ jobs:
           APP=$(find build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' | head -1)
           xcrun simctl install "$DEVICE" "$APP"
           xcrun simctl privacy "$DEVICE" grant notifications app.beyond.fitness || true
+          xcrun simctl privacy "$DEVICE" grant location-always app.beyond.fitness || true
 
       - name: Walk through the app with Maestro
         run: |

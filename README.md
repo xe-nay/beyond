@@ -6,7 +6,7 @@ A minimal iPhone app for strength training, cardio, nutrition and progress. Ever
 - **Rest and cardio timers**: countdown beeps or voice cues near the end, ducking any music that is playing; guided intervals with pace cues.
 - **Food**: scan a barcode (Open Food Facts) for a full product view; search only when a barcode has no data.
 - **Progress**: muscle heatmap, weekly volume, strength trends, fatigue signals with their evidence, body weight and photos.
-- **Import**: one dated JSON file for plans and history (`beyond-training`, version 1; Kinetic files work too).
+- **Import**: one dated JSON file or AI chat reply for plans and history; conflicts ask which version to keep. See [docs/IMPORT-FORMAT.md](docs/IMPORT-FORMAT.md).
 
 ## Build
 

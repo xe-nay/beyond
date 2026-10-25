@@ -72,6 +72,11 @@ const preview: Partial<Record<IconName, string>> = {
   'keyboard': 'keyboard',
   'ellipsis': 'more_horiz',
   'gauge.with.dots.needle.67percent': 'speed',
+  'arrow.counterclockwise': 'restart_alt',
+  'location.fill': 'location_on',
+  'waveform': 'graphic_eq',
+  'square.on.square': 'content_copy',
+  'doc.on.clipboard': 'content_paste',
 };
 
 type Props = { name: IconName; size?: number; color?: ColorValue; weight?: SymbolWeight; style?: StyleProp<ViewStyle> };

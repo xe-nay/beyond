@@ -4,17 +4,19 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
+import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 
 import type { Cue } from './domain/types';
 import { downloadVoice, voiceUri } from './storage';
 import { useStore } from './store';
-import { pack } from './voices';
+import { pack, type Clip } from './voices';
 
 const S = {
   tick: require('../assets/sounds/tick.wav'),
   end: require('../assets/sounds/end.wav'),
   phase: require('../assets/sounds/phase.wav'),
+  silence: require('../assets/sounds/silence.wav'),
   'count3-end': require('../assets/sounds/count3-end.m4a'),
   'count5-end': require('../assets/sounds/count5-end.m4a'),
   'count10-end': require('../assets/sounds/count10-end.m4a'),
@@ -29,6 +31,7 @@ export type Sound = keyof typeof S;
 const players = new Map<string, AudioPlayer>();
 let current: AudioPlayer | null = null;
 let ready = false;
+let cap: ReturnType<typeof setTimeout> | null = null;
 
 export async function prepareAudio() {
   if (ready) return;
@@ -47,7 +50,7 @@ function player(key: string, source: number | string) {
   return p;
 }
 
-function start(key: string, source: number | string) {
+function start(key: string, source: number | string, seconds?: number) {
   const { sound, volume } = useStore.getState().timer;
   if (!sound || volume <= 0) return;
   try {
@@ -55,6 +58,8 @@ function start(key: string, source: number | string) {
     const p = player(key, source);
     p.volume = volume;
     current = p;
+    if (cap) clearTimeout(cap);
+    cap = seconds ? setTimeout(() => current === p && stopCue(), seconds * 1000) : null;
     p.seekTo(0).then(() => p.play()).catch(() => p.play());
   } catch {}
 }
@@ -78,20 +83,51 @@ export function play(name: Sound) {
   start(name, S[name]);
 }
 
+/**
+ * Speaks a short line in the iPhone's own voice. Music dips while it talks; a silent clip played
+ * afterwards hands the audio session back so the music comes up again.
+ */
+export function say(text: string) {
+  const { sound, volume } = useStore.getState().timer;
+  if (!sound || volume <= 0) return;
+  buzz('end');
+  try {
+    Speech.stop();
+    Speech.speak(text, { language: 'en-US', rate: 0.95, volume, onDone: () => start('silence', S.silence), onError: () => start('silence', S.silence) });
+  } catch {}
+}
+
 /** One file holding N ticks and the closing tone; N is rounded down to an available length. */
 export function playCountdown(seconds: number, ending: 'end' | 'phase') {
   const n = [15, 10, 5, 3].find((x) => x <= seconds);
   start(n ? `count${n}-${ending}` : ending, n ? S[`count${n}-${ending}` as Sound] : S[ending]);
 }
 
-/** A random clip from the chosen voice pack: the downloaded copy when there is one. */
-export function playVoice(cue: Cue) {
+/** Clips of a pack the user kept in rotation (all of them when every clip was removed). */
+export function keptClips(cue: Cue) {
+  const muted = useStore.getState().timer.muted ?? [];
   const p = pack(cue);
-  if (!p.clips.length) return play('end');
+  const kept = p.clips.filter((c) => !muted.includes(c.id));
+  return kept.length ? kept : p.clips;
+}
+
+function playClipNow(cue: Cue, clip: Clip) {
+  const source = pack(cue).remote ? voiceUri(clip.id) ?? (clip.source as string) : clip.source;
+  start(clip.id, source, clip.seconds);
+}
+
+/** A random kept clip from the chosen voice pack: the downloaded copy when there is one. */
+export function playVoice(cue: Cue) {
+  const clips = keptClips(cue);
+  if (!clips.length) return play('end');
   buzz('end');
-  const clip = p.clips[Math.floor(Math.random() * p.clips.length)];
-  const source = p.remote ? voiceUri(clip.id) ?? (clip.source as string) : clip.source;
-  start(clip.id, source);
+  playClipNow(cue, clips[Math.floor(Math.random() * clips.length)]);
+}
+
+/** Plays one clip, for listening before keeping or removing it. */
+export function playClip(cue: Cue, clipId: string) {
+  const clip = pack(cue).clips.find((c) => c.id === clipId);
+  if (clip) playClipNow(cue, clip);
 }
 
 export function packReady(cue: Cue) {

@@ -5,6 +5,7 @@ import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 
 import { Icon } from '../src/components/Icon';
 import { Press, Row, T } from '../src/components/ui';
+import { basicFoods, searchBasics } from '../src/basicFoods';
 import { searchFoods } from '../src/domain/nutrition';
 import type { Food } from '../src/domain/types';
 import { useStore } from '../src/store';
@@ -36,25 +37,28 @@ export default function FoodSearch() {
     return () => clearTimeout(t);
   }, [query]);
 
-  const local = Object.values(s.foods).filter((f) => query.length > 1 && f.name.toLowerCase().includes(query.toLowerCase()));
+  const mine = Object.values(s.foods).filter((f) => query.length > 1 && f.name.toLowerCase().includes(query.toLowerCase()));
+  const local = [...searchBasics(query), ...mine.filter((f) => !f.id.startsWith('usda-'))];
   const choose = (f: Food) => {
     // Remember the product under the scanned barcode so the next scan is instant.
-    const id = barcode || f.id;
+    const id = barcode && !f.id.startsWith('usda-') ? barcode : f.id;
     s.saveFood({ ...f, id, barcode: barcode || f.barcode });
     router.replace({ pathname: '/food/[id]', params: { id, date: date ?? '', meal: meal ?? '' } });
   };
 
   return (
     <View style={{ flex: 1, padding: space.xl, gap: space.md }}>
-      <T v="title">Find the product</T>
+      <T v="title">{barcode ? 'Find the product' : 'Search food'}</T>
       <Row style={styles.search}>
         <Icon name="magnifyingglass" size={16} color={colors.dim} />
-        <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Name or brand" placeholderTextColor={colors.faint} style={{ flex: 1, color: colors.text, fontSize: 17 }} returnKeyType="search" />
+        <TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Eggs, rice, chicken, a brand…" placeholderTextColor={colors.faint} style={{ flex: 1, color: colors.text, fontSize: 17 }} returnKeyType="search" />
         {state === 'loading' && <T v="label" color={colors.dim}>…</T>}
       </Row>
       {state === 'error' && <T v="label" color={colors.amber}>Search needs a connection.</T>}
       <FlatList
-        data={[...local, ...results.filter((r) => !local.some((l) => l.id === r.id))]}
+        data={query.trim().length < 2
+          ? [...Object.values(s.foods).sort((a, b) => b.lastUsed.localeCompare(a.lastUsed)).slice(0, 8), ...basicFoods.filter((b) => !s.foods[b.id])]
+          : [...local, ...results.filter((r) => !local.some((l) => l.id === r.id))]}
         keyExtractor={(x, i) => `${x.id}-${i}`}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ gap: 2, paddingBottom: space.xxl }}

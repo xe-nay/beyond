@@ -5,16 +5,19 @@ import { Icon } from '../src/components/Icon';
 import { Chip, Divider, Press, Row, Stepper, T, Toggle } from '../src/components/ui';
 import { formatClock } from '../src/domain/intervals';
 import type { Cue } from '../src/domain/types';
-import { downloadPack, packReady, playCountdown, playVoice, prepareAudio } from '../src/sound';
+import { downloadPack, packReady, playClip, playCountdown, playVoice, prepareAudio } from '../src/sound';
 import { useStore } from '../src/store';
 import { alpha, colors, radius, space } from '../src/theme';
-import { PACKS, VOICE_LEAD } from '../src/voices';
+import { pack, PACKS, VOICE_LEAD } from '../src/voices';
 
 export default function TimerSettings() {
   const s = useStore();
   const t = s.timer;
   const [loading, setLoading] = useState<{ cue: Cue; done: number; total: number } | null>(null);
   const [failed, setFailed] = useState<Cue | null>(null);
+  const muted = t.muted ?? [];
+  const current = pack(t.cue);
+  const kept = current.clips.filter((c) => !muted.includes(c.id));
 
   const toggle = (label: string, value: boolean, key: 'autoStart' | 'sound' | 'haptics') => (
     <Row style={{ justifyContent: 'space-between', paddingVertical: 4 }}>
@@ -74,6 +77,33 @@ export default function TimerSettings() {
         })}
       </View>
 
+      {t.cue !== 'beeps' && (
+        <View style={{ gap: space.sm }}>
+          <T v="caption" color={colors.faint}>Clips · {kept.length} of {current.clips.length} kept</T>
+          <View style={styles.clips}>
+            {current.clips.map((c, i) => {
+              const on = !muted.includes(c.id);
+              return (
+                <View key={c.id}>
+                  {i > 0 && <Divider />}
+                  <Row style={{ paddingVertical: space.sm, gap: space.md }}>
+                    <Press onPress={async () => { await prepareAudio(); playClip(t.cue, c.id); }} style={styles.play} hitSlop={6}>
+                      <Icon name="play.fill" size={12} color={colors.cyan} />
+                    </Press>
+                    <View style={{ flex: 1 }}>
+                      <T v="headline" color={on ? colors.text : colors.faint}>{c.name}</T>
+                      {c.seconds ? <T v="footnote" color={colors.faint}>First {c.seconds}s</T> : null}
+                    </View>
+                    {/* The last kept clip can't be removed: the pack needs one to play. */}
+                    <Toggle value={on} onChange={(v) => (v || kept.length > 1) && s.setTimer({ muted: v ? muted.filter((m) => m !== c.id) : [...muted, c.id] })} />
+                  </Row>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {t.cue === 'beeps' && (
         <View style={{ gap: space.sm }}>
           <T v="caption" color={colors.faint}>Countdown length</T>
@@ -103,4 +133,5 @@ const styles = StyleSheet.create({
   packOn: { borderColor: alpha(colors.cyan, 0.6), backgroundColor: alpha(colors.cyan, 0.08) },
   packIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface3, alignItems: 'center', justifyContent: 'center' },
   play: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surface3, alignItems: 'center', justifyContent: 'center' },
+  clips: { borderRadius: radius.lg, backgroundColor: colors.surface2, paddingHorizontal: space.md },
 });

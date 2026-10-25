@@ -230,11 +230,12 @@ export function Stepper({ value, onChange, step = 1, min = 0, max = 9999, format
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(min, Math.round(v * 1000) / 1000));
   return (
-    <View style={{ alignItems: 'center', gap: 6, flex: 1 }}>
+    // flexGrow (not flex: 1) so it shares a row evenly but keeps its own height in a column.
+    <View style={{ alignItems: 'center', gap: 6, flexGrow: 1, flexShrink: 1 }}>
       {label && <T v="caption" color={colors.faint}>{label}</T>}
       <Row gap={space.sm}>
         <Press onPress={() => onChange(clamp(value - step))} style={styles.step} hitSlop={6}><Icon name="minus" size={16} /></Press>
-        <T v={big ? 'big' : 'title'} style={[type.num, { minWidth: big ? 84 : 52, textAlign: 'center' }]}>{format(value)}</T>
+        <T v={big ? 'big' : 'title'} numberOfLines={1} style={[type.num, { minWidth: big ? 100 : 56, textAlign: 'center' }]}>{format(value)}</T>
         <Press onPress={() => onChange(clamp(value + step))} style={styles.step} hitSlop={6}><Icon name="plus" size={16} /></Press>
       </Row>
     </View>

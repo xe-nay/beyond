@@ -73,4 +73,4 @@ export function alpha(hex: string, a: number) {
 }
 
 /** "1 set", "3 sets". */
-export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;

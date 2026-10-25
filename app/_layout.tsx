@@ -5,6 +5,7 @@ import { LogBox, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { RestEngine } from '../src/components/RestEngine';
+import '../src/gps'; // registers the background location task before iOS delivers updates
 import { screenOptions, sheet } from '../src/nav';
 import { prepareAudio } from '../src/sound';
 import { useStore } from '../src/store';
