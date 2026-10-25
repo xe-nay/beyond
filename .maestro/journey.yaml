@@ -27,7 +27,7 @@ name: First run, workout, food, progress and cardio
 - waitForAnimationToEnd
 - takeScreenshot: 05b-calendar-previous-week
 - doubleTapOn:
-    point: "20%, 32%"
+    point: "15%, 24%"
 - waitForAnimationToEnd
 - takeScreenshot: 05c-calendar-back-to-today
 - tapOn: "Train"

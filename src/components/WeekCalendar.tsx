@@ -52,17 +52,17 @@ export function WeekCalendar() {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
 
-  // One tap waits briefly so a second tap can turn it into "back to today".
+  // One tap waits briefly (about the iOS double-tap window) so a second tap can turn it into "back to today".
   const tap = (single?: () => void) => {
     const now = Date.now();
-    if (now - lastTap.current < 300) {
+    if (now - lastTap.current < 400) {
       if (pending.current) clearTimeout(pending.current);
       pending.current = null;
       lastTap.current = 0;
       return goToday();
     }
     lastTap.current = now;
-    if (single) pending.current = setTimeout(() => { pending.current = null; single(); }, 300);
+    if (single) pending.current = setTimeout(() => { pending.current = null; single(); }, 400);
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
