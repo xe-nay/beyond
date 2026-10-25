@@ -3,7 +3,7 @@
 // drawn by the system, so nothing needs to tick from here.
 import { AppState } from 'react-native';
 
-import { endLive, liveAvailable, startLive, updateLive, type LiveState } from '../modules/live-activity';
+import { endLive, liveAvailable, liveLog, startLive, updateLive, type LiveState } from '../modules/live-activity';
 import { exercise } from './catalog';
 import { currentExercise } from './components/WorkoutDock';
 import { elapsed, position, timeline } from './domain/intervals';
@@ -15,11 +15,9 @@ const ACTIVITY: Record<string, string> = { Running: 'figure.run', Walking: 'figu
 
 export function liveState(s: State): { name: string; state: LiveState } | null {
   const run = s.cardioRun;
-  if (run) {
-    const phases = timeline(run.plan);
-    const t = elapsed({ banked: run.banked, resumedAt: run.resumedAt });
-    const pos = position(phases, t);
-    if (!pos.phase) return null;
+  // A cardio run that finished but was never saved must not hide a workout in progress.
+  const pos = run ? position(timeline(run.plan), elapsed({ banked: run.banked, resumedAt: run.resumedAt })) : null;
+  if (run && pos?.phase) {
     const kind = pos.phase.kind;
     const paused = run.resumedAt === null;
     return {
@@ -73,10 +71,11 @@ let last = '';
 let phaseTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function sync() {
-  if (!liveAvailable()) return;
+  if (!liveAvailable()) return liveLog('sync: Live Activities not available or turned off');
   const s = useStore.getState();
   const next = liveState(s);
   if (!next) {
+    liveLog(`sync: nothing live (running=${running})`);
     if (running) await endLive();
     running = false;
     last = '';
@@ -86,6 +85,7 @@ async function sync() {
   const key = JSON.stringify({ ...next.state, endsAt: next.state.endsAt ? Math.round(next.state.endsAt / 2000) : null });
   if (key === last) return;
   last = key;
+  liveLog(`sync: ${running ? 'update' : 'start'} ${next.state.mode} "${next.state.title}"`);
   if (!running) running = !!(await startLive(next.name, next.state));
   else await updateLive(next.state);
   // Cardio moves to its next phase on its own; wake up then to show it.

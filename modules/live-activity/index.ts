@@ -15,6 +15,7 @@ export interface LiveState {
 
 const native = requireOptionalNativeModule<{
   isAvailable(): boolean;
+  log(message: string): void;
   status(): { supported: boolean; enabled: boolean; running: number };
   start(name: string, state: LiveState): Promise<string | null>;
   update(state: LiveState): Promise<void>;
@@ -22,8 +23,11 @@ const native = requireOptionalNativeModule<{
 }>('LiveActivity');
 
 let lastError: string | null = null;
+/** Writes to the device log (category BeyondLive), readable over USB. */
+export const liveLog = (message: string) => { try { native?.log(message); } catch {} };
 const fail = (e: any) => {
   lastError = String(e?.message ?? e);
+  liveLog(`failed: ${lastError}`);
   return null;
 };
 
