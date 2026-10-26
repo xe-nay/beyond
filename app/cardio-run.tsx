@@ -1,7 +1,7 @@
 import { useScreenOn } from '../src/keepAwake';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, useWindowDimensions, View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +11,7 @@ import { Button, Press, Row, Stepper, T } from '../src/components/ui';
 import { elapsed, formatClock, pause, position, resume, skip, timeline, totalSeconds } from '../src/domain/intervals';
 import { cueWords, formatPace, formatPaceRange, paceVerdict, rollingPace, tracksDistance } from '../src/domain/track';
 import { gps, pauseGps, startGps, stopGps } from '../src/gps';
-import { buzz, cancelEnd, play, playCountdown, prepareAudio, scheduleEnd, stopCue } from '../src/sound';
+import { buzz, cancelEnd, prepareAudio, scheduleEnd, stopCue } from '../src/sound';
 import { useStore } from '../src/store';
 import { alpha, colors, space, type } from '../src/theme';
 
@@ -31,7 +31,6 @@ export default function CardioRun() {
   const [gpsMode, setGpsMode] = useState<'background' | 'foreground' | 'off'>('off');
   const synced = useRef(0);
   const [rpe, setRpe] = useState(6);
-  const last = useRef<{ index: number; whole: number } | null>(null);
   const tickRef = useRef<number | null>(null);
 
   const phases = run ? timeline(run.plan) : [];
@@ -62,27 +61,17 @@ export default function CardioRun() {
     return () => clearInterval(id);
   }, []);
 
-  // One countdown file per phase change (ticks + a two-tone cue, or the closing tone at the very end),
-  // started N seconds before the change so music under it dips only once.
+  // The beeps and the voice come from src/cardioCoach.ts, which keeps going with the screen locked.
+  // Here: a tap of the haptic engine on each countdown second, and the end of the run.
   useEffect(() => {
     if (!run || run.resumedAt === null || done) return;
-    const prev = last.current;
-    if (!prev || prev.index !== pos.index) {
-      if (prev && !pos.phase && !prev.whole) play('end');
-      last.current = { index: pos.index, whole: 0 };
-    }
     const lead = run.plan.countdown;
-    if (pos.phase && last.current?.whole === 0 && pos.remaining <= Math.max(lead, 0.3) + 0.05 && AppState.currentState === 'active') {
-      last.current = { index: pos.index, whole: 1 };
-      playCountdown(Math.min(lead, Math.round(pos.remaining)), phases[pos.index + 1] ? 'phase' : 'end');
-    }
     if (pos.phase && lead > 0 && pos.remaining <= lead) {
       const w = Math.ceil(pos.remaining);
       if (tickRef.current !== w) { tickRef.current = w; buzz('tick'); }
     }
     if (!pos.phase) end();
 
-    // The voice coach (src/cardioCoach.ts) does the talking.
     // Keeps the distance in the saved run every few seconds, in case the app is closed mid-run.
     if (outdoor && Date.now() - synced.current > 5000) {
       synced.current = Date.now();
@@ -91,12 +80,13 @@ export default function CardioRun() {
     }
   });
 
-  // Backstop for a locked phone: a notification when the current phase ends.
+  // Backstop for a locked phone: a notification when the current phase ends. Not with background GPS:
+  // the app keeps running then and beeps itself, so a notification would only add noise.
   useEffect(() => {
-    if (!run || run.resumedAt === null || !pos.phase) return void cancelEnd();
+    if (!run || run.resumedAt === null || !pos.phase || gpsMode === 'background') return void cancelEnd();
     const next = phases[pos.index + 1];
     scheduleEnd(Date.now() + pos.remaining * 1000, next ? LABEL[next.kind] : 'Done', next?.cue || run.plan.activity, run.plan.countdown, next ? 'phase' : 'end');
-  }, [pos.index, run?.resumedAt]);
+  }, [pos.index, run?.resumedAt, gpsMode]);
 
   if (!run) return <View style={{ flex: 1, backgroundColor: colors.black }} />;
   const set = (patch: Partial<NonNullable<typeof run>>) => useStore.getState().set({ cardioRun: { ...run, ...patch } });

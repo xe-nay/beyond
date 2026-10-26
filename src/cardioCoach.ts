@@ -1,10 +1,12 @@
-// The voice coach for guided cardio. It follows the store, not a screen, so it keeps talking with the
-// run screen closed or the phone in a pocket: each phase as it starts (length, round, rounds left,
-// cue, pace), halfway through long phases, and when the GPS pace leaves the phase's pace window.
+// The sound of guided cardio: the countdown beeps before each change and the voice coach. It follows
+// the store, not a screen, so it keeps going with the run screen closed or the phone locked in a
+// pocket (the app stays awake there for the GPS and the audio). The voice says each phase as it
+// starts (length, round, rounds left, cue, pace), halfway through long phases, and when the GPS pace
+// leaves the phase's pace window.
 import { announce, elapsed, position, spokenTime, timeline } from './domain/intervals';
 import { paceVerdict, rollingPace, spokenPace, tracksDistance } from './domain/track';
 import { gps } from './gps';
-import { say } from './sound';
+import { play, playCountdown, say } from './sound';
 import { useStore } from './store';
 
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -19,13 +21,30 @@ function coach(runId: string) {
   let warned = false;
   let ended = false;
   let first = true;
+  let beepIndex = -1;
+  let beeped = false;
   return () => {
     const s = useStore.getState();
     const run = s.cardioRun;
-    if (!run || run.id !== runId || run.resumedAt === null || s.timer.voiceCoach === false) return;
+    if (!run || run.id !== runId || run.resumedAt === null) return;
     const phases = timeline(run.plan);
     const pos = position(phases, elapsed(run));
     const now = Date.now();
+
+    // One countdown file per change (ticks and the change tone, or the closing tone at the very end),
+    // started N seconds before it so music under it dips once.
+    if (pos.index !== beepIndex) {
+      if (beepIndex >= 0 && !pos.phase && !beeped) play('end');
+      beepIndex = pos.index;
+      beeped = false;
+    }
+    const lead = run.plan.countdown;
+    if (pos.phase && !beeped && pos.remaining <= Math.max(lead, 0.3) + 0.1) {
+      beeped = true;
+      playCountdown(Math.min(lead, Math.round(pos.remaining)), phases[pos.index + 1] ? 'phase' : 'end');
+    }
+
+    if (s.timer.voiceCoach === false) return;
     const speak = (key: string, text: string) => {
       if (said.has(key)) return;
       said.add(key);
@@ -75,5 +94,5 @@ useStore.subscribe((s) => {
   if (id === following) return;
   following = id;
   if (timer) clearInterval(timer);
-  timer = id ? setInterval(coach(id), 500) : null;
+  timer = id ? setInterval(coach(id), 200) : null;
 });

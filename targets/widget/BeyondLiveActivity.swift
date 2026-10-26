@@ -30,6 +30,21 @@ private struct Clock: View {
   }
 }
 
+/// Width of the compact timer: room for the digits it will show and no more. A countdown only
+/// shrinks, so its starting length decides (M:SS, MM:SS, H:MM:SS); a session clock counting up gets
+/// MM:SS until 50 minutes, then H:MM:SS.
+private func compactWidth(_ s: State) -> CGFloat {
+  let digit: CGFloat = 8.8, colon: CGFloat = 4.6
+  func width(_ seconds: TimeInterval) -> CGFloat {
+    if seconds >= 3600 { return 5 * digit + 2 * colon }
+    if seconds >= 600 { return 4 * digit + colon }
+    return 3 * digit + colon
+  }
+  if let end = s.endsAt, end > Date() { return width(end.timeIntervalSinceNow) + 2 }
+  if let start = s.startedAt { return width(max(600, Date().timeIntervalSince(start) + 600)) + 2 }
+  return 46
+}
+
 /// A ring that drains over the countdown; a plain symbol when there is nothing to count down.
 private struct Badge: View {
   let state: State
@@ -108,11 +123,15 @@ struct BeyondLiveActivity: Widget {
       } compactLeading: {
         Image(systemName: s.symbol).font(.system(size: 14, weight: .bold)).foregroundStyle(accent)
       } compactTrailing: {
+        // A timer takes all the width it is offered; sized to its digits the island stays snug.
         Clock(state: s)
           .font(.system(size: 14, weight: .semibold, design: .rounded))
           .monospacedDigit()
           .foregroundStyle(accent)
-          .frame(maxWidth: 52)
+          .multilineTextAlignment(.trailing)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .frame(width: compactWidth(s), alignment: .trailing)
       } minimal: {
         Badge(state: s, size: 22)
       }

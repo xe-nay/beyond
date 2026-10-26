@@ -5,11 +5,11 @@ import { View } from 'react-native';
 import { byId, exercise } from '../../../src/catalog';
 import { BodyMap } from '../../../src/components/BodyMap';
 import { CardioPlanCard } from '../../../src/components/CardioPlanCard';
+import { DoneCardioCard, DoneWorkoutCard } from '../../../src/components/DoneCards';
 import { Icon } from '../../../src/components/Icon';
 import { WeekCalendar } from '../../../src/components/WeekCalendar';
-import { Button, Card, Ring, Row, Screen, Section, Stat, T } from '../../../src/components/ui';
-import { fatigueReport, personalRecords, progression, volumeLoad, weekStart, working } from '../../../src/domain/calc';
-import { toDisplay } from '../../../src/domain/plates';
+import { Button, Card, Ring, Row, Screen, Section, T } from '../../../src/components/ui';
+import { fatigueReport, progression, weekStart } from '../../../src/domain/calc';
 import { plannedFor } from '../../../src/schedule';
 import type { Region } from '../../../src/domain/types';
 import { eatenOn, today, useStore } from '../../../src/store';
@@ -44,33 +44,18 @@ export default function Today() {
 
         <WeekCalendar />
 
-        {/* Today's training */}
-        {open ? (
+        {/* Today's training: under way, done (with Completed instead of Start), then still planned */}
+        {open && (
           <Card style={{ borderColor: alpha(colors.cyan, 0.4) }} onPress={() => router.push('/workout')}>
             <T v="caption" color={colors.cyan}>In progress</T>
             <T v="title" numberOfLines={2}>{open.name}</T>
             <T v="label" color={colors.dim}>{plural(open.sets.filter((x) => !x.warmup).length, 'set')} logged</T>
             <Button title="Resume" icon="play.fill" onPress={() => router.push('/workout')} />
           </Card>
-        ) : doneToday.length ? (
-          <Card onPress={() => router.push(`/day/${date}`)} style={{ borderColor: alpha(colors.lime, 0.35) }}>
-            <Row>
-              <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.lime, 0.16) }}>
-                <Icon name="checkmark" size={18} color={colors.lime} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <T v="caption" color={colors.lime}>Done today</T>
-                <T v="title" numberOfLines={2}>{doneToday.map((x) => x.name).join(' + ')}</T>
-              </View>
-              <Icon name="chevron.right" size={14} color={colors.faint} />
-            </Row>
-            <Row style={{ justifyContent: 'space-between' }}>
-              <Stat small label="Sets" value={doneToday.reduce((n, x) => n + working(x.sets).length, 0)} />
-              <Stat small label="Volume" value={Math.round(toDisplay(doneToday.reduce((n, x) => n + volumeLoad(x.sets), 0), s.profile.unit)).toLocaleString()} unit={s.profile.unit} />
-              <Stat small label="Records" value={doneToday.reduce((n, x) => n + personalRecords(s.sessions, x).length, 0)} color={colors.lime} />
-            </Row>
-          </Card>
-        ) : todays ? (
+        )}
+        {doneToday.map((x) => <DoneWorkoutCard key={x.id} x={x} />)}
+        {plan.cardioDone.map((c) => <DoneCardioCard key={c.id} c={c} />)}
+        {todays && !open && (
           <Card>
             <Row style={{ alignItems: 'flex-start' }}>
               <View style={{ flex: 1, gap: 6 }}>
@@ -92,12 +77,13 @@ export default function Today() {
               router.push('/workout');
             }} />
           </Card>
-        ) : !plan.program && !s.sessions.some((x) => x.source === 'import') ? (
+        )}
+        {!open && !todays && !doneToday.length && !plan.cardioDone.length && !cardioToday && (!plan.program && !s.sessions.some((x) => x.source === 'import') ? (
           <Card>
             <T v="title">No program yet</T>
             <Button title="Choose a program" onPress={() => router.push('/templates')} />
           </Card>
-        ) : !cardioToday ? (
+        ) : (
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             <Icon name="bed.double.fill" size={22} color={colors.dim} />
             <View style={{ flex: 1 }}>
@@ -105,8 +91,7 @@ export default function Today() {
               <T v="footnote" color={colors.dim}>Nothing planned today. Tap a day above to see what is next.</T>
             </View>
           </Card>
-        ) : null}
-
+        ))}
         {cardioToday && <CardioPlanCard c={cardioToday} canStart={!s.cardioRun} />}
 
         {/* Fuel */}
