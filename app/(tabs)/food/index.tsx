@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-native-reanimated';
 
-import { BackToToday, DayFlash, shortDate } from '../../../src/components/DayFlash';
+import { Bell } from '../../../src/components/Bell';
+import { DayFlash, shortDate } from '../../../src/components/DayFlash';
 import { DailyIntake } from '../../../src/components/DailyIntake';
 import { Icon } from '../../../src/components/Icon';
 import { NutritionCard } from '../../../src/components/NutritionCard';
@@ -21,6 +22,7 @@ export default function Food() {
   const reduced = useReducedMotion();
   const s = useStore();
   const [offset, setOffset] = useState(0);
+  const lastTap = useRef(0);
   // Opened from a day's Edit: show that day.
   const { date: asked } = useLocalSearchParams<{ date?: string }>();
   useEffect(() => {
@@ -50,11 +52,14 @@ export default function Food() {
     <GestureDetector gesture={swipe}>
     <View style={{ flex: 1 }}>
     <Screen>
-      <Stack.Screen options={{ title: offset === 0 ? 'Food' : shortDate(date), headerRight: () => <BackToToday date={date} onPress={() => setOffset(0)} /> }} />
+      <Stack.Screen options={{ title: offset === 0 ? 'Food' : shortDate(date), headerRight: () => <Bell /> }} />
       {/* Day switcher */}
       <Row style={{ justifyContent: 'space-between', marginTop: -space.sm }}>
         <Press onPress={() => go(-1)} hitSlop={10}><Icon name="chevron.left" size={16} color={colors.dim} /></Press>
-        <Animated.View key={offset} entering={reduced ? undefined : FadeIn.duration(180)}><T v="headline">{offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</T></Animated.View>
+        {/* Two taps on the date go back to today. */}
+        <Press haptic={false} label="Day; tap twice for today" onPress={() => { const now = Date.now(); if (now - lastTap.current < 400) setOffset(0); lastTap.current = now; }}>
+        <Animated.View key={offset} entering={reduced ? undefined : FadeIn.duration(180)}><T v="headline" color={offset === 0 ? colors.text : colors.amber}>{offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</T></Animated.View>
+        </Press>
         <Press onPress={() => go(1)} hitSlop={10} disabled={atEnd}><Icon name="chevron.right" size={16} color={colors.dim} /></Press>
       </Row>
 

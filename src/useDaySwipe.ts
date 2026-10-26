@@ -5,6 +5,8 @@ import { Gesture } from 'react-native-gesture-handler';
 import { Extrapolation, interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { innerSwipe, markSwipe } from './swipeGuard';
+
 /** `step` moves the day by ±1; `canStep` says whether there is a day that way. */
 export function useDaySwipe(step: (n: 1 | -1) => void, canStep: (n: 1 | -1) => boolean = () => true) {
   const { width } = useWindowDimensions();
@@ -27,13 +29,16 @@ export function useDaySwipe(step: (n: 1 | -1) => void, canStep: (n: 1 | -1) => b
   const gesture = Gesture.Pan()
     .activeOffsetX([-28, 28])
     .failOffsetY([-14, 14])
+    .onStart(() => scheduleOnRN(markSwipe))
     .onUpdate((e) => {
-      if (reduced) return;
+      if (reduced || innerSwipe.get()) return;
       // Where there is no day, the page only gives a little.
       const blocked = (e.translationX < 0 && !canNext) || (e.translationX > 0 && !canPrev);
       x.set(e.translationX * (blocked ? 0.15 : 0.8));
     })
     .onEnd((e) => {
+      scheduleOnRN(markSwipe);
+      if (innerSwipe.get()) return void x.set(withSpring(0, { duration: 300, dampingRatio: 0.9 }));
       const far = Math.abs(e.translationX) > 60 || Math.abs(e.velocityX) > 600;
       if (far) scheduleOnRN(go, e.translationX < 0 ? 1 : -1);
       else x.set(withSpring(0, { duration: 350, dampingRatio: 0.85 }));

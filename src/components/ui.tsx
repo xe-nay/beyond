@@ -5,6 +5,7 @@ import Animated, { cubicBezier, Easing, useAnimatedProps, useAnimatedStyle, useS
 import Svg, { Circle } from 'react-native-svg';
 
 import { useStore } from '../store';
+import { swipedRecently } from '../swipeGuard';
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon, type IconName } from './Icon';
 
@@ -52,12 +53,13 @@ export function Press({ children, onPress, style, disabled, haptic = true, onLon
       disabled={disabled}
       onPressIn={() => setDown(true)}
       onPressOut={() => setDown(false)}
-      onLongPress={onLongPress}
+      onLongPress={onLongPress && (() => { if (!swipedRecently()) onLongPress(); })}
       hitSlop={hitSlop}
       accessibilityRole={label ? 'button' : undefined}
       accessibilityLabel={label}
       pressRetentionOffset={12}
       onPress={() => {
+        if (swipedRecently()) return;
         if (haptic) tap();
         onPress?.();
       }}>

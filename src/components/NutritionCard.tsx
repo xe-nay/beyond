@@ -9,6 +9,7 @@ import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedVal
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { formatMicro, MICRO, type MicroUnit } from '../domain/micros';
+import { innerSwipe } from '../swipeGuard';
 import type { Nutrients, NutritionTargets } from '../domain/types';
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon } from './Icon';
@@ -106,6 +107,9 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             onScroll={(e) => w && setPage(Math.round(e.nativeEvent.contentOffset.x / w))}
+            // Paging the micros is not a day swipe.
+            onScrollBeginDrag={() => innerSwipe.set(1)}
+            onScrollEndDrag={() => innerSwipe.set(0)}
             scrollEventThrottle={32}
             style={{ marginHorizontal: -space.lg }}>
             {w > 0 && PAGES.map((p, i) => (

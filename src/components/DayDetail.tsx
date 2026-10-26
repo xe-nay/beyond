@@ -2,20 +2,21 @@ import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
-import { exercise } from '../catalog';
+import { byId, exercise } from '../catalog';
 import { formatClock } from '../domain/intervals';
 import { formatWeight } from '../domain/plates';
-import type { Prescription } from '../domain/types';
+import type { Prescription, Region } from '../domain/types';
 import { MEALS } from '../meals';
 import { plannedFor } from '../schedule';
-import { eatenOn, today, useStore } from '../store';
+import { eatenOn, intakeNutrients, today, useStore } from '../store';
 import { alpha, colors, plural, space, type } from '../theme';
+import { BodyMap } from './BodyMap';
 import { CardioPlanCard } from './CardioPlanCard';
-import { DailyIntake } from './DailyIntake';
 import { DoneCardioCard, DoneWorkoutCard } from './DoneCards';
 import { ExerciseImage } from './ExerciseImage';
 import { Icon } from './Icon';
-import { MacroDonut, MacroLegend } from './Nutrition';
+import { NutritionCard } from './NutritionCard';
+import { SwipeOpen } from './SwipeOpen';
 import { Button, Card, Press, Row, Section, Stat, T } from './ui';
 
 /** "Today", "Yesterday", "In 3 days", "5 days ago". */
@@ -46,6 +47,8 @@ export function DayDetail({ date }: { date: string }) {
   const { sessions: imported, programDay, program, cardio: cardioPlanned, done, cardioDone, rest } = plannedFor(s, date, now);
   const open = isToday ? s.sessions.find((x) => x.id === s.activeSession && !x.finishedAt) : undefined;
   const entries = s.entries.filter((e) => e.date === date);
+  const taken = s.intakes.filter((i) => i.date === date);
+  const missed = s.supplements.filter((x) => x.createdAt.slice(0, 10) <= date && !taken.some((i) => i.supplementId === x.id)).length;
   const eaten = eatenOn(s, date);
   const body = s.body.find((b) => b.date === date);
   const check = s.checks.find((c) => c.date === date);
@@ -93,11 +96,8 @@ export function DayDetail({ date }: { date: string }) {
       {(past || isToday) && (
         <>
           <Section title="Nutrition" action={<Press onPress={() => router.navigate({ pathname: '/(tabs)/food', params: { date } })} haptic={false}><T v="label" color={colors.cyan}>Edit food</T></Press>}>
-            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.xl }}>
-              <MacroDonut n={eaten} size={120} label={`of ${s.targets.kcal}`} />
-              <View style={{ flex: 1 }}><MacroLegend n={eaten} targets={s.targets} /></View>
-            </Card>
-            {entries.length > 0 ? (
+            <NutritionCard n={eaten} targets={s.targets} />
+            {entries.length > 0 || taken.length > 0 ? (
               <Card style={{ gap: space.sm }}>
                 {MEALS.map((m) => {
                   const list = entries.filter((e) => e.meal === m.value);
@@ -119,12 +119,29 @@ export function DayDetail({ date }: { date: string }) {
                     </View>
                   );
                 })}
+                {/* Supplements ticked that day, as one more group of the table */}
+                {taken.length > 0 && (
+                  <View style={{ gap: 4 }}>
+                    <Row style={{ justifyContent: 'space-between' }}>
+                      <T v="caption" color={colors.faint}>Daily intake</T>
+                      <T v="footnote" color={colors.dim} style={type.num}>{taken.length}/{taken.length + missed}</T>
+                    </Row>
+                    {taken.map((i) => {
+                      const kcal = intakeNutrients(s, i)?.kcal ?? 0;
+                      return (
+                        <Row key={i.id} style={{ justifyContent: 'space-between' }}>
+                          <T v="callout" numberOfLines={1} style={{ flex: 1 }}>{i.name}</T>
+                          <T v="footnote" color={colors.faint} style={type.num}>{new Date(i.takenAt).toTimeString().slice(0, 5)} · {i.dose}{kcal ? ` · ${kcal}` : ''}</T>
+                        </Row>
+                      );
+                    })}
+                  </View>
+                )}
               </Card>
             ) : (
               <T v="footnote" color={colors.faint}>No food logged.</T>
             )}
           </Section>
-          <DailyIntake date={date} />
           {(body?.weightKg || check) && (
             <Card>
               <Row style={{ justifyContent: 'space-between' }}>
@@ -140,20 +157,31 @@ export function DayDetail({ date }: { date: string }) {
   );
 }
 
-function PlanCard({ title, label, plan, unit, onStart, notes }: { title: string; label: string; plan: Prescription[]; unit: 'kg' | 'lb'; onStart?: () => void; notes?: string }) {
+/**
+ * A planned workout: the muscles it will work, and every exercise with its sets, warm-ups, reps, RIR and
+ * rest. Swipe an exercise left to open it.
+ */
+export function PlanCard({ title, label, plan, unit, onStart, notes }: { title: string; label: string; plan: Prescription[]; unit: 'kg' | 'lb'; onStart?: () => void; notes?: string }) {
   const router = useRouter();
   const sets = plan.reduce((n, x) => n + x.sets, 0);
+  const regions = [...new Set(plan.flatMap((x) => byId[x.exerciseId]?.primary ?? []))] as Region[];
   return (
     <Card>
-      <View style={{ gap: 2 }}>
-        <T v="caption" color={colors.cyan}>{label}</T>
-        <T v="title">{title}</T>
-        <T v="footnote" color={colors.dim}>{plural(plan.length, 'exercise')} · {plural(sets, 'set')}</T>
-      </View>
+      <Row style={{ alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <T v="caption" color={colors.cyan}>{label}</T>
+          <T v="title" numberOfLines={2}>{title}</T>
+          <T v="footnote" color={colors.dim}>{plural(plan.length, 'exercise')} · {plural(sets, 'set')}</T>
+          <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0, marginTop: 4 }}>Swipe an exercise left to open it</T>
+        </View>
+        <View style={{ marginRight: -space.md, marginTop: -space.sm }} pointerEvents="none">
+          <BodyMap key={title} primary={regions} scale={0.42} toggle={false} />
+        </View>
+      </Row>
       {plan.map((x, i) => {
         const e = exercise(x.exerciseId);
         return (
-          <Press key={`${x.exerciseId}-${i}`} onPress={() => router.push(`/exercise/${x.exerciseId}`)} haptic={false}>
+          <SwipeOpen key={`${x.exerciseId}-${i}`} onOpen={() => router.push(`/exercise/${x.exerciseId}`)}>
             <Row>
               {e && <ExerciseImage exercise={e} thumb style={{ width: 44, height: 44 }} />}
               <View style={{ flex: 1 }}>
@@ -164,7 +192,7 @@ function PlanCard({ title, label, plan, unit, onStart, notes }: { title: string;
                 </T>
               </View>
             </Row>
-          </Press>
+          </SwipeOpen>
         );
       })}
       {!!notes && <T v="callout" color={colors.dim}>{notes}</T>}

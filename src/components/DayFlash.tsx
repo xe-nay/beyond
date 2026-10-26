@@ -5,8 +5,7 @@ import Animated, { FadeIn, FadeOut, useReducedMotion, ZoomIn } from 'react-nativ
 import { today } from '../store';
 import { alpha, colors, type } from '../theme';
 import { relative } from './DayDetail';
-import { Icon } from './Icon';
-import { Press, Row, T } from './ui';
+import { T } from './ui';
 
 /** "Tue 27 Oct". */
 export const shortDate = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
@@ -41,18 +40,5 @@ export function DayFlash({ date }: { date: string }) {
         </Animated.View>
       )}
     </View>
-  );
-}
-
-/** In the navigation bar when another day than today is shown: amber, and a tap goes back to today. */
-export function BackToToday({ date, onPress }: { date: string; onPress: () => void }) {
-  if (date === today()) return null;
-  return (
-    <Press onPress={onPress} hitSlop={8} label="Back to today">
-      <Row gap={5} style={{ paddingHorizontal: 11, height: 30, borderRadius: 15, backgroundColor: alpha(colors.amber, 0.18), borderWidth: 1, borderColor: alpha(colors.amber, 0.5) }}>
-        <Icon name="arrow.uturn.backward" size={12} color={colors.amber} />
-        <T v="footnote" color={colors.amber} style={{ fontWeight: '600' }}>Today</T>
-      </Row>
-    </Press>
   );
 }

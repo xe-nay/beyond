@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 
@@ -7,6 +7,7 @@ import { byId, exercise } from '../../../src/catalog';
 import { SwipeBody } from '../../../src/components/BodyMap';
 import { ExerciseImage } from '../../../src/components/ExerciseImage';
 import { Radar } from '../../../src/components/Radar';
+import { Bell } from '../../../src/components/Bell';
 import { CardioStats } from '../../../src/components/CardioStats';
 import { BarChart, LineChart } from '../../../src/components/Charts';
 import { Icon } from '../../../src/components/Icon';
@@ -88,6 +89,7 @@ export default function Progress() {
 
   return (
     <Screen>
+      <Stack.Screen options={{ headerRight: () => <Bell /> }} />
       <Segmented options={LEVELS as any} value={s.analyticsLevel} onChange={(v) => s.set({ analyticsLevel: v as any })} />
 
       <Segmented options={PERIODS as any} value={period} onChange={(v) => setPeriod(v as any)} />

@@ -1,23 +1,21 @@
 import { Stack, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 import { View } from 'react-native';
 
-import { byId, exercise } from '../../../src/catalog';
-import { BodyMap } from '../../../src/components/BodyMap';
+import { exercise } from '../../../src/catalog';
 import { CardioPlanCard } from '../../../src/components/CardioPlanCard';
-import { DayDetail, longDate, relative } from '../../../src/components/DayDetail';
-import { BackToToday, DayFlash, shortDate } from '../../../src/components/DayFlash';
+import { DayDetail, longDate, PlanCard, relative } from '../../../src/components/DayDetail';
+import { Bell } from '../../../src/components/Bell';
+import { DayFlash, shortDate } from '../../../src/components/DayFlash';
 import { DoneCardioCard, DoneWorkoutCard } from '../../../src/components/DoneCards';
 import { Icon } from '../../../src/components/Icon';
 import { WeekCalendar } from '../../../src/components/WeekCalendar';
 import { Button, Card, Press, Ring, Row, Screen, Section, T } from '../../../src/components/ui';
 import { fatigueReport, progression, weekStart } from '../../../src/domain/calc';
 import { plannedFor } from '../../../src/schedule';
-import type { Region } from '../../../src/domain/types';
-import { clock, eatenOn, today, useStore } from '../../../src/store';
-import { daysLeft, dueNow, LOW_DAYS } from '../../../src/domain/supplements';
+import { eatenOn, today, useStore } from '../../../src/store';
 import { alpha, colors, plural, space, type } from '../../../src/theme';
 import { useDaySwipe } from '../../../src/useDaySwipe';
 
@@ -36,7 +34,6 @@ export default function Today() {
   const plan = plannedFor(s, date, date);
   const planned = plan.sessions[0];
   const todays = planned ? { name: planned.name, exercises: planned.plan, label: 'Planned today' } : plan.programDay ? { name: plan.programDay.name, exercises: plan.programDay.exercises, label: 'Today' } : null;
-  const regions = useMemo(() => [...new Set(todays?.exercises.flatMap((x) => byId[x.exerciseId]?.primary ?? []) ?? [])] as Region[], [todays?.name, todays?.exercises.length]);
   const monday = weekStart();
   const eaten = eatenOn(s, date);
   const fatigue = fatigueReport(done, s.checks);
@@ -49,7 +46,7 @@ export default function Today() {
   return (
     <View style={{ flex: 1 }}>
     <Screen>
-        <Stack.Screen options={{ title: sel === date ? 'Today' : shortDate(sel), headerRight: () => <Row gap={10}><BackToToday date={sel} onPress={() => setSel(date)} /><Bell /></Row> }} />
+        <Stack.Screen options={{ title: sel === date ? 'Today' : shortDate(sel), headerRight: () => <Bell /> }} />
         <T v="title" color={colors.dim} style={{ fontWeight: '500', marginTop: -space.sm }}>
           {greeting()}{s.profile.name ? `, ${s.profile.name}` : ''}
         </T>
@@ -82,27 +79,10 @@ export default function Today() {
         {doneToday.map((x) => <DoneWorkoutCard key={x.id} x={x} />)}
         {plan.cardioDone.map((c) => <DoneCardioCard key={c.id} c={c} />)}
         {todays && !open && (
-          <Card>
-            <Row style={{ alignItems: 'flex-start' }}>
-              <View style={{ flex: 1, gap: 6 }}>
-                <T v="caption" color={colors.faint}>{todays.label}</T>
-                <T v="title" numberOfLines={2}>{todays.name}</T>
-                <T v="label" color={colors.dim}>{plural(todays.exercises.length, 'exercise')} · {plural(todays.exercises.reduce((n, x) => n + x.sets, 0), 'set')}</T>
-                <View style={{ gap: 4, marginTop: 6 }}>
-                  {todays.exercises.slice(0, 4).map((x, i) => (
-                    <T key={i} v="label" color={colors.dim} numberOfLines={1}>{exercise(x.exerciseId)?.name}</T>
-                  ))}
-                </View>
-              </View>
-              <View style={{ marginRight: -space.md, marginTop: -space.sm }}>
-                <BodyMap key={todays.name} primary={regions} scale={0.42} toggle={false} />
-              </View>
-            </Row>
-            <Button title="Start workout" icon="play.fill" onPress={() => {
-              s.startSession(planned ? { sessionId: planned.id } : { dayId: plan.programDay!.id });
-              router.push('/workout');
-            }} />
-          </Card>
+          <PlanCard title={todays.name} label={todays.label} plan={todays.exercises} notes={planned?.notes} unit={s.profile.unit} onStart={() => {
+            s.startSession(planned ? { sessionId: planned.id } : { dayId: plan.programDay!.id });
+            router.push('/workout');
+          }} />
         )}
         {!open && !todays && !doneToday.length && !plan.cardioDone.length && !cardioToday && (!plan.program && !s.sessions.some((x) => x.source === 'import') ? (
           <Card>
@@ -185,22 +165,4 @@ function RingStat({ value, target, label, color }: { value: number; target: numb
 function greeting() {
   const h = new Date().getHours();
   return h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-}
-
-
-/** The notification panel: a dot when a dose is waiting, a pack is low or a message is unread. */
-function Bell() {
-  const router = useRouter();
-  const s = useStore();
-  const waiting = s.inbox.some((i) => !i.read)
-    || dueNow(s.supplements, s.intakes, s.skipped, today(), clock()).length > 0
-    || s.supplements.some((x) => { const d = daysLeft(x, s.intakes); return d !== null && d <= LOW_DAYS; });
-  return (
-    <Press onPress={() => router.push('/inbox')} hitSlop={10} label="Notifications">
-      <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name="bell" size={19} color={colors.text} />
-        {waiting && <View style={{ position: 'absolute', top: 5, right: 6, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.amber, borderWidth: 1.5, borderColor: colors.black }} />}
-      </View>
-    </Press>
-  );
 }

@@ -27,6 +27,9 @@ function Arc({ size, stroke, start, length, color }: { size: number; stroke: num
 }
 
 /** Calorie donut split into protein / carbs / fat by energy share, with the calories in the middle. */
+/** A font size that fits a whole number's digits in `width` (rounded digits are about 0.62 em wide). */
+const digitSize = (value: number, width: number) => Math.min(34, Math.max(14, width / (String(Math.round(Math.abs(value))).length * 0.62)));
+
 export function MacroDonut({ n, size = 150, label = 'kcal' }: { n: Nutrients; size?: number; label?: string }) {
   const split = macroSplit(n);
   const empty = n.protein + n.carbs + n.fat === 0;
@@ -43,8 +46,9 @@ export function MacroDonut({ n, size = 150, label = 'kcal' }: { n: Nutrients; si
           </>
         )}
       </Svg>
-      <CountUp value={n.kcal} style={[type.big, { color: colors.text }]} />
-      <T v="caption" color={colors.faint}>{label}</T>
+      {/* The number fits inside the ring with room to spare, however many digits it has. */}
+      <CountUp value={n.kcal} style={[type.big, { color: colors.text, fontSize: digitSize(n.kcal, size - stroke * 2 - 22), lineHeight: undefined }]} />
+      <T v="caption" color={colors.faint} numberOfLines={1}>{label}</T>
     </View>
   );
 }
