@@ -47,6 +47,7 @@ interface Data {
   intakes: Intake[];
   skipped: { supplementId: string; date: string }[]; // doses answered "Skip" in a reminder
   inbox: InboxItem[];
+  restDays: string[]; // dates an imported plan leaves empty on purpose: no program workout there
 }
 
 const initial: Data = {
@@ -76,6 +77,7 @@ const initial: Data = {
   intakes: [],
   skipped: [],
   inbox: [],
+  restDays: [],
 };
 
 interface Actions {
@@ -120,7 +122,7 @@ interface Actions {
   deleteBody(id: string): void;
   saveCheck(c: RecoveryCheck): void;
   /** Adds imported entries next to everything else; only same ids and the ids in remove are replaced. */
-  importData(sessions: Session[], cardio: CardioSession[], remove?: string[]): void;
+  importData(sessions: Session[], cardio: CardioSession[], remove?: string[], rest?: { from: string | null; until: string | null; days: string[] }): void;
   replaceAll(data: Partial<Data>): void;
   reset(): void;
 }
@@ -316,12 +318,17 @@ export const useStore = create<State>((set, get) => ({
   deleteBody(id) { set((s) => ({ body: s.body.filter((x) => x.id !== id) })); },
   saveCheck(c) { set((s) => ({ checks: [...s.checks.filter((x) => x.date !== c.date), c] })); },
 
-  importData(sessions, cardio, remove = []) {
+  importData(sessions, cardio, remove = [], rest) {
     const out = new Set([...remove, ...sessions.map((x) => x.id), ...cardio.map((x) => x.id)]);
-    set((s) => ({
-      sessions: [...s.sessions.filter((x) => !out.has(x.id)), ...sessions],
-      cardio: [...s.cardio.filter((x) => !out.has(x.id)), ...cardio],
-    }));
+    set((s) => {
+      // Replacing a period also replaces its rest days.
+      const kept = rest?.from && rest.until ? s.restDays.filter((d) => d < rest.from! || d > rest.until!) : s.restDays;
+      return {
+        sessions: [...s.sessions.filter((x) => !out.has(x.id)), ...sessions],
+        cardio: [...s.cardio.filter((x) => !out.has(x.id)), ...cardio],
+        restDays: [...new Set([...kept, ...(rest?.days ?? [])])].sort(),
+      };
+    });
   },
   replaceAll(data) { set({ ...initial, ...data, ready: true }); },
   reset() { set({ ...initial, ready: true }); },

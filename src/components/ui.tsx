@@ -276,7 +276,7 @@ export function Stepper({ value, onChange, step = 1, min = 0, max = 9999, format
           />
         ) : (
           <Press onPress={() => setTyping(clock ? format(value) : String(value))} haptic={false} label={`${label ?? 'Value'} ${format(value)}, tap to type`}>
-            <T v={big ? 'big' : 'title'} numberOfLines={1} style={[type.num, { minWidth: big ? 100 : 56, textAlign: 'center', textDecorationLine: 'underline', textDecorationStyle: 'dotted', textDecorationColor: colors.faint }]}>{format(value)}</T>
+            <T v={big ? 'big' : 'title'} numberOfLines={1} style={[type.num, { minWidth: big ? 100 : 56, textAlign: 'center' }]}>{format(value)}</T>
           </Press>
         )}
         <Press onPress={() => onChange(clamp(value + step))} style={styles.step} hitSlop={6} label={`More ${label ?? ''}`}><Icon name="plus" size={16} /></Press>

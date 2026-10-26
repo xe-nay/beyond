@@ -7,6 +7,7 @@ import { byId, exercise } from '../../../src/catalog';
 import { SwipeBody } from '../../../src/components/BodyMap';
 import { ExerciseImage } from '../../../src/components/ExerciseImage';
 import { Radar } from '../../../src/components/Radar';
+import { CardioStats } from '../../../src/components/CardioStats';
 import { BarChart, LineChart } from '../../../src/components/Charts';
 import { Icon } from '../../../src/components/Icon';
 import { Button, Card, Chip, Press, Row, Screen, Section, Segmented, Stat, T } from '../../../src/components/ui';
@@ -212,11 +213,7 @@ export default function Progress() {
         </Section>
       )}
 
-      {level >= 1 && cardioWeeks.some((v) => v > 0) && (
-        <Section title="Cardio minutes">
-          <Card><BarChart data={cardioWeeks} labels={weekLabels} color={colors.lime} format={(v) => `${v} min`} /></Card>
-        </Section>
-      )}
+      <CardioStats range={range} monday={monday} weeks={cardioWeeks} labels={weekLabels} />
 
       <Section title="Body" action={<Press onPress={() => router.push('/body-entry')}><T v="label" color={colors.cyan}>Add</T></Press>}>
         <Card>

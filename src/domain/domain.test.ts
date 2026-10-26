@@ -5,7 +5,7 @@ import { e1rm, rirToRpe, repDrop, progression, fatigueReport, personalRecords } 
 import { timeline, position, beepFor, elapsed, pause, resume, skip, totalSeconds } from './intervals.ts';
 import { fromOff, scale, startingTargets } from './nutrition.ts';
 import { parseTrainingFile } from './importer.ts';
-import type { Exercise, Session, WorkoutSet, Prescription, IntervalPlan } from './types.ts';
+import type { CardioSession, Exercise, Session, WorkoutSet, Prescription, IntervalPlan } from './types.ts';
 
 const set = (reps: number, loadKg: number, rir: number | null = 2, extra: Partial<WorkoutSet> = {}): WorkoutSet => ({
   id: Math.random().toString(36), exerciseId: 'bench-press', reps, loadKg, rir, warmup: false, completedAt: '2026-10-01T10:00:00Z', restSeconds: null, ...extra,
@@ -356,4 +356,60 @@ test('pack size from a label quantity', async () => {
   assert.deepEqual(packFromText('90 comprimés'), { total: 90, unit: 'tablet' });
   assert.deepEqual(packFromText('0,5 l'), { total: 500, unit: 'ml' });
   assert.equal(packFromText(''), null);
+});
+
+test('weight for a target RIR from a set done with its RIR', async () => {
+  const { loadForRir } = await import('./calc.ts');
+  // 100 kg x 8 with 2 in reserve = 10 possible. 8 reps at RIR 1 wants 9 possible: a little heavier.
+  assert.equal(Math.round(loadForRir({ loadKg: 100, reps: 8, rir: 2 }, 8, 1)! * 10) / 10, 102.6);
+  // Same reps and RIR: same weight.
+  assert.ok(Math.abs(loadForRir({ loadKg: 60, reps: 10, rir: 2 }, 10, 2)! - 60) < 1e-9);
+  // Too easy last time (RIR 5 at 10 reps) for 10 at RIR 2: heavier.
+  assert.ok(loadForRir({ loadKg: 25, reps: 10, rir: 5 }, 10, 2)! > 25);
+  assert.equal(loadForRir({ loadKg: 25, reps: 10, rir: null }, 10, 2), null);
+  assert.equal(loadForRir({ loadKg: 25, reps: 15, rir: 3 }, 10, 2), null); // 18 possible: past what Epley holds
+});
+
+test('import: rest days, the period, and replacing what is planned in it', async () => {
+  const { parseTrainingFile, applyChoices } = await import('./importer.ts');
+  const all = [{ id: 'bench-press', name: 'Barbell Bench Press', primary: [], secondary: [], equipment: 'barbell' }] as any;
+  const file = JSON.stringify({ format: 'beyond-training', version: 1, id: 'f', entries: [
+    { id: 'a', date: '2030-01-01', type: 'strength', exercises: [{ name: 'Bench Press' }] },
+    { id: 'r', date: '2030-01-02', type: 'rest' },
+    { id: 'b', date: '2030-01-04', type: 'strength', exercises: [{ name: 'Bench Press' }] },
+  ] });
+  const mine = { id: 'm', programId: null, dayId: null, name: 'Mine', date: '2030-01-03', plan: [], sets: [], startedAt: null, finishedAt: null, sessionRpe: null, notes: '' };
+  const r = parseTrainingFile(file, all, { sessions: [mine], cardio: [] });
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.period, { from: '2030-01-01', until: '2030-01-04' });
+  assert.deepEqual(r.rest, ['2030-01-02']);
+  assert.deepEqual(r.plannedInPeriod.map((x) => x.id), ['m']);
+  const keep = applyChoices(r, {});
+  assert.deepEqual(keep.remove, []);
+  assert.deepEqual(keep.rest.days, ['2030-01-02']);
+  const replace = applyChoices(r, {}, 'replace');
+  assert.deepEqual(replace.remove, ['m']);
+  assert.deepEqual(replace.rest.days, ['2030-01-02', '2030-01-03']); // the empty day becomes rest too
+  assert.equal(replace.sessions.length, 2);
+});
+
+test('cardio: WHO minutes, VDOT, Riegel, load ratio', async () => {
+  const { guidelineMinutes, vdot, riegel, fitness, loadReport } = await import('./cardioStats.ts');
+  const c = (date: string, minutes: number, rpe: number | null, extra: Partial<CardioSession> = {}): CardioSession =>
+    ({ id: date + minutes, date, activity: 'Running', minutes, distanceKm: null, rpe, avgHr: null, plan: null, completed: true, notes: '', ...extra });
+  const week = guidelineMinutes([c('2026-10-20', 30, 5), c('2026-10-22', 20, 8)], Date.parse('2026-10-19T00:00:00'), Date.parse('2026-10-26T00:00:00'));
+  assert.deepEqual(week, { moderate: 30, vigorous: 20, equivalent: 70 });
+  // A 20:00 5 km is VDOT ~49.8 on the Daniels tables.
+  assert.ok(Math.abs(vdot(5, 20)! - 49.8) < 0.5);
+  assert.ok(Math.abs(riegel(5, 20, 10) - 41.7) < 0.1);
+  // Intervals and easy runs do not count as a race effort.
+  assert.equal(fitness([c('2026-10-20', 30, 5, { distanceKm: 5 })]), null);
+  assert.equal(fitness([c('2026-10-20', 25, 8, { distanceKm: 5, plan: { activity: 'Running', warmupSeconds: 0, workSeconds: 60, recoverySeconds: 60, rounds: 6, cooldownSeconds: 0, workCue: '', recoveryCue: '', countdown: 5 } })]), null);
+  assert.equal(Math.round(fitness([c('2026-10-20', 20, 8, { distanceKm: 5 })])!.vdot), 50);
+  const days = [
+    ...[1, 2, 3, 4].map((w) => ({ date: new Date(2026, 9, 25 - 7 * w).toISOString().slice(0, 10), load: 300 })),
+    { date: '2026-10-24', load: 600 },
+  ];
+  const r = loadReport(days, new Date(2026, 9, 25, 12));
+  assert.equal(r.ratio, 2);
 });

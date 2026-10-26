@@ -1,9 +1,9 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-native-reanimated';
+import Animated, { Extrapolation, FadeIn, interpolate, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { DailyIntake } from '../../../src/components/DailyIntake';
@@ -32,15 +32,39 @@ export default function Food() {
   const total = eatenOn(s, date);
   const recent = Object.values(s.foods).sort((a, b) => Number(b.favorite) - Number(a.favorite) || b.lastUsed.localeCompare(a.lastUsed)).slice(0, 12);
 
-  // Swipe sideways anywhere on the page to change day (left: next, right: previous).
-  const go = (step: number) => setOffset((o) => Math.max(-365, Math.min(14, o + step)));
+  // Swipe sideways anywhere on the page to change day (left: next, right: previous). The day follows
+  // the finger, slides out, and the next one slides in from the other side, so the change is seen.
+  const { width } = useWindowDimensions();
+  const x = useSharedValue(0);
+  const last = 14;
+  const arrive = (step: number) => {
+    setOffset((o) => Math.max(-365, Math.min(last, o + step)));
+    if (reduced) return;
+    x.set(withSequence(withTiming(step * width * 0.35, { duration: 0 }), withSpring(0, { duration: 420, dampingRatio: 0.9 })));
+  };
+  const go = (step: number) => {
+    if (step > 0 && offset >= last) return;
+    if (reduced) return arrive(step);
+    x.set(withTiming(-step * width * 0.45, { duration: 150 }, (done) => { if (done) scheduleOnRN(arrive, step); }));
+  };
+  const atEnd = offset >= last;
   const swipe = Gesture.Pan()
     .activeOffsetX([-28, 28])
     .failOffsetY([-14, 14])
+    .onUpdate((e) => {
+      if (reduced) return;
+      // No next day past the last one: it only gives a little.
+      x.set(e.translationX < 0 && atEnd ? e.translationX * 0.15 : e.translationX * 0.8);
+    })
     .onEnd((e) => {
       if (e.translationX < -60 || e.velocityX < -600) scheduleOnRN(go, 1);
       else if (e.translationX > 60 || e.velocityX > 600) scheduleOnRN(go, -1);
+      if (!(Math.abs(e.translationX) > 60 || Math.abs(e.velocityX) > 600) || (e.translationX < 0 && atEnd)) x.set(withSpring(0, { duration: 350, dampingRatio: 0.85 }));
     });
+  const slide = useAnimatedStyle(() => ({
+    transform: [{ translateX: x.get() }],
+    opacity: interpolate(Math.abs(x.get()), [0, width * 0.45], [1, 0.25], Extrapolation.CLAMP),
+  }));
 
   return (
     <GestureDetector gesture={swipe}>
@@ -48,11 +72,12 @@ export default function Food() {
     <Screen>
       {/* Day switcher */}
       <Row style={{ justifyContent: 'space-between', marginTop: -space.sm }}>
-        <Press onPress={() => setOffset(offset - 1)} hitSlop={10}><Icon name="chevron.left" size={16} color={colors.dim} /></Press>
+        <Press onPress={() => go(-1)} hitSlop={10}><Icon name="chevron.left" size={16} color={colors.dim} /></Press>
         <Animated.View key={offset} entering={reduced ? undefined : FadeIn.duration(180)}><T v="headline">{offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : offset === 1 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</T></Animated.View>
-        <Press onPress={() => setOffset(Math.min(14, offset + 1))} hitSlop={10} disabled={offset === 14}><Icon name="chevron.right" size={16} color={colors.dim} /></Press>
+        <Press onPress={() => go(1)} hitSlop={10} disabled={atEnd}><Icon name="chevron.right" size={16} color={colors.dim} /></Press>
       </Row>
 
+      <Animated.View style={[{ gap: space.lg }, slide]}>
       <DailyIntake date={date} />
 
       <NutritionCard n={total} targets={s.targets} onPress={() => router.push('/targets')} />
@@ -102,6 +127,7 @@ export default function Food() {
         );
       })}
       <T v="caption" color={colors.faint} style={{ textAlign: 'center', textTransform: 'none' }}>Food data from Open Food Facts (ODbL)</T>
+      </Animated.View>
     </Screen>
     </View>
     </GestureDetector>

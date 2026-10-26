@@ -28,6 +28,21 @@ export function e1rmWithRir(loadKg: number, reps: number, rir: number | null) {
   return e1rm(loadKg, Math.min(10, reps + (rir ?? 0)));
 }
 
+/**
+ * The weight that should leave `targetRir` reps in reserve after `targetReps`, from a set already done
+ * with its RIR. Reps possible = reps + RIR (the RIR-based RPE scale, Zourdos et al. 2016; Helms et al.
+ * 2016), and load scales with reps possible as in Epley, which is how RPE charts such as the RTS table
+ * are used: estimate the max from one set, then work back to the next. Trusted up to 15 reps possible on
+ * both sides; null otherwise or without an RIR.
+ */
+export function loadForRir(set: { loadKg: number; reps: number; rir: number | null }, targetReps: number, targetRir: number) {
+  if (set.rir === null || !(set.loadKg > 0) || set.reps < 1 || targetReps < 1) return null;
+  const done = set.reps + set.rir;
+  const want = targetReps + targetRir;
+  if (done > 15 || want > 15) return null;
+  return (set.loadKg * (1 + done / 30)) / (1 + want / 30);
+}
+
 /** RPE on the RIR-based scale (Zourdos et al. 2016): RPE = 10 − RIR, for RIR 0–4. */
 export const rirToRpe = (rir: number | null) => (rir === null || rir < 0 || rir > 4 ? null : 10 - rir);
 

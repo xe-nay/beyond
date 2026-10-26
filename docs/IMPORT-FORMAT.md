@@ -11,13 +11,16 @@ This guide explains every part of the file Beyond imports. It is written so you 
 - Give every entry a date in YYYY-MM-DD. If I say "last Monday" or "three weeks ago", work out the real date; if you do not know today's date, ask me before writing the file.
 - Use exercise names as I say them, with the equipment when it matters ("Dumbbell Bench Press", "Cable Lateral Raise"). If I gave you Beyond's exercise list, copy names exactly from it.
 - Make a new file "id" for every file, unless I ask you to correct a file you already gave me: then keep the same file id and entry ids.
+- For a plan, give every date of its period an entry: a workout, a cardio session or a rest day ("type": "rest").
 - For cardio, put every pace in the pace fields (workPace, recoveryPace, warmupPace, cooldownPace) as minutes:seconds per km, a window "7:15-8:15" or one value "7:30". Follow the checklist at the end of section 8.
 
 
 ## 1. How importing works
 
-- Imports only ADD. Nothing already in the app is deleted or changed unless you choose so on a conflict.
-- One file holds any number of entries. Each entry is ONE workout or ONE cardio session on ONE date.
+- The app reads the file's period: its first and last date. Before importing you choose:
+  - Replace this period: everything planned in the app between those dates is removed and the file's plan takes its place. Every date in the period with no workout or cardio in the file becomes a rest day (no program workout is shown there). Workouts already logged are never removed.
+  - Keep what is there: nothing is deleted; days that already have something ask what to keep (below).
+- One file holds any number of entries. Each entry is ONE workout, ONE cardio session or ONE rest day on ONE date.
 - An entry with a "performed" block is history: a workout already done, with its sets, reps, weights and RIR. Its date must be today or earlier.
 - An entry without "performed" is a plan for that date. A planned workout shows on Today as "Planned today" with a Start button, and as a ring on that day in the calendar. Planned cardio shows in the Cardio screen under "Planned", ready to start.
 - The import does not create a repeating weekly program. Programs are made in the app (templates or Build my program). To plan several weeks, write one entry per workout per date.
@@ -26,7 +29,7 @@ This guide explains every part of the file Beyond imports. It is written so you 
   - Mine: keep what is in the app, skip this entry (the default).
   - Import: use this entry and remove what the app had on that date (same type only).
   - Both: keep both.
-  A workout in progress in the app is never touched.
+  "For every day" sets one choice for all of them at once. A workout in progress in the app is never touched.
 - Importing a file with the same file "id" again: entries that did not change show "Already in" and are skipped; entries that changed ask "Keep mine" or "Use import". This is how you correct a file without duplicating it.
 - Everything is stored only on the phone.
 
@@ -61,12 +64,16 @@ This guide explains every part of the file Beyond imports. It is written so you 
 
 - id (required): unique inside this file. Letters, digits and dashes, such as "push-2026-09-14". Keep it the same when you correct the file later.
 - date (required): YYYY-MM-DD, a real calendar date.
-- type: "strength" (the default when left out) or "cardio". Anything else is an error.
+- type: "strength" (the default when left out), "cardio" or "rest". Anything else is an error.
 - name (optional): shown in the app, such as "Upper A" or "Easy run". Strength defaults to "Imported session"; cardio to its activity.
 - notes (optional): free text kept with the workout.
 - performed (optional): the results; makes the entry history. Only for today or earlier.
 
-A strength entry needs "exercises" (the plan), "performed" with "sets" (the results), or both. A cardio entry needs "intervals".
+A strength entry needs "exercises" (the plan), "performed" with "sets" (the results), or both. A cardio entry needs "intervals". A rest entry needs nothing else:
+
+    { "id": "rest-2026-11-01", "date": "2026-11-01", "type": "rest", "name": "Rest", "notes": "Walk if you like" }
+
+Write a rest entry for every rest day of a plan, so the plan covers each date of its period (a strength, cardio or rest entry on every day). In "Replace this period" days without an entry become rest days anyway; in "Keep what is there" only rest entries mark them.
 
 
 ## 4. Strength plan: "exercises"
@@ -273,7 +280,8 @@ If any entry has a problem, nothing is imported and the first errors are shown:
 - "The file has no entries." "entries" is missing or empty.
 - "Entry N: missing or duplicate id." Every entry needs its own "id".
 - "Entry N: date must be YYYY-MM-DD." Use a real date such as 2026-09-14.
-- "Entry N: type must be "strength" or "cardio"."
+- "Entry N: type must be "strength", "cardio" or "rest"."
+- "Entry N: a rest day has no results." Remove "performed" from the rest entry.
 - "Entry N: a future date cannot have results." Remove "performed" or fix the date.
 - "Entry N: a workout needs "exercises" or performed "sets"."
 - "Entry N: unknown exercise "X"." / "a performed set names an unknown exercise." Rename it (see section 7).

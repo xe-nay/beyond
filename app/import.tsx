@@ -20,10 +20,12 @@ export default function Import() {
   const s = useStore();
   const [result, setResult] = useState<ImportResult | null>(null);
   const [choices, setChoices] = useState<Record<string, Choice>>({});
+  const [mode, setMode] = useState<'keep' | 'replace'>('keep');
   const [copied, setCopied] = useState<'guide' | 'names' | null>(null);
 
   const read = (text: string) => {
     setChoices({});
+    setMode('keep');
     setResult(parseTrainingFile(text, exercises, { sessions: s.sessions, cardio: s.cardio }));
   };
   const pick = async () => {
@@ -36,9 +38,13 @@ export default function Import() {
     setCopied(what);
   };
 
-  const plan = result && !result.errors.length ? applyChoices(result, choices) : null;
+  const plan = result && !result.errors.length ? applyChoices(result, choices, mode) : null;
   const count = plan ? plan.sessions.length + plan.cardio.length : 0;
-  const conflicts = result?.rows.filter(needsChoice) ?? [];
+  const conflicts = mode === 'keep' ? result?.rows.filter(needsChoice) ?? [] : [];
+  const period = result?.period;
+  const days = period ? Math.round((Date.parse(period.until) - Date.parse(period.from)) / 86400000) + 1 : 0;
+  const nice = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const removing = result?.plannedInPeriod ?? [];
   // A day imported before can only be kept or replaced, so "both" updates it.
   const fit = (r: ImportRow, c: Choice): Choice => (r.status === 'changed' && c === 'both' ? 'import' : c);
   const chooseAll = (c: Choice) => setChoices(Object.fromEntries(conflicts.map((r) => [r.id, fit(r, c)])));
@@ -63,6 +69,25 @@ export default function Import() {
             </Card>
           ) : (
             <>
+              {period && (
+                <Card style={{ gap: space.md }}>
+                  <View style={{ gap: 2 }}>
+                    <T v="caption" color={colors.faint}>This file covers</T>
+                    <T v="title3">{nice(period.from)} – {nice(period.until)} <T v="footnote" color={colors.dim}>· {plural(days, 'day')}</T></T>
+                  </View>
+                  <Segmented<'keep' | 'replace'>
+                    value={mode}
+                    onChange={setMode}
+                    options={[{ value: 'replace', label: 'Replace this period' }, { value: 'keep', label: 'Keep what is there' }]}
+                  />
+                  <T v="footnote" color={colors.dim}>
+                    {mode === 'replace'
+                      ? `Everything planned between these dates is removed${removing.length ? ` (${plural(removing.length, 'planned session')})` : ''} and the file's plan goes in. Days with nothing in the file become rest days.${result.doneInPeriod ? ` Your ${plural(result.doneInPeriod, 'logged session')} stay.` : ' Logged workouts always stay.'}`
+                      : 'Your plans stay. Where a day already has something, choose below: yours, the import, or both.'}
+                  </T>
+                  {mode === 'replace' && plan?.rest.days.length ? <T v="footnote" color={colors.cyan}>{plural(plan.rest.days.length, 'rest day')} in this period</T> : null}
+                </Card>
+              )}
               {conflicts.length > 0 && (
                 <View style={{ gap: 4 }}>
                   <T v="headline" color={colors.amber}>{plural(conflicts.length, 'day')} already {conflicts.length === 1 ? 'has' : 'have'} logs</T>
@@ -82,13 +107,13 @@ export default function Import() {
               )}
               <Card style={{ padding: 0, gap: 0 }}>
                 {result.rows.map((r, i) => (
-                  <Entry key={r.id} row={r} first={i === 0} choice={choices[r.id] ?? 'mine'} onChoose={(c) => setChoices({ ...choices, [r.id]: c })} />
+                  <Entry key={r.id} row={r} first={i === 0} ask={mode === 'keep'} choice={choices[r.id] ?? 'mine'} onChoose={(c) => setChoices({ ...choices, [r.id]: c })} />
                 ))}
               </Card>
               <Button
-                kind="lime" icon="checkmark" disabled={!count}
-                title={count ? `Import ${plural(count, 'entry', 'entries')}` : 'Nothing new'}
-                onPress={() => { s.importData(plan!.sessions, plan!.cardio, plan!.remove); router.back(); }}
+                kind="lime" icon="checkmark" disabled={!count && !plan?.rest.days.length}
+                title={mode === 'replace' ? `Replace with ${plural(count, 'session')}` : count ? `Import ${plural(count, 'entry', 'entries')}` : plan?.rest.days.length ? `Add ${plural(plan.rest.days.length, 'rest day')}` : 'Nothing new'}
+                onPress={() => { s.importData(plan!.sessions, plan!.cardio, plan!.remove, plan!.rest); router.back(); }}
               />
             </>
           )}
@@ -105,15 +130,15 @@ export default function Import() {
   );
 }
 
-function Entry({ row: r, first, choice, onChoose }: { row: ImportRow; first: boolean; choice: Choice; onChoose: (c: Choice) => void }) {
-  const ask = needsChoice(r);
+function Entry({ row: r, first, choice, onChoose, ask: asking }: { row: ImportRow; first: boolean; choice: Choice; onChoose: (c: Choice) => void; ask: boolean }) {
+  const ask = asking && needsChoice(r);
   return (
     <View style={{ padding: space.md, gap: space.sm, borderTopWidth: first ? 0 : 0.5, borderTopColor: colors.hairline }}>
       <Row>
-        <Icon name={r.type === 'cardio' ? 'figure.run' : 'dumbbell.fill'} size={16} color={r.kind === 'history' ? colors.lime : colors.cyan} />
+        <Icon name={r.type === 'rest' ? 'bed.double.fill' : r.type === 'cardio' ? 'figure.run' : 'dumbbell.fill'} size={16} color={r.type === 'rest' ? colors.dim : r.kind === 'history' ? colors.lime : colors.cyan} />
         <View style={{ flex: 1 }}>
           <T v="headline" numberOfLines={1}>{r.name}</T>
-          <T v="footnote" color={colors.dim}>{r.date} · {r.kind === 'history' ? 'History' : 'Planned'}</T>
+          <T v="footnote" color={colors.dim}>{r.date} · {r.type === 'rest' ? 'Rest day' : r.kind === 'history' ? 'History' : 'Planned'}</T>
         </View>
         {r.status === 'same' && <T v="footnote" color={colors.faint}>Already in</T>}
       </Row>

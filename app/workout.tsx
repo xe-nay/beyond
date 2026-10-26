@@ -11,9 +11,9 @@ import { Icon } from '../src/components/Icon';
 import { motionFor, WeightControl } from '../src/components/LoadVisual';
 import { RestBar } from '../src/components/RestBar';
 import { Button, Card, Divider, Press, Row, Stepper, T, thud } from '../src/components/ui';
-import { e1rm, e1rmWithRir, fatigueIndex, previousSets, progression, repDrop, rirToRpe, volumeLoad, working } from '../src/domain/calc';
+import { e1rm, e1rmWithRir, fatigueIndex, loadForRir, previousSets, progression, repDrop, rirToRpe, volumeLoad, working } from '../src/domain/calc';
 import { formatClock } from '../src/domain/intervals';
-import { formatWeight, toDisplay } from '../src/domain/plates';
+import { dumbbellStep, formatWeight, roundTo, toDisplay, toKg } from '../src/domain/plates';
 import type { WorkoutSet } from '../src/domain/types';
 import { prepareAudio } from '../src/sound';
 import { useStore } from '../src/store';
@@ -75,6 +75,17 @@ export default function Workout() {
     warmup: false,
     implements: doneWork[doneWork.length - 1]?.implements ?? prevAt(0)?.implements ?? defaultImplements(ex),
   };
+  // The weight for the next set's reps at the program's RIR, from the latest set that has an RIR.
+  const aim = (() => {
+    if (!p || draft.warmup || kind === 'bodyweight') return null;
+    const today = [...doneWork].reverse().find((x) => x.rir !== null);
+    const from = today ?? [...prev].reverse().find((x) => !x.warmup && x.rir !== null);
+    const kg = from ? loadForRir(from, draft.reps, p.rir) : null;
+    if (!from || kg === null) return null;
+    const v = toDisplay(kg, unit);
+    const step = kind === 'dumbbell' || kind === 'kettlebell' ? dumbbellStep(unit, v) : unit === 'kg' ? 2.5 : 5;
+    return { kg: toKg(roundTo(v, step), unit), from: from as WorkoutSet & { rir: number }, thisSession: !!today };
+  })();
   const setDraft = (patch: Partial<Draft>) => p && s.patchSession(session.id, { drafts: { ...drafts, [p.exerciseId]: { ...draft, ...patch } } });
 
   const elapsed = session.startedAt ? (Date.now() - Date.parse(session.startedAt)) / 1000 : 0;
@@ -191,6 +202,19 @@ export default function Workout() {
                 <Icon name={advice.kind === 'increase' ? 'arrow.up.right' : 'wand.and.stars'} size={15} color={advice.kind === 'increase' ? colors.lime : colors.cyan} />
                 <T v="label" color={colors.dim} style={{ flex: 1 }}>{advice.title}{prev.length ? ` · last ${prev.map((x) => `${formatWeight(x.loadKg, unit)}×${x.reps}`).join(', ')}` : ''}</T>
               </Row>
+            )}
+
+            {aim && (
+              <Press onPress={() => setDraft({ kg: aim.kg })} haptic={aim.kg !== draft.kg} label="Use the suggested weight">
+                <Row gap={space.sm} style={{ padding: space.md, borderRadius: radius.md, backgroundColor: alpha(colors.cyan, 0.08), borderWidth: 0.5, borderColor: alpha(colors.cyan, 0.3) }}>
+                  <Icon name="scope" size={16} color={colors.cyan} />
+                  <View style={{ flex: 1 }}>
+                    <T v="headline">{formatWeight(aim.kg, unit)} {unit}{draft.implements === 2 ? ' each' : ''} <T v="footnote" color={colors.dim}>for {draft.reps} reps at RIR {p.rir}</T></T>
+                    <T v="footnote" color={colors.faint}>From your {formatWeight(aim.from.loadKg, unit)} × {aim.from.reps} at RIR {aim.from.rir}{aim.thisSession ? ' today' : ' last time'}</T>
+                  </View>
+                  {aim.kg !== draft.kg ? <T v="footnote" color={colors.cyan}>Use</T> : <Icon name="checkmark" size={14} color={colors.lime} />}
+                </Row>
+              </Press>
             )}
 
             {/* Sets */}

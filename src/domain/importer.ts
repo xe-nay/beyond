@@ -10,7 +10,7 @@ export interface ImportRow {
   id: string; // id the entry gets in the app
   date: string;
   name: string;
-  type: 'strength' | 'cardio';
+  type: 'strength' | 'cardio' | 'rest';
   kind: 'plan' | 'history';
   status: 'new' | 'same' | 'changed'; // changed: this entry was imported before and differs now
   clashes: Clash[];
@@ -21,6 +21,12 @@ export interface ImportResult {
   cardio: CardioSession[];
   rows: ImportRow[];
   errors: string[];
+  rest: string[]; // dates the file marks as rest days
+  period: { from: string; until: string } | null; // first and last date in the file
+  /** What the app already plans inside the period (not started), which "replace" removes. */
+  plannedInPeriod: { id: string; date: string; name: string; type: 'strength' | 'cardio' }[];
+  /** Workouts and cardio already done inside the period; always kept. */
+  doneInPeriod: number;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -122,7 +128,7 @@ export function readIntervals(iv: any): IntervalPlan | string {
 }
 
 export function parseTrainingFile(text: string, all: Exercise[], existing: { sessions: Session[]; cardio: CardioSession[] }): ImportResult {
-  const out: ImportResult = { sessions: [], cardio: [], rows: [], errors: [] };
+  const out: ImportResult = { sessions: [], cardio: [], rows: [], errors: [], rest: [], period: null, plannedInPeriod: [], doneInPeriod: 0 };
   let file: any;
   try {
     // Tolerates a reply pasted from a chat: code fences or a sentence around the JSON.
@@ -147,10 +153,17 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
     ids.add(entry.id);
     if (!DATE.test(entry.date ?? '') || Number.isNaN(Date.parse(entry.date))) return out.errors.push(`${where}: date must be YYYY-MM-DD.`);
     const type = entry.type ?? 'strength';
-    if (type !== 'strength' && type !== 'cardio') return out.errors.push(`${where}: type must be "strength" or "cardio".`);
+    if (type !== 'strength' && type !== 'cardio' && type !== 'rest') return out.errors.push(`${where}: type must be "strength", "cardio" or "rest".`);
     const done = !!entry.performed;
     if (done && entry.date > today) return out.errors.push(`${where}: a future date cannot have results.`);
     const id = `imp-${fileId}-${entry.id}`;
+
+    if (type === 'rest') {
+      if (done) return out.errors.push(`${where}: a rest day has no results.`);
+      out.rest.push(entry.date);
+      out.rows.push({ id, date: entry.date, name: entry.name ?? 'Rest day', type: 'rest', kind: 'plan', status: 'new', clashes: [] });
+      return;
+    }
 
     if (type === 'cardio') {
       const read = readIntervals(entry.intervals ?? {});
@@ -221,18 +234,52 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
   });
 
   out.rows.sort((a, b) => a.date.localeCompare(b.date));
+  if (out.rows.length) {
+    const from = out.rows[0].date;
+    const until = out.rows[out.rows.length - 1].date;
+    out.period = { from, until };
+    const ids = new Set(out.rows.map((r) => r.id));
+    const inside = (d: string) => d >= from && d <= until;
+    out.plannedInPeriod = [
+      ...existing.sessions.filter((x) => inside(x.date) && !x.startedAt && !ids.has(x.id)).map((x) => ({ id: x.id, date: x.date, name: x.name, type: 'strength' as const })),
+      ...existing.cardio.filter((c) => inside(c.date) && !c.completed && !ids.has(c.id)).map((c) => ({ id: c.id, date: c.date, name: c.name ?? c.activity, type: 'cardio' as const })),
+    ];
+    out.doneInPeriod = existing.sessions.filter((x) => inside(x.date) && x.finishedAt).length + existing.cardio.filter((c) => inside(c.date) && c.completed).length;
+  }
+  return out;
+}
+
+/** Every date from `from` to `until`, both included. */
+export function datesBetween(from: string, until: string) {
+  const out: string[] = [];
+  for (let d = new Date(`${from}T12:00:00Z`); d.toISOString().slice(0, 10) <= until; d.setUTCDate(d.getUTCDate() + 1)) out.push(d.toISOString().slice(0, 10));
   return out;
 }
 
 export type Choice = 'mine' | 'import' | 'both';
 /** A row needs a decision when it would overwrite or sit next to something already logged. */
-export const needsChoice = (r: ImportRow) => r.status === 'changed' || (r.status === 'new' && r.clashes.length > 0);
+export const needsChoice = (r: ImportRow) => r.type !== 'rest' && (r.status === 'changed' || (r.status === 'new' && r.clashes.length > 0));
 
-/** What to add and what to remove, given the user's choice for each conflicting row (default: keep mine). */
-export function applyChoices(result: ImportResult, choices: Record<string, Choice>) {
+/**
+ * What to add and what to remove.
+ * - keep: the app's plans stay; each conflicting day follows its choice (default: keep mine).
+ * - replace: everything planned in the file's period goes and the file's plan takes its place; days
+ *   with nothing in the file become rest days. Logged workouts always stay.
+ */
+export function applyChoices(result: ImportResult, choices: Record<string, Choice>, mode: 'keep' | 'replace' = 'keep') {
+  if (mode === 'replace' && result.period) {
+    const busy = new Set(result.rows.filter((r) => r.type !== 'rest').map((r) => r.date));
+    return {
+      sessions: result.sessions,
+      cardio: result.cardio,
+      remove: result.plannedInPeriod.map((x) => x.id),
+      rest: { ...result.period, days: datesBetween(result.period.from, result.period.until).filter((d) => !busy.has(d)) },
+    };
+  }
   const take = new Set<string>();
   const remove = new Set<string>();
   for (const r of result.rows) {
+    if (r.type === 'rest') continue;
     if (r.status === 'same') continue;
     const c = needsChoice(r) ? choices[r.id] ?? 'mine' : 'import';
     if (c === 'mine') continue;
@@ -243,6 +290,7 @@ export function applyChoices(result: ImportResult, choices: Record<string, Choic
     sessions: result.sessions.filter((x) => take.has(x.id)),
     cardio: result.cardio.filter((x) => take.has(x.id)),
     remove: [...remove],
+    rest: { from: null, until: null, days: result.rest },
   };
 }
 

@@ -37,7 +37,9 @@ function line(n: Nutrients, key: string): Line {
   return { label: m.label, unit: m.unit, dv: m.dv, limit: m.limit, value: n.micro?.[key] ?? 0 };
 }
 
+// The least height; a page with more rows (or larger text) makes the card taller rather than cutting it.
 const H = 236;
+const DOTS = 6;
 
 export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: NutritionTargets; onPress?: () => void }) {
   const reduced = useReducedMotion();
@@ -45,6 +47,11 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
   const [back, setBack] = useState(false);
   const [page, setPage] = useState(0);
   const [w, setW] = useState(0);
+  // Each page's rows, measured at the current width; the card is as tall as the tallest.
+  const [heights, setHeights] = useState<{ w: number; h: Record<number, number> }>({ w: 0, h: {} });
+  const tallest = heights.w === w ? Math.max(0, ...Object.values(heights.h)) : 0;
+  const height = Math.max(H, tallest + DOTS + space.sm + space.lg * 2 + 4);
+  const measured = (i: number, h: number) => setHeights((x) => (x.w === w && Math.abs((x.h[i] ?? 0) - h) < 0.5 ? x : { w, h: { ...(x.w === w ? x.h : {}), [i]: h } }));
   const left = targets.kcal - n.kcal;
 
   // The face shown is a choice, not a toggle of the animation's position, so quick taps never
@@ -77,9 +84,10 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
     <View style={{ gap: space.sm }}>
     <Segmented options={[{ value: 'macros', label: 'Macros' }, { value: 'micros', label: 'Micros' }]} value={back ? 'micros' : 'macros'} onChange={(v) => show(v === 'micros')} />
     <GestureDetector gesture={pan}>
-      <View style={{ height: H }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      <View style={{ height }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
         <Animated.View style={[styles.face, front]} pointerEvents={back ? 'none' : 'auto'}>
-          <Press onPress={onPress} haptic={false} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.xl }}>
+          {/* Held, not tapped, so scrolling past the card never opens the goals. */}
+          <Press onLongPress={onPress && (() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onPress(); })} haptic={false} label="Hold to change your daily goals" style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.xl }}>
             <MacroDonut n={n} size={136} label={`of ${targets.kcal}`} />
             <View style={{ flex: 1, gap: space.md }}>
               <View>
@@ -87,6 +95,7 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
                 <T v="title" color={left >= 0 ? colors.lime : colors.amber} style={type.num}>{Math.abs(left)} kcal</T>
               </View>
               <MacroLegend n={n} targets={targets} />
+              {onPress && <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0 }}>Hold to change goals</T>}
             </View>
           </Press>
         </Animated.View>
@@ -99,10 +108,13 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
             onScroll={(e) => w && setPage(Math.round(e.nativeEvent.contentOffset.x / w))}
             scrollEventThrottle={32}
             style={{ marginHorizontal: -space.lg }}>
-            {PAGES.map((p, i) => (
-              <View key={i} style={{ width: w || 1, paddingHorizontal: space.lg, gap: 8 }}>
-                <T v="caption" color={colors.faint}>{p.title}</T>
-                {p.keys.map((k) => <MicroRow key={k} l={line(n, k)} />)}
+            {w > 0 && PAGES.map((p, i) => (
+              <View key={i} style={{ width: w, paddingHorizontal: space.lg }}>
+                {/* Measured on its own: the page stretches to the card, its rows do not. */}
+                <View style={{ gap: 8 }} onLayout={(e) => measured(i, e.nativeEvent.layout.height)}>
+                  <T v="caption" color={colors.faint}>{p.title}</T>
+                  {p.keys.map((k) => <MicroRow key={k} l={line(n, k)} />)}
+                </View>
               </View>
             ))}
           </ScrollView>

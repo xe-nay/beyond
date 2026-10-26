@@ -3,6 +3,7 @@
 // - A program with a period fills only the days inside it.
 // - A program without a period (older ones) stays hidden while an imported plan covers the dates,
 //   and takes over after the plan's last date.
+// - A rest day from an imported plan has no program workout.
 import { activeProgram, type State } from './store';
 
 const weekdayOf = (date: string) => (new Date(`${date}T12:00:00`).getDay() + 6) % 7;
@@ -12,6 +13,7 @@ export function importedUntil(s: State) {
   const dates = [
     ...s.sessions.filter((x) => x.source === 'import' && !x.startedAt).map((x) => x.date),
     ...s.cardio.filter((c) => !c.completed && c.plan && c.id.startsWith('imp-')).map((c) => c.date),
+    ...s.restDays,
   ];
   return dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : null;
 }
@@ -34,9 +36,11 @@ export function plannedFor(s: State, date: string, today: string) {
   const program = activeProgram(s);
   const sessions = s.sessions.filter((x) => !x.startedAt && x.date === date);
   const done = s.sessions.filter((x) => x.finishedAt && x.date === date);
-  const programDay = date >= today && !sessions.length && programCovers(s, date)
+  // A rest day from an imported plan keeps the program off that date.
+  const rest = s.restDays.includes(date);
+  const programDay = date >= today && !sessions.length && !rest && programCovers(s, date)
     ? program?.days.find((d) => d.weekday === weekdayOf(date) && !done.some((x) => x.dayId === d.id))
     : undefined;
   const cardio = s.cardio.filter((c) => !c.completed && c.plan && c.date === date);
-  return { sessions, programDay, program, cardio, done, cardioDone: s.cardio.filter((c) => c.completed && c.date === date) };
+  return { sessions, programDay, program, cardio, done, rest, cardioDone: s.cardio.filter((c) => c.completed && c.date === date) };
 }
