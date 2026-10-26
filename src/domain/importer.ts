@@ -1,6 +1,7 @@
 // One dated training file for plans and history. Entries with a "performed" block become history;
 // the rest become scheduled sessions. Also reads the earlier "kinetic-training" v1 files.
 import { defaultImplements } from './equipment.ts';
+import { paceInText, readPace } from './track.ts';
 import type { CardioSession, Exercise, IntervalPlan, Prescription, Session, WorkoutSet } from './types.ts';
 
 /** Something already in the app on the same date and of the same type as an imported entry. */
@@ -63,6 +64,63 @@ export function resolver(all: Exercise[]) {
   };
 }
 
+/** The cardio activities the app knows, and everyday words for them. */
+export const CARDIO_ACTIVITIES = ['Running', 'Walking', 'Cycling', 'Rowing', 'Swimming', 'Elliptical', 'Stairs', 'HIIT'] as const;
+const ACTIVITY_WORDS: Record<string, (typeof CARDIO_ACTIVITIES)[number]> = {
+  run: 'Running', running: 'Running', jog: 'Running', jogging: 'Running', 'run-walk': 'Running', treadmill: 'Running',
+  walk: 'Walking', walking: 'Walking', hike: 'Walking', hiking: 'Walking',
+  cycle: 'Cycling', cycling: 'Cycling', bike: 'Cycling', biking: 'Cycling', spin: 'Cycling',
+  row: 'Rowing', rowing: 'Rowing', rower: 'Rowing', swim: 'Swimming', swimming: 'Swimming',
+  elliptical: 'Elliptical', 'cross-trainer': 'Elliptical', stairs: 'Stairs', stair: 'Stairs', 'stair-climber': 'Stairs', stairmaster: 'Stairs',
+  hiit: 'HIIT', circuit: 'HIIT',
+};
+
+const PHASES = ['warmup', 'work', 'recovery', 'cooldown'] as const;
+
+/** An "intervals" block as a plan, or a sentence saying what is wrong with it. */
+export function readIntervals(iv: any): IntervalPlan | string {
+  const name = String(iv.activityType ?? iv.activity ?? 'Running');
+  const activity = CARDIO_ACTIVITIES.find((a) => a.toLowerCase() === name.toLowerCase()) ?? ACTIVITY_WORDS[slug(name)];
+  if (!activity) return `activityType "${name}" is not one of ${CARDIO_ACTIVITIES.join(', ')}.`;
+  // Seconds, or the same field in minutes ("warmupMinutes": 5).
+  const time = (key: string, lo: number, hi: number): number | string => {
+    const v = iv[`${key}Seconds`] ?? (iv[`${key}Minutes`] !== undefined ? +iv[`${key}Minutes`] * 60 : undefined);
+    if (v === undefined || v === null) return 0;
+    const n = Math.round(+v);
+    return Number.isFinite(n) && n >= lo && n <= hi ? n : `${key}Seconds must be a number from ${lo} to ${hi}.`;
+  };
+  const warmupSeconds = time('warmup', 0, 3600);
+  const workSeconds = time('work', 5, 14400);
+  const recoverySeconds = time('recovery', 0, 3600);
+  const cooldownSeconds = time('cooldown', 0, 3600);
+  for (const v of [warmupSeconds, workSeconds, recoverySeconds, cooldownSeconds]) if (typeof v === 'string') return v;
+  if (!workSeconds) return 'cardio needs workSeconds (or workMinutes).';
+  const rounds = iv.rounds === undefined ? 1 : Math.round(+iv.rounds);
+  if (!Number.isFinite(rounds) || rounds < 1 || rounds > 50) return 'rounds must be a whole number from 1 to 50.';
+  const countdown = iv.countdownSeconds ?? iv.countdown ?? 5;
+  if (!Number.isFinite(+countdown) || +countdown < 0 || +countdown > 30) return 'countdownSeconds must be 0 to 30.';
+  const unit = String(iv.paceUnit ?? 'km').toLowerCase().startsWith('mi') ? 'mi' : 'km';
+
+  const plan: IntervalPlan = {
+    activity, warmupSeconds: warmupSeconds as number, workSeconds: workSeconds as number, recoverySeconds: recoverySeconds as number,
+    rounds, cooldownSeconds: cooldownSeconds as number,
+    workCue: String(iv.workCue ?? ''), recoveryCue: String(iv.recoveryCue ?? ''),
+    ...(iv.warmupCue ? { warmupCue: String(iv.warmupCue) } : {}), ...(iv.cooldownCue ? { cooldownCue: String(iv.cooldownCue) } : {}),
+    countdown: Math.round(+countdown),
+    ...(unit === 'mi' ? { paceUnit: 'mi' as const } : {}),
+  };
+  for (const k of PHASES) {
+    const raw = iv[`${k}Pace`];
+    // A number is seconds per km; text without a unit takes the paceUnit.
+    const text = typeof raw === 'string' && unit === 'mi' && !/\/|per/i.test(raw) ? `${raw} /mi` : raw;
+    // Without a pace field, a pace written in the cue ("Easy walk 10:00–12:00 min/km") counts.
+    const pace = readPace(text) ?? paceInText(iv[`${k}Cue`]);
+    if (readPace(text) === undefined) return `${k}Pace ${JSON.stringify(raw)} is not a pace. Write "7:30", "7:15-8:15" or "7:30 /km".`;
+    if (pace) plan[`${k}Pace`] = pace;
+  }
+  return plan;
+}
+
 export function parseTrainingFile(text: string, all: Exercise[], existing: { sessions: Session[]; cardio: CardioSession[] }): ImportResult {
   const out: ImportResult = { sessions: [], cardio: [], rows: [], errors: [] };
   let file: any;
@@ -95,19 +153,9 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
     const id = `imp-${fileId}-${entry.id}`;
 
     if (type === 'cardio') {
-      const iv = entry.intervals ?? {};
-      const plan: IntervalPlan = {
-        activity: iv.activityType ?? iv.activity ?? 'Running',
-        warmupSeconds: +iv.warmupSeconds || 0,
-        workSeconds: +iv.workSeconds || 0,
-        recoverySeconds: +iv.recoverySeconds || 0,
-        rounds: Math.max(1, +iv.rounds || 1),
-        cooldownSeconds: +iv.cooldownSeconds || 0,
-        workCue: iv.workCue ?? '',
-        recoveryCue: iv.recoveryCue ?? '',
-        countdown: Math.min(30, Math.max(0, iv.countdownSeconds ?? iv.countdown ?? 5)),
-      };
-      if (!plan.workSeconds) return out.errors.push(`${where}: cardio needs workSeconds.`);
+      const read = readIntervals(entry.intervals ?? {});
+      if (typeof read === 'string') return out.errors.push(`${where}: ${read}`);
+      const plan = read;
       const p = entry.performed;
       const c: CardioSession = {
         id, date: entry.date, activity: plan.activity, plan, notes: entry.notes ?? '', ...(entry.name ? { name: String(entry.name) } : {}),

@@ -14,9 +14,10 @@ export default function Targets() {
   const estimate = startingTargets(s.profile, latestWeight(s));
   const kcalFromMacros = t.protein * 4 + t.carbs * 4 + t.fat * 9;
   return (
-    <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.xl }}>
+    <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.xl, paddingBottom: 120 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
       <T v="title">Daily targets</T>
-      <Stepper label="Calories" value={t.kcal} onChange={(kcal) => setT({ ...t, kcal })} step={50} min={1000} max={6000} big />
+      <T v="footnote" color={colors.dim}>Tap a number to type your own goal, or use − and +.</T>
+      <Stepper label="Calories" value={t.kcal} onChange={(kcal) => setT({ ...t, kcal })} step={50} min={800} max={8000} big />
       <Row>
         <Stepper label="Protein g" value={t.protein} onChange={(protein) => setT({ ...t, protein })} step={5} max={400} />
         <Stepper label="Carbs g" value={t.carbs} onChange={(carbs) => setT({ ...t, carbs })} step={5} max={800} />

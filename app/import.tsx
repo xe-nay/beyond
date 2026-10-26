@@ -39,6 +39,11 @@ export default function Import() {
   const plan = result && !result.errors.length ? applyChoices(result, choices) : null;
   const count = plan ? plan.sessions.length + plan.cardio.length : 0;
   const conflicts = result?.rows.filter(needsChoice) ?? [];
+  // A day imported before can only be kept or replaced, so "both" updates it.
+  const fit = (r: ImportRow, c: Choice): Choice => (r.status === 'changed' && c === 'both' ? 'import' : c);
+  const chooseAll = (c: Choice) => setChoices(Object.fromEntries(conflicts.map((r) => [r.id, fit(r, c)])));
+  const picked = conflicts.map((r) => choices[r.id] ?? 'mine');
+  const all = (['mine', 'import', 'both'] as Choice[]).find((c) => conflicts.length && conflicts.every((r, i) => picked[i] === fit(r, c)));
 
   return (
     <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }} keyboardShouldPersistTaps="handled">
@@ -61,7 +66,18 @@ export default function Import() {
               {conflicts.length > 0 && (
                 <View style={{ gap: 4 }}>
                   <T v="headline" color={colors.amber}>{plural(conflicts.length, 'day')} already {conflicts.length === 1 ? 'has' : 'have'} logs</T>
-                  <T v="label" color={colors.dim}>Choose which version to keep for each. Yours stays unless you change it.</T>
+                  <T v="label" color={colors.dim}>Choose for all at once, or for each day below. Yours stays unless you change it.</T>
+                  <View style={{ gap: 6, marginTop: space.sm }}>
+                    <T v="caption" color={colors.faint}>For every day</T>
+                    <Segmented<Choice | 'mixed'>
+                      value={all ?? 'mixed'}
+                      onChange={(c) => c !== 'mixed' && chooseAll(c)}
+                      options={[{ value: 'mine', label: 'All mine' }, { value: 'import', label: 'All import' }, { value: 'both', label: 'All both' }]}
+                    />
+                    {all === 'both' && conflicts.some((r) => r.status === 'changed') && (
+                      <T v="footnote" color={colors.dim}>Entries imported before are updated to the new version, not doubled.</T>
+                    )}
+                  </View>
                 </View>
               )}
               <Card style={{ padding: 0, gap: 0 }}>

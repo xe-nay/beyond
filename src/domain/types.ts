@@ -60,6 +60,8 @@ export interface TimerSettings {
   defaultRest?: number; // seconds, for exercises added outside a program
   muted?: string[]; // voice clips the user removed from rotation
   pauseMusic?: boolean; // pause other audio during voice clips instead of lowering it
+  voiceCoach?: boolean; // cardio: spoken phases, rounds left and pace; default on
+  voiceId?: string; // the English voice the coach speaks with; default the best male one
 }
 
 export interface Prescription {
@@ -121,6 +123,9 @@ export interface Session {
   drafts?: Record<string, { kg: number; reps: number; rir: number | null; warmup: boolean; implements: 1 | 2 }>;
 }
 
+/** A pace window in seconds per km: `fast` is the quickest allowed, `slow` the slowest (equal for one target). */
+export interface PaceRange { fast: number; slow: number }
+
 export interface IntervalPlan {
   activity: string;
   warmupSeconds: number;
@@ -130,8 +135,19 @@ export interface IntervalPlan {
   cooldownSeconds: number;
   workCue: string;
   recoveryCue: string;
+  warmupCue?: string;
+  cooldownCue?: string;
   countdown: number;
+  /** Pace targets per phase. Without one, a pace written in that phase's cue ("4:30 /km") is used. */
+  warmupPace?: PaceRange | null;
+  workPace?: PaceRange | null;
+  recoveryPace?: PaceRange | null;
+  cooldownPace?: PaceRange | null;
+  paceUnit?: 'km' | 'mi'; // how paces are shown and spoken
 }
+
+/** A cardio workout the user saved to reuse. */
+export interface SavedCardio { id: string; name: string; plan: IntervalPlan }
 
 export interface CardioSession {
   id: string;

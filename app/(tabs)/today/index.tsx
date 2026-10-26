@@ -4,11 +4,11 @@ import { View } from 'react-native';
 
 import { byId, exercise } from '../../../src/catalog';
 import { BodyMap } from '../../../src/components/BodyMap';
+import { CardioPlanCard } from '../../../src/components/CardioPlanCard';
 import { Icon } from '../../../src/components/Icon';
 import { WeekCalendar } from '../../../src/components/WeekCalendar';
 import { Button, Card, Ring, Row, Screen, Section, Stat, T } from '../../../src/components/ui';
 import { fatigueReport, personalRecords, progression, volumeLoad, weekStart, working } from '../../../src/domain/calc';
-import { formatClock, totalSeconds } from '../../../src/domain/intervals';
 import { toDisplay } from '../../../src/domain/plates';
 import { plannedFor } from '../../../src/schedule';
 import type { Region } from '../../../src/domain/types';
@@ -107,19 +107,7 @@ export default function Today() {
           </Card>
         ) : null}
 
-        {cardioToday && (
-          <Card onPress={() => router.push('/cardio')} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.cyan, 0.14) }}>
-              <Icon name="figure.run" size={18} color={colors.cyan} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <T v="caption" color={colors.faint}>Cardio today</T>
-              <T v="headline" numberOfLines={1}>{cardioToday.activity} · {formatClock(totalSeconds(cardioToday.plan!))}</T>
-              {!!cardioToday.plan!.workCue && <T v="footnote" color={colors.dim} numberOfLines={1}>{cardioToday.plan!.workCue}</T>}
-            </View>
-            <Icon name="play.fill" size={14} color={colors.cyan} />
-          </Card>
-        )}
+        {cardioToday && <CardioPlanCard c={cardioToday} canStart={!s.cardioRun} />}
 
         {/* Fuel */}
         <Card onPress={() => router.navigate('/(tabs)/food')}>

@@ -11,6 +11,7 @@ This guide explains every part of the file Beyond imports. It is written so you 
 - Give every entry a date in YYYY-MM-DD. If I say "last Monday" or "three weeks ago", work out the real date; if you do not know today's date, ask me before writing the file.
 - Use exercise names as I say them, with the equipment when it matters ("Dumbbell Bench Press", "Cable Lateral Raise"). If I gave you Beyond's exercise list, copy names exactly from it.
 - Make a new file "id" for every file, unless I ask you to correct a file you already gave me: then keep the same file id and entry ids.
+- For cardio, put every pace in the pace fields (workPace, recoveryPace, warmupPace, cooldownPace) as minutes:seconds per km, a window "7:15-8:15" or one value "7:30". Follow the checklist at the end of section 8.
 
 
 ## 1. How importing works
@@ -162,41 +163,80 @@ Be specific when the variant matters: "Dumbbell Shoulder Press", "Smith Machine 
 
 ## 8. Cardio
 
+A cardio entry is one guided session the phone times and talks you through. Every session has the same shape:
+
+    warm-up  ->  work, recovery, work, recovery ... work  ->  cool-down
+                 (rounds x work, rounds - 1 recoveries: no recovery after the last work)
+
+Planned length = warmupSeconds + rounds x workSeconds + (rounds - 1) x recoverySeconds + cooldownSeconds.
+
+- A steady session (an easy 40-minute run) is ONE round: "rounds": 1, "workSeconds": 2400, no recovery.
+- Run/walk intervals: work = the running part, recovery = the walking part.
+- Phases are timed, not measured by distance. For "6 x 400 m", estimate each repeat's time from its pace (400 m at 5:00 /km = 120 seconds).
+- Every work phase in one session is the same length with the same targets, and so is every recovery. A session that changes inside (a pyramid, or 3 x 1 min then 3 x 2 min) is written as separate cardio entries, or as the nearest even version. Say so in "notes".
+
+Example: run/walk intervals with a pace for every phase.
+
     {
-      "id": "intervals-2026-11-04",
-      "date": "2026-11-04",
+      "id": "run-walk-2026-10-26",
+      "date": "2026-10-26",
       "type": "cardio",
-      "name": "6 x 1 min",
+      "name": "Run/walk A, week 1",
+      "notes": "Jog stays conversational, RPE 4-5. Repeat the week if sore.",
       "intervals": {
         "activityType": "Running",
-        "warmupSeconds": 600,
-        "workSeconds": 60,
-        "recoverySeconds": 90,
+        "warmupSeconds": 300,
+        "workSeconds": 90,
+        "recoverySeconds": 120,
         "rounds": 6,
         "cooldownSeconds": 300,
-        "workCue": "4:30 /km",
-        "recoveryCue": "Easy jog",
+        "warmupCue": "Brisk walk",
+        "workCue": "Easy jog",
+        "recoveryCue": "Walk",
+        "cooldownCue": "Walk",
+        "warmupPace": "10:30-12:30",
+        "workPace": "7:15-8:15",
+        "recoveryPace": "10:00-12:00",
+        "cooldownPace": "10:30-12:30",
+        "paceUnit": "km",
         "countdownSeconds": 5
       }
     }
 
-intervals (required for cardio):
+### intervals: every field
 
-- activityType: Running, Walking, Cycling, Rowing, Swimming, Elliptical, Stairs or HIIT. Default Running. Other text is accepted and shown as is.
-- warmupSeconds: 0 or more. Default 0.
-- workSeconds (required): length of each work phase, more than 0.
-- recoverySeconds: rest between work phases. Default 0.
-- rounds: number of work phases, 1 or more. Default 1.
-- cooldownSeconds: 0 or more. Default 0.
-- workCue (optional): text shown during work phases. A pace written as "M:SS /km" or "M:SS /mi" (such as "4:30 /km") is also the target pace for the voice coach.
-- recoveryCue (optional): text shown during recovery phases.
-- countdownSeconds: beeps before each phase change, 0 to 30. Default 5. The app plays 3, 5, 10 or 15 seconds of beeps (the nearest length below); 0 plays only the closing tone.
+Lengths (whole seconds). Each one can instead be given in minutes with the same name ending in Minutes ("warmupMinutes": 5 is 300 seconds).
 
-The timer runs: warm-up, then work and recovery for each round (no recovery after the last round), then cool-down. Planned length = warm-up + rounds x work + (rounds - 1) x recovery + cool-down. A steady session is one round: "rounds": 1 and "workSeconds" equal to its length, such as 2400 for 40 minutes.
+- warmupSeconds: 0 to 3600. Default 0 (no warm-up).
+- workSeconds (required): length of ONE work phase, 5 to 14400.
+- recoverySeconds: length of ONE recovery between work phases, 0 to 3600. Default 0.
+- rounds: how many work phases, a whole number 1 to 50. Default 1.
+- cooldownSeconds: 0 to 3600. Default 0.
 
-During Running, Walking and Cycling the phone measures distance by GPS and shows the live pace. When the last 30 seconds reach the target pace of the workCue (within 3 %), a voice says "You're on pace", once per work phase.
+The activity:
 
-performed for cardio (history):
+- activityType: exactly one of Running, Walking, Cycling, Rowing, Swimming, Elliptical, Stairs, HIIT. Default Running. Run, jog and treadmill are read as Running; walk and hike as Walking; bike and spin as Cycling. Anything else stops the import with an error.
+- Running, Walking and Cycling are measured by GPS outdoors: distance, live pace and pace coaching. The others are timed only, so their paces are ignored; use cues for effort.
+
+Targets for each phase (all optional):
+
+- warmupPace, workPace, recoveryPace, cooldownPace: the pace window for that phase, as minutes:seconds per km (or per mile with "paceUnit": "mi"). Write a window "7:15-8:15" (fastest-slowest) or one target "7:30". Also accepted: "7:30 /km", "8:00 min/mi", a number of seconds per km (450), or { "fast": "7:15", "slow": "8:15" }. A pace with any other unit ("/500m", "km/h") stops the import with an error.
+- paceUnit: "km" (default) or "mi". How paces are read when they have no unit, shown and spoken.
+- warmupCue, workCue, recoveryCue, cooldownCue: a few words shown on screen and spoken at the start of the phase: an effort or what to do ("Easy jog", "Walk", "Tempo", "Hard", "All out", "Light paddle"). Keep each under 30 characters. Defaults: warm-up "Easy", cool-down "Ease down", work and recovery none.
+- A pace written inside a cue ("Easy walk 10:00-12:00 min/km") is read as that phase's pace when its pace field is missing, but prefer the pace fields.
+- countdownSeconds: beeps before each phase change, 0 to 30. Default 5. The app plays 3, 5, 10 or 15 seconds of beeps (the nearest length below); 0 plays only the change tone.
+
+Put explanations, RPE and the talk test in the entry's "notes": they are shown in full on the day and on Today, not spoken.
+
+### What happens during the session
+
+- Before each change: the countdown beeps, then a tone.
+- As each phase starts, a voice says it, for example: "Round 2 of 6. Work, 90 seconds. Easy jog. Pace 7 15 to 8 15 per kilometre." On recoveries it says how many rounds are left; on the last work phase, "Last round". At the end: "Workout complete".
+- Halfway through any phase of 4 minutes or more, it says the time left.
+- With a pace window on a GPS activity, after the first 30 seconds of the phase: "Pick it up" when slower than the window for 8 seconds, "Ease off" when faster, then "Back on pace" when you return, with your live pace and the target. At most once every 40 seconds. A little slack each way (4% slower, 6% faster) keeps GPS wobble from nagging.
+- This also works with the screen locked, as long as the phone's sound is on. The voice can be turned off in the cardio screen or the timer settings.
+
+### performed for cardio (history)
 
     "performed": { "minutes": 42, "distanceKm": 8.2, "rpe": 7, "avgHr": 152 }
 
@@ -206,6 +246,14 @@ performed for cardio (history):
 - avgHr (optional): average heart rate in beats per minute.
 
 Calories for cardio are estimated from the activity (MET values) and your body weight when one is logged.
+
+### Checklist before you reply
+
+- "type": "cardio" and an "intervals" object on every cardio entry.
+- activityType is one of the eight names above.
+- Lengths are whole seconds (or ...Minutes), workSeconds is ONE work phase, and rounds counts the work phases.
+- Paces are minutes:seconds per km, as "fastest-slowest" or one value, in the ...Pace fields, not only in the cues.
+- Cues are short words; long explanations go in "notes".
 
 
 ## 9. Correcting and re-importing
@@ -229,7 +277,10 @@ If any entry has a problem, nothing is imported and the first errors are shown:
 - "Entry N: a future date cannot have results." Remove "performed" or fix the date.
 - "Entry N: a workout needs "exercises" or performed "sets"."
 - "Entry N: unknown exercise "X"." / "a performed set names an unknown exercise." Rename it (see section 7).
-- "Entry N: cardio needs workSeconds."
+- "Entry N: cardio needs workSeconds (or workMinutes)."
+- "Entry N: activityType "X" is not one of ..." Use one of the eight activities in section 8.
+- "Entry N: workPace "X" is not a pace." (or warmupPace, recoveryPace, cooldownPace) Write minutes:seconds per km: "7:30" or "7:15-8:15".
+- "Entry N: rounds must be a whole number from 1 to 50." / "...Seconds must be a number from A to B." / "countdownSeconds must be 0 to 30."
 - "Entry N: already in progress in the app." Finish or discard that workout first.
 
 
@@ -274,7 +325,7 @@ One file with two past workouts, one past run, one planned workout and one plann
         },
         {
           "id": "run-2026-10-16", "date": "2026-10-16", "type": "cardio", "name": "Easy run",
-          "intervals": { "activityType": "Running", "workSeconds": 2400, "rounds": 1, "workCue": "6:00 /km" },
+          "intervals": { "activityType": "Running", "workSeconds": 2400, "rounds": 1, "workCue": "Easy", "workPace": "5:45-6:15" },
           "performed": { "minutes": 41, "distanceKm": 6.9, "rpe": 5, "avgHr": 141 }
         },
         {
@@ -290,7 +341,8 @@ One file with two past workouts, one past run, one planned workout and one plann
           "id": "intervals-2026-11-04", "date": "2026-11-04", "type": "cardio", "name": "6 x 1 min",
           "intervals": {
             "activityType": "Running", "warmupSeconds": 600, "workSeconds": 60, "recoverySeconds": 90, "rounds": 6,
-            "cooldownSeconds": 300, "workCue": "4:30 /km", "recoveryCue": "Easy jog", "countdownSeconds": 5
+            "cooldownSeconds": 300, "workCue": "Hard", "workPace": "4:20-4:40", "recoveryCue": "Easy jog", "recoveryPace": "6:30-7:30",
+            "warmupPace": "6:00-6:45", "countdownSeconds": 5
           }
         }
       ]

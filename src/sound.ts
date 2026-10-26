@@ -102,18 +102,53 @@ export function play(name: Sound) {
   start(name, S[name]);
 }
 
+// English male iPhone voices, most natural first. The novelty voices (Grandpa, Rocko...) are left out.
+const MALE = ['Evan', 'Nathan', 'Aaron', 'Arthur', 'Daniel', 'Tom', 'Alex', 'Oliver', 'Gordon', 'Rishi', 'Fred'];
+const isEnglish = (v: Speech.Voice) => /^en[-_]/i.test(v.language);
+const maleRank = (v: Speech.Voice) => {
+  const i = MALE.findIndex((n) => v.name.startsWith(n));
+  return (i < 0 ? 100 : i) - (v.quality === Speech.VoiceQuality.Enhanced ? 50 : 0);
+};
+
+let voices: Speech.Voice[] | null = null;
+/** The phone's English voices, male ones first (better quality first among them). */
+export async function englishVoices() {
+  if (!voices?.length) {
+    try {
+      voices = (await Speech.getAvailableVoicesAsync()).filter(isEnglish).sort((a, b) => maleRank(a) - maleRank(b) || a.name.localeCompare(b.name));
+    } catch {
+      voices = [];
+    }
+  }
+  return voices;
+}
+
 /**
- * Speaks a short line in the iPhone's own voice. Music dips while it talks; a silent clip played
+ * The voice to speak with: the one picked in settings, else the best English male voice. Naming the
+ * voice matters: asking only for "en-US" can fall back to the phone's own language voice (a French
+ * voice reading English).
+ */
+async function voiceFor() {
+  const all = await englishVoices();
+  const picked = useStore.getState().timer.voiceId;
+  return (all.find((v) => v.identifier === picked) ?? all.find((v) => maleRank(v) < 100) ?? all.find((v) => v.language === 'en-US') ?? all[0])?.identifier;
+}
+englishVoices();
+
+/**
+ * Speaks a short line in an English iPhone voice. Music dips while it talks; a silent clip played
  * afterwards hands the audio session back so the music comes up again.
  */
 export function say(text: string) {
   const { sound, volume } = useStore.getState().timer;
   if (!sound || volume <= 0) return;
   buzz('end');
-  try {
-    Speech.stop();
-    Speech.speak(text, { language: 'en-US', rate: 0.95, volume, onDone: () => start('silence', S.silence), onError: () => start('silence', S.silence) });
-  } catch {}
+  voiceFor().then((voice) => {
+    try {
+      Speech.stop();
+      Speech.speak(text, { language: 'en-US', voice, rate: 0.95, volume, onDone: () => start('silence', S.silence), onError: () => start('silence', S.silence) });
+    } catch {}
+  });
 }
 
 /** One file holding N ticks and the closing tone; N is rounded down to an available length. */

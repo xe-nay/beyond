@@ -1,24 +1,88 @@
 // Cardio interval timeline and the countdown schedule shared by cardio and rest timers.
-import type { IntervalPlan } from './types.ts';
+import { cueWords, paceInText, spokenPace } from './track.ts';
+import type { IntervalPlan, PaceRange } from './types.ts';
 
 export type PhaseKind = 'warmup' | 'work' | 'recovery' | 'cooldown';
-export interface Phase { kind: PhaseKind; round: number; seconds: number; cue: string; start: number; end: number }
+export interface Phase { kind: PhaseKind; round: number; seconds: number; cue: string; pace: PaceRange | null; start: number; end: number }
+
+/** The cue a phase shows; warm-up and cool-down have a default. */
+export function phaseCue(plan: IntervalPlan, kind: PhaseKind) {
+  if (kind === 'warmup') return plan.warmupCue || 'Easy';
+  if (kind === 'cooldown') return plan.cooldownCue || 'Ease down';
+  return kind === 'work' ? plan.workCue : plan.recoveryCue;
+}
+
+/** A phase's pace window: the plan's own, or one written in its cue ("4:30 /km"). */
+export function phasePace(plan: IntervalPlan, kind: PhaseKind): PaceRange | null {
+  const own = { warmup: plan.warmupPace, work: plan.workPace, recovery: plan.recoveryPace, cooldown: plan.cooldownPace }[kind];
+  return own ?? paceInText(phaseCue(plan, kind));
+}
 
 export function timeline(plan: IntervalPlan): Phase[] {
   const out: Phase[] = [];
   let t = 0;
-  const add = (kind: PhaseKind, round: number, seconds: number, cue: string) => {
+  const add = (kind: PhaseKind, round: number, seconds: number) => {
     if (seconds <= 0) return;
-    out.push({ kind, round, seconds, cue, start: t, end: t + seconds });
+    out.push({ kind, round, seconds, cue: phaseCue(plan, kind), pace: phasePace(plan, kind), start: t, end: t + seconds });
     t += seconds;
   };
-  add('warmup', 0, plan.warmupSeconds, 'Easy');
+  add('warmup', 0, plan.warmupSeconds);
   for (let r = 1; r <= plan.rounds; r++) {
-    add('work', r, plan.workSeconds, plan.workCue);
-    if (r < plan.rounds) add('recovery', r, plan.recoverySeconds, plan.recoveryCue);
+    add('work', r, plan.workSeconds);
+    if (r < plan.rounds) add('recovery', r, plan.recoverySeconds);
   }
-  add('cooldown', 0, plan.cooldownSeconds, 'Ease down');
+  add('cooldown', 0, plan.cooldownSeconds);
   return out;
+}
+
+/** A length as the voice says it: "45 seconds", "2 minutes", "2 minutes 30". */
+export function spokenTime(seconds: number) {
+  const s = Math.round(seconds);
+  if (s <= 90) return `${s} seconds`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m} ${m === 1 ? 'minute' : 'minutes'}${r ? ` ${r}` : ''}`;
+}
+
+/** "Target pace 7 30 per kilometre", or "Pace 7 15 to 8 15 per kilometre" for a window. */
+export function spokenTarget(r: PaceRange, unit: 'km' | 'mi' = 'km') {
+  const per = unit === 'mi' ? 'per mile' : 'per kilometre';
+  const a = spokenPace(r.fast, unit);
+  const b = spokenPace(r.slow, unit);
+  if (a === b) return `Target pace ${a} ${per}`;
+  // "10 to 12 minutes", not "10 minutes to 12 minutes".
+  return `Pace ${a.endsWith(' minutes') && b.endsWith(' minutes') ? a.slice(0, -8) : a} to ${b} ${per}`;
+}
+
+/**
+ * What the voice coach says as a phase starts: the phase, its length, the round and how many are
+ * left, the cue and the pace. With no phase (index past the end), the closing line.
+ */
+export function announce(plan: IntervalPlan, phases: Phase[], index: number, paced = true) {
+  const p = phases[index];
+  if (!p) return 'Workout complete. Well done.';
+  const unit = plan.paceUnit ?? 'km';
+  const words = cueWords(p.cue);
+  const parts: string[] = [];
+  if (p.kind === 'warmup') parts.push(`Warm-up, ${spokenTime(p.seconds)}`);
+  if (p.kind === 'work') {
+    if (plan.rounds > 1) parts.push(p.round === plan.rounds ? `Last round, ${p.round} of ${plan.rounds}` : `Round ${p.round} of ${plan.rounds}`);
+    parts.push(`Work, ${spokenTime(p.seconds)}`);
+  }
+  if (p.kind === 'recovery') {
+    const left = plan.rounds - p.round;
+    parts.push(`Recover, ${spokenTime(p.seconds)}`, `${left} ${left === 1 ? 'round' : 'rounds'} to go`);
+  }
+  if (p.kind === 'cooldown') parts.push(plan.rounds > 1 ? 'All rounds done' : 'Work done', `Cool-down, ${spokenTime(p.seconds)}`);
+  if (words) parts.push(words);
+  if (paced && p.pace) parts.push(spokenTarget(p.pace, unit));
+  return `${parts.join('. ')}.`;
+}
+
+/** Roughly how far a plan goes at the middle of each phase's pace window, in km; null without paces. */
+export function plannedKm(phases: Phase[]) {
+  if (!phases.some((p) => p.pace)) return null;
+  return phases.reduce((n, p) => n + (p.pace ? p.seconds / ((p.pace.fast + p.pace.slow) / 2) : 0), 0);
 }
 
 export const totalSeconds = (plan: IntervalPlan) => timeline(plan).reduce((n, p) => n + p.seconds, 0);

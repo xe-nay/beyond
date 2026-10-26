@@ -9,9 +9,9 @@ import { Ambient, Glass, GlassButton, HoldButton, PHASE, PhaseRings, RoundDots }
 import { Icon, type IconName } from '../src/components/Icon';
 import { Button, Press, Row, Stepper, T } from '../src/components/ui';
 import { elapsed, formatClock, pause, position, resume, skip, timeline, totalSeconds } from '../src/domain/intervals';
-import { formatPace, onPace, rollingPace, targetPace, tracksDistance } from '../src/domain/track';
+import { cueWords, formatPace, formatPaceRange, paceVerdict, rollingPace, tracksDistance } from '../src/domain/track';
 import { gps, pauseGps, startGps, stopGps } from '../src/gps';
-import { buzz, cancelEnd, play, playCountdown, prepareAudio, say, scheduleEnd, stopCue } from '../src/sound';
+import { buzz, cancelEnd, play, playCountdown, prepareAudio, scheduleEnd, stopCue } from '../src/sound';
 import { useStore } from '../src/store';
 import { alpha, colors, space, type } from '../src/theme';
 
@@ -29,7 +29,6 @@ export default function CardioRun() {
   const [km, setKm] = useState(0);
   const [tracked, setTracked] = useState(false);
   const [gpsMode, setGpsMode] = useState<'background' | 'foreground' | 'off'>('off');
-  const saidFor = useRef(new Set<number>());
   const synced = useRef(0);
   const [rpe, setRpe] = useState(6);
   const last = useRef<{ index: number; whole: number } | null>(null);
@@ -83,12 +82,7 @@ export default function CardioRun() {
     }
     if (!pos.phase) end();
 
-    // Says "You're on pace" once per work interval, the first time the last 30 s reach the target.
-    const target = pos.phase?.kind === 'work' ? targetPace(pos.phase.cue) : null;
-    if (target && livePace && !saidFor.current.has(pos.index) && pos.phase!.seconds - pos.remaining >= 15 && onPace(livePace, target)) {
-      saidFor.current.add(pos.index);
-      say("You're on pace");
-    }
+    // The voice coach (src/cardioCoach.ts) does the talking.
     // Keeps the distance in the saved run every few seconds, in case the app is closed mid-run.
     if (outdoor && Date.now() - synced.current > 5000) {
       synced.current = Date.now();
@@ -140,6 +134,7 @@ export default function CardioRun() {
 
   const next = phases[pos.index + 1];
   const look = PHASE[kind];
+  const verdict = livePace && pos.phase?.pace ? paceVerdict(livePace, pos.phase.pace) : 'on';
   const doneRounds = phases.slice(0, pos.index).filter((x) => x.kind === 'work').length;
   const current = pos.phase?.kind === 'work' ? pos.phase.round : pos.phase?.kind === 'recovery' ? pos.phase.round + 0.5 : 0;
   const ringSize = Math.min(width - space.xl * 2, 320);
@@ -173,10 +168,11 @@ export default function CardioRun() {
             </Animated.View>
           </PhaseRings>
 
-          {!!pos.phase?.cue && (
+          {(!!cueWords(pos.phase?.cue) || !!pos.phase?.pace) && (
             <Glass round style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, height: 44 }}>
               <Icon name="gauge.with.dots.needle.67percent" size={16} color={look.a} />
-              <T v="headline">{pos.phase.cue}</T>
+              {!!cueWords(pos.phase?.cue) && <T v="headline">{cueWords(pos.phase?.cue)}</T>}
+              {!!pos.phase?.pace && <T v="headline" color={verdict === 'slow' ? colors.amber : verdict === 'fast' ? colors.cyan : look.a} style={type.num}>{formatPaceRange(pos.phase.pace, run.plan.paceUnit ?? 'km')}</T>}
             </Glass>
           )}
           {outdoor && (
@@ -195,7 +191,7 @@ export default function CardioRun() {
           </View>
           <View style={{ flex: 1 }}>
             <T v="footnote" color={colors.dim}>{next ? 'Up next' : 'Last phase'}</T>
-            <T v="headline" numberOfLines={1}>{next ? `${PHASE[next.kind].label} · ${formatClock(next.seconds)}${next.cue ? ` · ${next.cue}` : ''}` : 'Finish strong'}</T>
+            <T v="headline" numberOfLines={1}>{next ? `${PHASE[next.kind].label} · ${formatClock(next.seconds)}${cueWords(next.cue) ? ` · ${cueWords(next.cue)}` : ''}${next.pace ? ` · ${formatPaceRange(next.pace, run.plan.paceUnit ?? 'km')}` : ''}` : 'Finish strong'}</T>
           </View>
           <T v="footnote" color={colors.faint} style={type.num}>{formatClock(Math.max(0, total - t))} left</T>
         </Glass>

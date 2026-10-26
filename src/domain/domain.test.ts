@@ -253,3 +253,63 @@ test('USDA branded food: macros, salt from sodium, vitamins as micronutrients', 
   assert.equal(f.per100.salt, 0.05);
   assert.deepEqual(f.per100.micro, { sodium: 20, vitaminC: 24, vitaminD: 1 });
 });
+
+test('pace windows: values, ranges, miles, paces inside cues', async () => {
+  const { readPace, paceInText, cueWords, paceVerdict, formatPaceRange } = await import('./track.ts');
+  assert.deepEqual(readPace('7:30'), { fast: 450, slow: 450 });
+  assert.deepEqual(readPace('7:15-8:15 /km'), { fast: 435, slow: 495 });
+  assert.deepEqual(readPace('8:15–7:15 min/km'), { fast: 435, slow: 495 });
+  assert.deepEqual(readPace({ from: '7:15', to: '8:15' }), { fast: 435, slow: 495 });
+  assert.deepEqual(readPace(450), { fast: 450, slow: 450 });
+  assert.equal(readPace('fast'), undefined);
+  assert.equal(readPace('1:55 /500m'), undefined);
+  assert.equal(readPace(undefined), null);
+  assert.equal(Math.round(readPace('12:00 /mi')!.fast), 447);
+  assert.deepEqual(paceInText('Easy walk 10:00–12:00 min/km'), { fast: 600, slow: 720 });
+  assert.equal(paceInText('Easy jog'), null);
+  assert.equal(cueWords('Easy walk 10:00–12:00 min/km'), 'Easy walk');
+  assert.equal(cueWords('7:30 /km'), '');
+  const w = { fast: 435, slow: 495 };
+  assert.equal(paceVerdict(470, w), 'on');
+  assert.equal(paceVerdict(530, w), 'slow');
+  assert.equal(paceVerdict(400, w), 'fast');
+  assert.equal(formatPaceRange(w), '7:15–8:15 /km');
+  assert.equal(formatPaceRange({ fast: 450, slow: 450 }), '7:30 /km');
+});
+
+test('import: a run/walk entry keeps its paces, cues and lengths; bad values are named', async () => {
+  const { readIntervals } = await import('./importer.ts');
+  const plan = readIntervals({
+    activityType: 'Running', warmupSeconds: 300, workSeconds: 90, recoverySeconds: 120, rounds: 6, cooldownSeconds: 300,
+    workCue: '7:30 /km', recoveryCue: 'Easy walk 10:00–12:00 min/km', countdownSeconds: 5,
+  });
+  assert.ok(typeof plan !== 'string');
+  assert.deepEqual(plan.workPace, { fast: 450, slow: 450 });
+  assert.deepEqual(plan.recoveryPace, { fast: 600, slow: 720 });
+  assert.equal(plan.rounds, 6);
+  assert.equal(plan.countdown, 5);
+  const explicit = readIntervals({ activityType: 'jog', workMinutes: 2, rounds: 3, workPace: '7:15-8:15', warmupPace: '10:30-12:30', warmupMinutes: 5, warmupCue: 'Brisk walk' });
+  assert.ok(typeof explicit !== 'string');
+  assert.equal(explicit.activity, 'Running');
+  assert.equal(explicit.workSeconds, 120);
+  assert.equal(explicit.warmupSeconds, 300);
+  assert.deepEqual(explicit.warmupPace, { fast: 630, slow: 750 });
+  assert.match(readIntervals({ activityType: 'Skating', workSeconds: 60 }) as string, /not one of/);
+  assert.match(readIntervals({ workSeconds: 60, workPace: 'quick' }) as string, /workPace "quick" is not a pace/);
+  assert.match(readIntervals({ workSeconds: 60, rounds: 0 }) as string, /rounds/);
+});
+
+test('voice coach lines: phase, length, round, rounds left, cue and pace', async () => {
+  const { announce, timeline } = await import('./intervals.ts');
+  const p: IntervalPlan = {
+    activity: 'Running', warmupSeconds: 300, workSeconds: 90, recoverySeconds: 120, rounds: 3, cooldownSeconds: 300,
+    workCue: 'Jog', recoveryCue: 'Easy walk 10:00–12:00 min/km', countdown: 5, workPace: { fast: 450, slow: 450 },
+  };
+  const t = timeline(p);
+  assert.equal(announce(p, t, 0), 'Warm-up, 5 minutes. Easy.');
+  assert.equal(announce(p, t, 1), 'Round 1 of 3. Work, 90 seconds. Jog. Target pace 7 30 per kilometre.');
+  assert.equal(announce(p, t, 2), 'Recover, 2 minutes. 2 rounds to go. Easy walk. Pace 10 to 12 minutes per kilometre.');
+  assert.equal(announce(p, t, 5), 'Last round, 3 of 3. Work, 90 seconds. Jog. Target pace 7 30 per kilometre.');
+  assert.equal(announce(p, t, 6), 'All rounds done. Cool-down, 5 minutes. Ease down.');
+  assert.equal(announce(p, t, 7), 'Workout complete. Well done.');
+});

@@ -8,6 +8,7 @@ import { RestEngine } from '../src/components/RestEngine';
 import '../src/gps'; // registers the background location task before iOS delivers updates
 import '../src/reminders'; // plans daily intake reminders and handles their buttons
 import '../src/live'; // the Lock Screen and Dynamic Island view of a live session
+import '../src/cardioCoach'; // spoken phases, rounds and pace during guided cardio
 import { screenOptions, sheet } from '../src/nav';
 import { prepareAudio } from '../src/sound';
 import { useStore } from '../src/store';

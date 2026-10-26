@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import * as Speech from 'expo-speech';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Icon } from '../src/components/Icon';
@@ -6,7 +7,7 @@ import { Button, Chip, Divider, Press, Row, Stepper, T, Toggle } from '../src/co
 import { endLive, liveStatus, startLive } from '../modules/live-activity';
 import { formatClock } from '../src/domain/intervals';
 import type { Cue } from '../src/domain/types';
-import { downloadPack, packReady, playClip, playCountdown, playVoice, prepareAudio } from '../src/sound';
+import { downloadPack, englishVoices, packReady, playClip, playCountdown, playVoice, prepareAudio, say } from '../src/sound';
 import { useStore } from '../src/store';
 import { alpha, colors, radius, space } from '../src/theme';
 import { pack, PACKS, VOICE_LEAD } from '../src/voices';
@@ -60,7 +61,7 @@ export default function TimerSettings() {
     <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg }}>
       <T v="title">Rest timer</T>
       {toggle('Start after each set', t.autoStart, 'autoStart')}
-      <Stepper label="Default rest for new exercises" value={t.defaultRest ?? 120} onChange={(defaultRest) => s.setTimer({ defaultRest })} step={15} min={15} max={600} format={formatClock} />
+      <Stepper label="Default rest for new exercises" value={t.defaultRest ?? 120} onChange={(defaultRest) => s.setTimer({ defaultRest })} step={15} min={15} max={600} clock format={formatClock} />
       <Divider />
 
       <T v="caption" color={colors.faint}>End of rest</T>
@@ -119,6 +120,15 @@ export default function TimerSettings() {
         </View>
       )}
 
+      <Row style={{ justifyContent: 'space-between', paddingVertical: 4 }}>
+        <View style={{ flex: 1 }}>
+          <T v="headline">Cardio voice coach</T>
+          <T v="footnote" color={colors.dim}>Says each phase, the round and rounds left, and when your pace is off</T>
+        </View>
+        <Toggle value={t.voiceCoach !== false} onChange={(voiceCoach) => s.setTimer({ voiceCoach })} />
+      </Row>
+      {t.voiceCoach !== false && <CoachVoice />}
+
       {t.cue === 'beeps' && (
         <View style={{ gap: space.sm }}>
           <T v="caption" color={colors.faint}>Countdown length</T>
@@ -161,3 +171,31 @@ const styles = StyleSheet.create({
   play: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surface3, alignItems: 'center', justifyContent: 'center' },
   clips: { borderRadius: radius.lg, backgroundColor: colors.surface2, paddingHorizontal: space.md },
 });
+
+const SAMPLE = 'Round 2 of 6. Work, 90 seconds. Target pace 7 30 per kilometre.';
+const ACCENT: Record<string, string> = { 'en-US': 'US', 'en-GB': 'UK', 'en-AU': 'Australia', 'en-IE': 'Ireland', 'en-IN': 'India', 'en-ZA': 'South Africa', 'en-SC': 'Scotland' };
+
+/** The English voices on this iPhone, male ones first; tapping one picks it and speaks a sample. */
+function CoachVoice() {
+  const s = useStore();
+  const [list, setList] = useState<Speech.Voice[]>([]);
+  useEffect(() => { englishVoices().then(setList); }, []);
+  const current = s.timer.voiceId && list.some((v) => v.identifier === s.timer.voiceId) ? s.timer.voiceId : list[0]?.identifier;
+  const pick = (id: string) => { s.setTimer({ voiceId: id }); prepareAudio(); say(SAMPLE); };
+  return (
+    <View style={{ gap: space.sm }}>
+      <T v="caption" color={colors.faint}>Coach voice</T>
+      {list.length ? (
+        <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+          {list.slice(0, 10).map((v) => (
+            <Chip key={v.identifier} label={`${v.name} · ${ACCENT[v.language.replace('_', '-')] ?? v.language}${v.quality === Speech.VoiceQuality.Enhanced ? ' · HD' : ''}`} active={current === v.identifier} onPress={() => pick(v.identifier)} />
+          ))}
+        </Row>
+      ) : (
+        <T v="footnote" color={colors.dim}>No English voice found on this iPhone.</T>
+      )}
+      <T v="footnote" color={colors.dim}>Male voices come first. More voices, and better HD versions: iPhone Settings › Accessibility › Spoken Content › Voices › English.</T>
+      <Button small kind="ghost" icon="speaker.wave.2.fill" title="Hear a sample" onPress={() => { prepareAudio(); say(SAMPLE); }} />
+    </View>
+  );
+}

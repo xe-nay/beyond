@@ -5,7 +5,7 @@ import { sum } from './domain/nutrition';
 import { generateProgram, TEMPLATES } from './domain/program';
 import { doseNutrients, formatDose } from './domain/supplements';
 import type {
-  BodyEntry, CardioSession, Food, FoodEntry, Intake, IntervalPlan, Meal, NutritionTargets, Prescription, Profile, Program,
+  BodyEntry, CardioSession, Food, FoodEntry, Intake, IntervalPlan, Meal, SavedCardio, NutritionTargets, Prescription, Profile, Program,
   RecoveryCheck, Session, Supplement, TimerSettings, WorkoutSet,
 } from './domain/types';
 import { loadJson, saveJson } from './storage';
@@ -42,6 +42,7 @@ interface Data {
   analyticsLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   cardioRun: { id: string; date: string; plan: IntervalPlan; banked: number; resumedAt: number | null; gpsMeters?: number } | null;
   cardioPlans: IntervalPlan[];
+  savedCardio: SavedCardio[];
   supplements: Supplement[];
   intakes: Intake[];
 }
@@ -68,6 +69,7 @@ const initial: Data = {
   analyticsLevel: 'intermediate',
   cardioRun: null,
   cardioPlans: [],
+  savedCardio: [],
   supplements: [],
   intakes: [],
 };

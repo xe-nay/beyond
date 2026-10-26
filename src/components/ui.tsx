@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { cubicBezier, Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withSpring, withTiming, useReducedMotion } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -142,12 +142,14 @@ function useLiquid(target: number, size: number) {
 /** Segmented control: a glass pill that stretches toward the new option, then settles. */
 export function Segmented<V extends string | number>({ options, value, onChange, style }: { options: { value: V; label: string }[]; value: V; onChange: (v: V) => void; style?: StyleProp<ViewStyle> }) {
   const [w, setW] = useState(0);
-  const i = Math.max(0, options.findIndex((o) => o.value === value));
+  // No pill when the value matches no option (a mixed choice).
+  const found = options.findIndex((o) => o.value === value);
+  const i = Math.max(0, found);
   const seg = w / options.length;
   const pill = useLiquid(3 + seg * i, seg);
   return (
     <View style={[styles.segment, style]} onLayout={(e) => setW(e.nativeEvent.layout.width - 6)}>
-      {w > 0 && <Animated.View style={[styles.pill, pill]} />}
+      {w > 0 && found >= 0 && <Animated.View style={[styles.pill, pill]} />}
       {options.map((o) => (
         <Pressable key={String(o.value)} style={styles.segmentItem} onPress={() => { if (o.value !== value) { tap(); onChange(o.value); } }}>
           <Animated.Text numberOfLines={1} style={[type.footnote, { fontWeight: '600', color: o.value === value ? colors.text : colors.dim, transitionProperty: 'color', transitionDuration: 180 } as any]}>{o.label}</Animated.Text>
@@ -171,9 +173,9 @@ export function Toggle({ value, onChange, tint = colors.cyan }: { value: boolean
   );
 }
 
-export function Chip({ label, active, onPress, icon }: { label: string; active?: boolean; onPress?: () => void; icon?: IconName }) {
+export function Chip({ label, active, onPress, onLongPress, icon }: { label: string; active?: boolean; onPress?: () => void; onLongPress?: () => void; icon?: IconName }) {
   return (
-    <Press onPress={onPress} style={[styles.chip, active && { backgroundColor: colors.cyanSoft, borderColor: alpha(colors.cyan, 0.5) }]}>
+    <Press onPress={onPress} onLongPress={onLongPress} style={[styles.chip, active && { backgroundColor: colors.cyanSoft, borderColor: alpha(colors.cyan, 0.5) }]}>
       {icon && <Icon name={icon} size={13} color={active ? colors.cyan : colors.dim} />}
       <T v="footnote" color={active ? colors.cyan : colors.dim} style={{ fontWeight: '500' }}>{label}</T>
     </Press>
@@ -231,18 +233,53 @@ export function Divider() {
 }
 
 /** Number stepper: tap for one step, hold to repeat. */
-export function Stepper({ value, onChange, step = 1, min = 0, max = 9999, format = (v: number) => String(v), label, big }: {
-  value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; format?: (v: number) => string; label?: string; big?: boolean;
+/** Reads typed text as a number: "1,5" → 1.5. A value with a colon ("7:30", "1:05:00") as minutes and seconds. */
+export function readTyped(text: string, clock = false) {
+  const s = text.trim().replace(',', '.');
+  if (!s) return null;
+  if (s.includes(':')) {
+    const parts = s.split(':').map(Number);
+    if (parts.some((n) => !Number.isFinite(n))) return null;
+    return parts.reduce((n, x) => n * 60 + x, 0);
+  }
+  const n = parseFloat(s);
+  // A plain number for a clock means minutes ("5" → 5:00).
+  return Number.isFinite(n) ? (clock ? n * 60 : n) : null;
+}
+
+/**
+ * − value +. Tap the value to type it instead; `clock` reads what is typed as minutes or M:SS
+ * (for values kept in seconds).
+ */
+export function Stepper({ value, onChange, step = 1, min = 0, max = 9999, format = (v: number) => String(v), label, big, clock }: {
+  value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; format?: (v: number) => string; label?: string; big?: boolean; clock?: boolean;
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(min, Math.round(v * 1000) / 1000));
+  const [typing, setTyping] = useState<string | null>(null);
+  const commit = () => {
+    const n = typing === null ? null : readTyped(typing, clock);
+    if (n !== null) onChange(clamp(n));
+    setTyping(null);
+  };
+  const text = [big ? type.big : type.title, type.num, { minWidth: big ? 100 : 56, textAlign: 'center' as const, color: colors.text }];
   return (
     // flexGrow (not flex: 1) so it shares a row evenly but keeps its own height in a column.
     <View style={{ alignItems: 'center', gap: 6, flexGrow: 1, flexShrink: 1 }}>
       {label && <T v="caption" color={colors.faint}>{label}</T>}
       <Row gap={space.sm}>
-        <Press onPress={() => onChange(clamp(value - step))} style={styles.step} hitSlop={6}><Icon name="minus" size={16} /></Press>
-        <T v={big ? 'big' : 'title'} numberOfLines={1} style={[type.num, { minWidth: big ? 100 : 56, textAlign: 'center' }]}>{format(value)}</T>
-        <Press onPress={() => onChange(clamp(value + step))} style={styles.step} hitSlop={6}><Icon name="plus" size={16} /></Press>
+        <Press onPress={() => onChange(clamp(value - step))} style={styles.step} hitSlop={6} label={`Less ${label ?? ''}`}><Icon name="minus" size={16} /></Press>
+        {typing !== null ? (
+          <TextInput
+            autoFocus selectTextOnFocus value={typing} onChangeText={setTyping} onBlur={commit} onSubmitEditing={commit}
+            keyboardType={clock ? 'numbers-and-punctuation' : 'decimal-pad'} returnKeyType="done"
+            style={[...text, { paddingVertical: 0, borderRadius: radius.sm, backgroundColor: colors.surface3 }]}
+          />
+        ) : (
+          <Press onPress={() => setTyping(clock ? format(value) : String(value))} haptic={false} label={`${label ?? 'Value'} ${format(value)}, tap to type`}>
+            <T v={big ? 'big' : 'title'} numberOfLines={1} style={[type.num, { minWidth: big ? 100 : 56, textAlign: 'center', textDecorationLine: 'underline', textDecorationStyle: 'dotted', textDecorationColor: colors.faint }]}>{format(value)}</T>
+          </Press>
+        )}
+        <Press onPress={() => onChange(clamp(value + step))} style={styles.step} hitSlop={6} label={`More ${label ?? ''}`}><Icon name="plus" size={16} /></Press>
       </Row>
     </View>
   );

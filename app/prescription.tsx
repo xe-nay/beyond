@@ -70,7 +70,7 @@ export default function PrescriptionSheet() {
       </Row>
       <Row>
         <Stepper label="Target RIR" value={p.rir} onChange={(rir) => patch({ rir })} min={0} max={5} />
-        <Stepper label="Rest" value={p.restSeconds} onChange={(restSeconds) => patch({ restSeconds })} step={15} min={15} max={600} format={formatClock} />
+        <Stepper label="Rest" value={p.restSeconds} onChange={(restSeconds) => patch({ restSeconds })} step={15} min={15} max={600} clock format={formatClock} />
       </Row>
       <View style={{ gap: space.sm }}>
         <T v="caption" color={colors.faint}>Superset</T>
