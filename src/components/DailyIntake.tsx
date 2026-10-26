@@ -2,10 +2,11 @@
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Platform, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 
-import { doseMicros, formatDose } from '../domain/supplements';
+import { daysLeft, doseMicros, formatAmount, formatDose, LOW_DAYS, stockLeft } from '../domain/supplements';
+import type { Supplement } from '../domain/types';
 import { today, useStore } from '../store';
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon } from './Icon';
@@ -69,7 +70,7 @@ export function DailyIntake({ date }: { date: string }) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <T v="headline" numberOfLines={1} color={on ? colors.dim : colors.text}>{x.name}</T>
-                    <T v="footnote" color={colors.faint}>{formatDose(x)}{x.time ? ` · ${x.time}` : ''}</T>
+                    <T v="footnote" color={colors.faint}>{formatDose(x)}{x.time ? ` · ${x.time}` : ''}{!on && s.skipped.some((k) => k.supplementId === x.id && k.date === date) ? ' · skipped' : ''}</T>
                     {/* What it adds to the day's nutrition, or a nudge when it adds nothing yet */}
                     <T v="footnote" color={doseMicros(x).length ? colors.cyan : colors.amber} numberOfLines={1}>
                       {doseMicros(x).length ? doseMicros(x).slice(0, 3).map((v) => `${v.label} ${v.amount} ${v.unit}`).join(' · ') : 'No label values · tap to add'}
@@ -77,6 +78,7 @@ export function DailyIntake({ date }: { date: string }) {
                   </View>
                 </Row>
               </Press>
+              {x.stock && <Left x={x} />}
               <Press onPress={() => tick(x.id)} haptic={false} hitSlop={10}>
                 <View style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: on ? 0 : 2, borderColor: colors.hairlineStrong, backgroundColor: on ? colors.lime : 'transparent' }}>
                   {on && <Animated.View entering={ZoomIn.springify().dampingRatio(0.55)}><Icon name="checkmark" size={14} color={colors.black} /></Animated.View>}
@@ -98,5 +100,32 @@ export function DailyIntake({ date }: { date: string }) {
         ))}
       </Card>
     </View>
+  );
+}
+
+/** What is left in the pack; tap to correct it (counted from now on). */
+function Left({ x }: { x: Supplement }) {
+  const router = useRouter();
+  const intakes = useStore((s) => s.intakes);
+  const left = stockLeft(x, intakes) ?? 0;
+  const days = daysLeft(x, intakes);
+  const low = days !== null && days <= LOW_DAYS;
+  const edit = () => {
+    const st = x.stock!;
+    if (Platform.OS !== 'ios') return router.push({ pathname: '/intake', params: { id: x.id } });
+    Alert.prompt(`${x.name}: left now`, `In ${st.unit === 'g' || st.unit === 'ml' ? st.unit : `${st.unit}s`}. A full pack holds ${formatAmount(st.total, st.unit)}.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'New pack', onPress: () => useStore.getState().saveSupplement({ ...x, stock: { ...st, left: st.total, at: new Date().toISOString(), warned: undefined } }) },
+      { text: 'Save', onPress: (v?: string) => {
+        const n = parseFloat((v ?? '').replace(',', '.'));
+        if (Number.isFinite(n) && n >= 0) useStore.getState().saveSupplement({ ...x, stock: { ...st, left: n, at: new Date().toISOString(), warned: undefined } });
+      } },
+    ], 'plain-text', String(left), 'decimal-pad');
+  };
+  return (
+    <Press onPress={edit} haptic={false} hitSlop={6} style={{ alignItems: 'flex-end', marginRight: space.md }}>
+      <T v="headline" color={low ? colors.amber : colors.text} style={type.num}>{+left.toFixed(1)}</T>
+      <T v="caption" color={low ? colors.amber : colors.faint}>{days !== null ? `${days} ${days === 1 ? 'day' : 'days'}` : 'left'}</T>
+    </Press>
   );
 }

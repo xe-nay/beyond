@@ -9,8 +9,8 @@ import { Button, Card, Chip, Divider, Press, Row, Stepper, T, Toggle } from '../
 import { dsldLabel, searchDsld } from '../src/domain/dsld';
 import { MICRO, MICROS } from '../src/domain/micros';
 import { lookupProduct, searchProducts } from '../src/domain/nutrition';
-import { doseMicros, doseNutrients, formatDose, supplementFromOff, UNITS } from '../src/domain/supplements';
-import type { DoseUnit, Supplement } from '../src/domain/types';
+import { daysLeft, doseMicros, doseNutrients, formatAmount, formatDose, LOW_DAYS, stockLeft, supplementFromOff, UNITS } from '../src/domain/supplements';
+import type { DoseUnit, Stock, Supplement } from '../src/domain/types';
 import { uid, useStore } from '../src/store';
 import { colors, radius, space, type } from '../src/theme';
 
@@ -26,6 +26,7 @@ export default function IntakeSetup() {
   const [x, setX] = useState<Supplement>(() => existing ?? {
     id: uid(), name: '', brand: null, image: null, barcode: code ?? null, dose: 1, unit: 'capsule', time: '08:00',
     per100: null, servingG: null, micros: [], createdAt: new Date().toISOString(),
+    stock: { total: 60, unit: 'capsule', left: 60, at: new Date().toISOString() },
   });
   const [state, setState] = useState<'idle' | 'looking' | 'missing' | 'offline'>(code && !existing ? 'looking' : 'idle');
   const [label, setLabel] = useState<string | null>(null);
@@ -50,7 +51,7 @@ export default function IntakeSetup() {
     }
     // Powders default to grams, everything else to one unit a day.
     const powder = !!p.per100 && (p.servingG ?? 0) >= 2;
-    setX((v) => ({ ...v, ...p, barcode: code, unit: powder ? 'g' : v.unit, dose: powder ? p.servingG! : v.dose }));
+    setX((v) => withPack({ ...v, ...p, barcode: code, unit: powder ? 'g' : v.unit, dose: powder ? p.servingG! : v.dose }, p.pack));
     setLabel(p.servingLabel);
     setState('idle');
   };
@@ -68,7 +69,7 @@ export default function IntakeSetup() {
     const p = supplementFromOff(product);
     if (!p) return;
     const powder = !!p.per100 && (p.servingG ?? 0) >= 2;
-    setX((v) => ({ ...v, ...p, barcode: v.barcode ?? p.barcode, unit: powder ? 'g' : v.unit, dose: powder ? p.servingG! : v.dose }));
+    setX((v) => withPack({ ...v, ...p, barcode: v.barcode ?? p.barcode, unit: powder ? 'g' : v.unit, dose: powder ? p.servingG! : v.dose }, p.pack));
     setLabel(p.servingLabel);
     setSearching(false);
   };
@@ -162,6 +163,9 @@ export default function IntakeSetup() {
       )}
 
       <Divider />
+      <Pack x={x} isNew={!existing} onChange={(stock) => up({ stock })} />
+
+      <Divider />
       <LabelValues
         values={micros}
         energy={nutrients && (nutrients.kcal > 0 || nutrients.protein > 0) ? `${nutrients.kcal} kcal · ${nutrients.protein} g protein` : null}
@@ -172,6 +176,70 @@ export default function IntakeSetup() {
       <Button kind="lime" icon="checkmark" title={existing ? 'Save' : 'Add to daily intake'} disabled={!x.name.trim()} onPress={save} />
       {existing && <Button kind="ghost" title="Remove" onPress={remove} />}
     </ScrollView>
+  );
+}
+
+/** A new supplement takes the pack size its label gives; one being edited keeps its own. */
+function withPack(x: Supplement & { pack?: unknown; servingLabel?: unknown }, pack: { total: number; unit: DoseUnit } | null): Supplement {
+  const { pack: _p, servingLabel: _l, ...rest } = x;
+  if (!pack || !x.stock || x.stock.warned) return rest;
+  return { ...rest, stock: { ...x.stock, total: pack.total, unit: pack.unit, left: pack.total } };
+}
+
+const PACK_UNITS: DoseUnit[] = ['capsule', 'tablet', 'scoop', 'drop', 'g', 'ml'];
+
+/**
+ * What the pack holds and how much is left, so the app knows when it runs out and reminds you to buy
+ * it three days before. "Left now" can be corrected any time; New pack fills it up again.
+ */
+function Pack({ x, isNew, onChange }: { x: Supplement; isNew: boolean; onChange: (s: Stock | null) => void }) {
+  const intakes = useStore((s) => s.intakes);
+  const st = x.stock;
+  const now = new Date().toISOString();
+  // While adding, what is left follows the pack size until it is changed by hand.
+  const [touched, setTouched] = useState(!isNew);
+  const left = st ? (isNew ? st.left : stockLeft(x, intakes)!) : 0;
+  const days = st ? daysLeft({ ...x, stock: { ...st, left, at: now } }, []) : null;
+  const step = (u: DoseUnit) => (u === 'g' || u === 'ml' ? 10 : 1);
+  const turnOn = () => {
+    const unit: DoseUnit = PACK_UNITS.includes(x.unit) && x.unit !== 'g' && x.unit !== 'ml' ? x.unit : x.unit === 'ml' ? 'ml' : 'g';
+    const total = unit === 'g' || unit === 'ml' ? 500 : 60;
+    onChange({ total, unit, left: total, at: now });
+  };
+  const out = days !== null ? new Date(Date.now() + days * 86400000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : null;
+  return (
+    <View style={{ gap: space.md }}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <View style={{ flex: 1 }}>
+          <T v="headline">Track the pack</T>
+          <T v="footnote" color={colors.dim}>Know what is left, and get a reminder to buy it 3 days before it runs out</T>
+        </View>
+        <Toggle value={!!st} onChange={(on) => (on ? turnOn() : onChange(null))} />
+      </Row>
+      {st && (
+        <Animated.View entering={FadeIn.duration(180)} style={{ gap: space.md }}>
+          <Row>
+            <Stepper label="A full pack holds" value={st.total} step={step(st.unit)} min={1} max={20000} format={(v) => formatAmount(v, st.unit)}
+              onChange={(total) => onChange({ ...st, total, ...(touched ? {} : { left: total, at: now }) })} />
+          </Row>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+            {PACK_UNITS.map((u) => <Chip key={u} label={u === 'g' ? 'grams' : u === 'ml' ? 'ml' : `${u}s`} active={st.unit === u} onPress={() => onChange({ ...st, unit: u })} />)}
+          </ScrollView>
+          <Row>
+            <Stepper label="Left now" value={left} step={step(st.unit)} min={0} max={20000} format={(v) => formatAmount(v, st.unit)}
+              onChange={(v) => { setTouched(true); onChange({ ...st, left: v, at: now, warned: undefined }); }} />
+          </Row>
+          <T v="footnote" color={days !== null && days <= LOW_DAYS ? colors.amber : colors.dim} style={{ textAlign: 'center' }}>
+            {days === null
+              ? `Your dose is in ${x.unit}s: pick the same kind of unit for the pack to count the days.`
+              : days <= 0 ? 'Finished' : `About ${days} ${days === 1 ? 'day' : 'days'} of doses · runs out around ${out}`}
+          </T>
+          {!isNew && left < st.total && (
+            <Button small kind="secondary" icon="arrow.clockwise" title="New pack" onPress={() => onChange({ ...st, left: st.total, at: now, warned: undefined })} />
+          )}
+        </Animated.View>
+      )}
+    </View>
   );
 }
 

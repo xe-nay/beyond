@@ -253,8 +253,24 @@ export interface Supplement {
   micros: Micro[]; // label values from Open Food Facts, in grams (older entries)
   serving?: Record<string, number>; // per one capsule, tablet or scoop (or servingG grams), by micronutrient key
   custom?: Record<string, number>; // per daily dose, typed by the user; wins over the label
+  stock?: Stock | null; // what the pack holds, to know when it runs out
   createdAt: string;
 }
+
+/**
+ * A supplement's pack: how much a full one holds and how much was left at a moment. What is left now
+ * is that minus the doses ticked since.
+ */
+export interface Stock {
+  total: number; // a full pack
+  unit: DoseUnit; // capsules, tablets, scoops, drops, or g / ml for a powder or liquid
+  left: number; // at `at`
+  at: string; // ISO time `left` was set (a new pack or a correction)
+  warned?: string; // the `at` of the pack a buy reminder was already given for
+}
+
+/** A message kept in the app's notification panel. */
+export interface InboxItem { id: string; at: string; kind: 'restock' | 'intake'; title: string; body: string; supplementId?: string; read: boolean }
 
 export interface Intake {
   id: string;

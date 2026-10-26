@@ -76,6 +76,7 @@ export default function RootLayout() {
           <Stack.Screen name="check-in" options={{ ...sheet, sheetAllowedDetents: [0.55] }} />
           <Stack.Screen name="targets" options={{ ...sheet, sheetAllowedDetents: [0.7] }} />
           <Stack.Screen name="cardio-edit" options={{ ...sheet, sheetAllowedDetents: [0.6] }} />
+          <Stack.Screen name="inbox" options={{ ...sheet, sheetAllowedDetents: [0.75, 1] }} />
           <Stack.Screen name="timer-settings" options={{ ...sheet, sheetAllowedDetents: [0.6] }} />
           <Stack.Screen name="intake" options={{ ...sheet, sheetAllowedDetents: [0.92] }} />
           <Stack.Screen name="day/[date]" options={{ title: '' }} />

@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
@@ -8,11 +8,12 @@ import { CardioPlanCard } from '../../../src/components/CardioPlanCard';
 import { DoneCardioCard, DoneWorkoutCard } from '../../../src/components/DoneCards';
 import { Icon } from '../../../src/components/Icon';
 import { WeekCalendar } from '../../../src/components/WeekCalendar';
-import { Button, Card, Ring, Row, Screen, Section, T } from '../../../src/components/ui';
+import { Button, Card, Press, Ring, Row, Screen, Section, T } from '../../../src/components/ui';
 import { fatigueReport, progression, weekStart } from '../../../src/domain/calc';
 import { plannedFor } from '../../../src/schedule';
 import type { Region } from '../../../src/domain/types';
-import { eatenOn, today, useStore } from '../../../src/store';
+import { clock, eatenOn, today, useStore } from '../../../src/store';
+import { daysLeft, dueNow, LOW_DAYS } from '../../../src/domain/supplements';
 import { alpha, colors, plural, space, type } from '../../../src/theme';
 
 export default function Today() {
@@ -38,6 +39,7 @@ export default function Today() {
 
   return (
     <Screen>
+        <Stack.Screen options={{ headerRight: () => <Bell /> }} />
         <T v="title" color={colors.dim} style={{ fontWeight: '500', marginTop: -space.sm }}>
           {greeting()}{s.profile.name ? `, ${s.profile.name}` : ''}
         </T>
@@ -155,3 +157,20 @@ function greeting() {
   return h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
+
+/** The notification panel: a dot when a dose is waiting, a pack is low or a message is unread. */
+function Bell() {
+  const router = useRouter();
+  const s = useStore();
+  const waiting = s.inbox.some((i) => !i.read)
+    || dueNow(s.supplements, s.intakes, s.skipped, today(), clock()).length > 0
+    || s.supplements.some((x) => { const d = daysLeft(x, s.intakes); return d !== null && d <= LOW_DAYS; });
+  return (
+    <Press onPress={() => router.push('/inbox')} hitSlop={10} label="Notifications">
+      <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name="bell" size={19} color={colors.text} />
+        {waiting && <View style={{ position: 'absolute', top: 5, right: 6, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.amber, borderWidth: 1.5, borderColor: colors.black }} />}
+      </View>
+    </Press>
+  );
+}

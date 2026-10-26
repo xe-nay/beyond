@@ -313,3 +313,47 @@ test('voice coach lines: phase, length, round, rounds left, cue and pace', async
   assert.equal(announce(p, t, 6), 'All rounds done. Cool-down, 5 minutes. Ease down.');
   assert.equal(announce(p, t, 7), 'Workout complete. Well done.');
 });
+
+test('supplement pack: what is left, days left and when to say buy it again', async () => {
+  const { stockLeft, daysLeft, restockAt, doseInUnit, formatAmount } = await import('./supplements.ts');
+  const base = { id: 's', name: 'Creatine', brand: null, image: null, barcode: null, time: '08:00', per100: null, micros: [], createdAt: '2026-10-01T00:00:00Z' };
+  const caps = { ...base, dose: 2, unit: 'capsule' as const, servingG: 0.5, stock: { total: 60, unit: 'capsule' as const, left: 10, at: '2026-10-20T00:00:00Z' } };
+  const tick = (date: string) => ({ id: date, date, supplementId: 's', name: 'Creatine', dose: '2 capsules', takenAt: `${date}T08:05:00Z`, nutrients: null });
+  const intakes = [tick('2026-10-19'), tick('2026-10-21'), tick('2026-10-22')];
+  assert.equal(stockLeft(caps, intakes), 6); // the tick before the pack was set does not count
+  assert.equal(daysLeft(caps, intakes), 3);
+  // Three doses left, today's not taken: they last today, tomorrow and the day after, so remind today.
+  const now = new Date(2026, 9, 23, 7, 0);
+  assert.equal(restockAt(caps, intakes, now)!.getDate(), 23);
+  // Today's taken: three doses cover the next three days; remind tomorrow.
+  assert.equal(restockAt(caps, [...intakes.slice(0, 2), tick('2026-10-23')], now)!.getDate(), 24);
+  // A 5 g dose from a pack weighed in grams; capsules counted from a dose in grams.
+  const powder = { ...base, dose: 5, unit: 'g' as const, servingG: null, stock: { total: 500, unit: 'g' as const, left: 500, at: '2026-10-20T00:00:00Z' } };
+  assert.equal(daysLeft(powder, []), 100);
+  assert.equal(doseInUnit({ dose: 1, unit: 'g', servingG: 0.5 }, 'capsule'), 2);
+  assert.equal(doseInUnit({ dose: 2, unit: 'scoop', servingG: null }, 'g'), null);
+  assert.equal(formatAmount(6, 'capsule'), '6 capsules');
+  assert.equal(formatAmount(380.4, 'g'), '380 g');
+});
+
+test('intake reminders come back until answered, and a skip counts as an answer', async () => {
+  const { reminderPlan } = await import('./supplements.ts');
+  const x = { id: 'c', name: 'Creatine', brand: null, image: null, barcode: null, dose: 5, unit: 'g' as const, time: '08:00', per100: null, servingG: null, micros: [], createdAt: '2026-01-01T00:00:00Z' };
+  const now = new Date(2026, 0, 10, 8, 20);
+  const plan = reminderPlan([x], [], now, 2, { nags: [15, 30, 60] });
+  // Today 08:00 has passed: its 08:30 and 09:00 repeats remain, then tomorrow's reminder and its three repeats.
+  assert.deepEqual(plan.map((r) => r.id), ['intake-2026-01-10-0800-n2', 'intake-2026-01-10-0800-n3', 'intake-2026-01-11-0800', 'intake-2026-01-11-0800-n1', 'intake-2026-01-11-0800-n2', 'intake-2026-01-11-0800-n3']);
+  const skipped = reminderPlan([x], [], now, 2, { nags: [15, 30, 60], skipped: [{ supplementId: 'c', date: '2026-01-10' }] });
+  assert.equal(skipped[0].id, 'intake-2026-01-11-0800');
+});
+
+test('pack size from a label quantity', async () => {
+  const { packFromText } = await import('./supplements.ts');
+  assert.deepEqual(packFromText('120 capsules'), { total: 120, unit: 'capsule' });
+  assert.deepEqual(packFromText('1 kg'), { total: 1000, unit: 'g' });
+  assert.deepEqual(packFromText('300g'), { total: 300, unit: 'g' });
+  assert.deepEqual(packFromText('60 gélules'), { total: 60, unit: 'capsule' });
+  assert.deepEqual(packFromText('90 comprimés'), { total: 90, unit: 'tablet' });
+  assert.deepEqual(packFromText('0,5 l'), { total: 500, unit: 'ml' });
+  assert.equal(packFromText(''), null);
+});

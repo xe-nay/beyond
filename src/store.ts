@@ -5,7 +5,7 @@ import { sum } from './domain/nutrition';
 import { generateProgram, TEMPLATES } from './domain/program';
 import { doseNutrients, formatDose } from './domain/supplements';
 import type {
-  BodyEntry, CardioSession, Food, FoodEntry, Intake, IntervalPlan, Meal, SavedCardio, NutritionTargets, Prescription, Profile, Program,
+  BodyEntry, CardioSession, Food, FoodEntry, Intake, InboxItem, IntervalPlan, Meal, SavedCardio, NutritionTargets, Prescription, Profile, Program,
   RecoveryCheck, Session, Supplement, TimerSettings, WorkoutSet,
 } from './domain/types';
 import { loadJson, saveJson } from './storage';
@@ -45,6 +45,8 @@ interface Data {
   savedCardio: SavedCardio[];
   supplements: Supplement[];
   intakes: Intake[];
+  skipped: { supplementId: string; date: string }[]; // doses answered "Skip" in a reminder
+  inbox: InboxItem[];
 }
 
 const initial: Data = {
@@ -72,6 +74,8 @@ const initial: Data = {
   savedCardio: [],
   supplements: [],
   intakes: [],
+  skipped: [],
+  inbox: [],
 };
 
 interface Actions {
@@ -299,7 +303,11 @@ export const useStore = create<State>((set, get) => ({
     if (had) return set({ intakes: s.intakes.filter((i) => i !== had) });
     const x = s.supplements.find((y) => y.id === supplementId);
     if (!x) return;
-    set({ intakes: [...s.intakes, { id: uid(), date, supplementId, name: x.name, dose: formatDose(x), takenAt: new Date().toISOString(), nutrients: doseNutrients(x) }] });
+    set({
+      intakes: [...s.intakes, { id: uid(), date, supplementId, name: x.name, dose: formatDose(x), takenAt: new Date().toISOString(), nutrients: doseNutrients(x) }],
+      // Taken after all: no longer skipped.
+      skipped: s.skipped.filter((k) => k.supplementId !== supplementId || k.date !== date),
+    });
   },
 
   saveCardio(c) { set((s) => ({ cardio: s.cardio.some((x) => x.id === c.id) ? s.cardio.map((x) => (x.id === c.id ? c : x)) : [...s.cardio, c] })); },
