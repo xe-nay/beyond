@@ -3,7 +3,7 @@
 // Tapping a day opens it: what was done, or what is planned.
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Platform, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
@@ -27,7 +27,11 @@ const addDays = (d: Date, n: number) => {
   return x;
 };
 
-export function WeekCalendar() {
+/**
+ * The scrolling week strip. With `onSelect`, a tap picks the day in place (the chosen one has a ring,
+ * and the strip follows it when the day changes elsewhere); without, it opens the day's page.
+ */
+export function WeekCalendar({ selected, onSelect }: { selected?: string; onSelect?: (iso: string) => void } = {}) {
   const router = useRouter();
   const s = useStore();
   const program = activeProgram(s);
@@ -49,8 +53,19 @@ export function WeekCalendar() {
     jumping.current = Date.now();
     list.current?.scrollToOffset({ offset: (BACK - MID) * cell, animated: true });
     setOffset(0);
+    onSelect?.(todayIso);
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
+
+  // Keeps the chosen day in view when it changes by a swipe of the page.
+  useEffect(() => {
+    if (!selected || !cell) return;
+    const d = Math.round((Date.parse(`${selected}T12:00:00`) - base.getTime()) / 86400000);
+    if (Math.abs(d - offset) <= MID - 1) return;
+    jumping.current = Date.now();
+    list.current?.scrollToOffset({ offset: (d - MID + BACK) * cell, animated: true });
+    setOffset(d);
+  }, [selected, cell]);
 
   // One tap waits briefly (about the iOS double-tap window) so a second tap can turn it into "back to today".
   const tap = (single?: () => void) => {
@@ -86,21 +101,30 @@ export function WeekCalendar() {
       (!!program?.days.some((p) => p.weekday === wd) && programCovers(s, iso, until))
     );
     const isToday = iso === todayIso;
+    const chosen = !!selected && iso === selected;
     const first = day.getDate() === 1;
     return (
-      <Press haptic={false} onPress={() => tap(() => router.push(`/day/${iso}`))} style={{ width: cell, alignItems: 'center', gap: 6 }}>
+      <Press haptic={false} onPress={() => {
+        if (!onSelect) return tap(() => router.push(`/day/${iso}`));
+        // Picks at once; a quick second tap still means "back to today".
+        tap();
+        onSelect(iso);
+        if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+      }} style={{ width: cell, alignItems: 'center', gap: 6 }}>
         <T v="caption" color={isToday ? colors.cyan : first ? colors.dim : colors.faint}>{first ? MONTHS[day.getMonth()].slice(0, 3) : LETTERS[wd]}</T>
+        <View style={{ padding: 2, borderRadius: 23, borderWidth: 2, borderColor: chosen && !isToday ? colors.text : chosen ? colors.cyan : 'transparent' }}>
         <View style={{
           width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center',
           backgroundColor: trained ? colors.lime : isToday ? colors.cyanSoft : colors.surface,
           borderWidth: !trained && (isToday || planned) ? 1.5 : 0,
           borderColor: isToday ? colors.cyan : colors.hairlineStrong,
         }}>
-          {trained ? <Icon name="checkmark" size={14} color={colors.black} /> : <T v="label" color={isToday ? colors.cyan : iso < todayIso ? colors.faint : colors.dim} style={type.num}>{day.getDate()}</T>}
+          {trained ? <Icon name="checkmark" size={14} color={colors.black} /> : <T v="label" color={isToday ? colors.cyan : chosen ? colors.text : iso < todayIso ? colors.faint : colors.dim} style={type.num}>{day.getDate()}</T>}
+        </View>
         </View>
       </Press>
     );
-  }, [cell, s.sessions, s.cardio, program, todayIso, until]);
+  }, [cell, s.sessions, s.cardio, program, todayIso, until, selected, onSelect]);
 
   const away = Math.abs(offset) > MID || centre.getMonth() !== base.getMonth();
   return (
@@ -140,7 +164,7 @@ export function WeekCalendar() {
           maxToRenderPerBatch={14}
         />
       ) : (
-        <View style={{ height: 62 }} />
+        <View style={{ height: 70 }} />
       )}
     </View>
   );

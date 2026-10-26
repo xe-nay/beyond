@@ -48,8 +48,8 @@ export default function FoodSearch() {
   const mine = Object.values(s.foods).filter((f) => query.length > 1 && f.name.toLowerCase().includes(query.toLowerCase()));
   const local = [...searchBasics(query), ...mine.filter((f) => !f.id.startsWith('usda-'))];
   const choose = (f: Food) => {
-    // Remember the product under the scanned barcode so the next scan is instant.
-    const id = barcode && !f.id.startsWith('usda-') ? barcode : f.id;
+    // Remember the product under the scanned barcode so the next scan is instant, a basic food too.
+    const id = barcode || f.id;
     s.saveFood({ ...f, id, barcode: barcode || f.barcode });
     router.replace({ pathname: '/food/[id]', params: { id, date: date ?? '', meal: meal ?? '' } });
   };

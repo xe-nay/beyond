@@ -72,8 +72,10 @@ export function Press({ children, onPress, style, disabled, haptic = true, onLon
   );
 }
 
-export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
-  return onPress ? <Press onPress={onPress} style={[styles.card, style]}>{children}</Press> : <View style={[styles.card, style]}>{children}</View>;
+export function Card({ children, style, onPress, onLongPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; onLongPress?: () => void }) {
+  return onPress || onLongPress
+    ? <Press onPress={onPress} onLongPress={onLongPress} haptic={!!onPress} style={[styles.card, style]}>{children}</Press>
+    : <View style={[styles.card, style]}>{children}</View>;
 }
 
 export function Button({ title, icon, onPress, kind = 'primary', style, disabled, small }: {

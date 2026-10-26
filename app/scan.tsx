@@ -51,7 +51,11 @@ export default function Scan() {
     const code = raw.replace(/\D/g, '');
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     // Supplements are set up on their own sheet, which looks the product up itself.
-    if (intake) return router.replace({ pathname: '/intake', params: { code } });
+    if (intake) {
+      // A supplement already set up with this barcode opens as it is.
+      const mine = useStore.getState().supplements.find((x) => x.barcode && variants(code).includes(x.barcode.replace(/\D/g, '')));
+      return router.replace({ pathname: '/intake', params: mine ? { id: mine.id } : { code } });
+    }
     const { foods, saveFood } = useStore.getState();
     // Anything scanned before opens instantly, also without a connection.
     const known = variants(code).map((c) => foods[c]).find(Boolean);

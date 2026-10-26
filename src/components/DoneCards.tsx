@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { ActionSheetIOS, Platform, View } from 'react-native';
 
@@ -6,29 +7,30 @@ import { groupByExercise, personalRecords, sessionMinutes, totalLoad, volumeLoad
 import { cardioKcal, formatClock, pace } from '../domain/intervals';
 import { formatWeight, toDisplay } from '../domain/plates';
 import type { CardioSession, Session } from '../domain/types';
-import { latestWeight, useStore } from '../store';
+import { latestWeight, today, useStore } from '../store';
 import { alpha, colors, space, type } from '../theme';
 import { ACTIVITY_ICON } from './CardioPlanCard';
 import { Icon, type IconName } from './Icon';
 import { Card, Row, Stat, T } from './ui';
 
-/** Tapping a finished card: a short menu, or straight to the first choice off iOS. */
+/** Holding a finished card: a short menu, or straight to the first choice off iOS. */
 function menu(options: { label: string; go: () => void }[]) {
-  if (Platform.OS !== 'ios') return options[0].go();
+  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+  if (Platform.OS !== 'ios' || options.length === 1) return options[0].go();
   ActionSheetIOS.showActionSheetWithOptions({ options: [...options.map((o) => o.label), 'Cancel'], cancelButtonIndex: options.length }, (i) => options[i]?.go());
 }
 
-function Header({ icon, title }: { icon: IconName; title: string }) {
+function Header({ icon, title, date }: { icon: IconName; title: string; date: string }) {
   return (
     <Row>
       <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.lime, 0.16) }}>
         <Icon name={icon} size={18} color={colors.lime} />
       </View>
       <View style={{ flex: 1 }}>
-        <T v="caption" color={colors.lime}>Completed today</T>
+        <T v="caption" color={colors.lime}>{date === today() ? 'Completed today' : 'Completed'}</T>
         <T v="title3" numberOfLines={2}>{title}</T>
       </View>
-      <Icon name="ellipsis" size={16} color={colors.faint} />
+      <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0 }}>Hold to edit</T>
     </Row>
   );
 }
@@ -56,8 +58,8 @@ export function DoneWorkoutCard({ x }: { x: Session }) {
     { label: 'See the workout', go: () => router.push({ pathname: '/session/[id]', params: { id: x.id } }) },
   ]);
   return (
-    <Card onPress={open} style={{ borderColor: alpha(colors.lime, 0.35) }}>
-      <Header icon="dumbbell.fill" title={x.name} />
+    <Card onLongPress={open} style={{ borderColor: alpha(colors.lime, 0.35) }}>
+      <Header icon="dumbbell.fill" title={x.name} date={x.date} />
       <Row style={{ justifyContent: 'space-between' }}>
         <Stat small label="Time" value={minutes ? Math.round(minutes) : '—'} unit={minutes ? 'min' : undefined} />
         <Stat small label="Sets" value={working(x.sets).length} />
@@ -97,11 +99,10 @@ export function DoneCardioCard({ c }: { c: CardioSession }) {
   const p = pace(c.minutes, c.distanceKm);
   const open = () => menu([
     { label: 'Edit time, distance or effort', go: () => router.push({ pathname: '/cardio-edit', params: { id: c.id } }) },
-    { label: 'See the day', go: () => router.push(`/day/${c.date}`) },
   ]);
   return (
-    <Card onPress={open} style={{ borderColor: alpha(colors.lime, 0.35) }}>
-      <Header icon={ACTIVITY_ICON[c.activity] ?? 'figure.run'} title={c.name ?? c.activity} />
+    <Card onLongPress={open} style={{ borderColor: alpha(colors.lime, 0.35) }}>
+      <Header icon={ACTIVITY_ICON[c.activity] ?? 'figure.run'} title={c.name ?? c.activity} date={c.date} />
       <Row style={{ justifyContent: 'space-between', flexWrap: 'wrap', rowGap: space.md }}>
         <Stat small label="Time" value={c.minutes} unit="min" />
         {c.distanceKm ? <Stat small label="Distance" value={c.distanceKm.toFixed(2)} unit="km" /> : null}

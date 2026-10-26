@@ -1,10 +1,14 @@
 import { Stack, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { GestureDetector } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
 import { View } from 'react-native';
 
 import { byId, exercise } from '../../../src/catalog';
 import { BodyMap } from '../../../src/components/BodyMap';
 import { CardioPlanCard } from '../../../src/components/CardioPlanCard';
+import { DayDetail, longDate, relative } from '../../../src/components/DayDetail';
+import { BackToToday, DayFlash, shortDate } from '../../../src/components/DayFlash';
 import { DoneCardioCard, DoneWorkoutCard } from '../../../src/components/DoneCards';
 import { Icon } from '../../../src/components/Icon';
 import { WeekCalendar } from '../../../src/components/WeekCalendar';
@@ -15,11 +19,16 @@ import type { Region } from '../../../src/domain/types';
 import { clock, eatenOn, today, useStore } from '../../../src/store';
 import { daysLeft, dueNow, LOW_DAYS } from '../../../src/domain/supplements';
 import { alpha, colors, plural, space, type } from '../../../src/theme';
+import { useDaySwipe } from '../../../src/useDaySwipe';
 
 export default function Today() {
   const router = useRouter();
   const s = useStore();
   const date = today();
+  // The day shown: today, or one picked in the calendar or reached by swiping.
+  const [sel, setSel] = useState(date);
+  const step = (n: 1 | -1) => setSel((d) => { const x = new Date(`${d}T12:00:00`); x.setDate(x.getDate() + n); return today(x); });
+  const { gesture: swipe, style: slide } = useDaySwipe(step);
   const done = s.sessions.filter((x) => x.finishedAt);
   const open = s.sessions.find((x) => x.id === s.activeSession && !x.finishedAt);
 
@@ -38,13 +47,28 @@ export default function Today() {
   const tone = fatigue.status === 'Ease off' ? colors.amber : fatigue.status === 'Watch' ? colors.amber : fatigue.status === 'Ready' ? colors.lime : colors.dim;
 
   return (
+    <View style={{ flex: 1 }}>
     <Screen>
-        <Stack.Screen options={{ headerRight: () => <Bell /> }} />
+        <Stack.Screen options={{ title: sel === date ? 'Today' : shortDate(sel), headerRight: () => <Row gap={10}><BackToToday date={sel} onPress={() => setSel(date)} /><Bell /></Row> }} />
         <T v="title" color={colors.dim} style={{ fontWeight: '500', marginTop: -space.sm }}>
           {greeting()}{s.profile.name ? `, ${s.profile.name}` : ''}
         </T>
 
-        <WeekCalendar />
+        <WeekCalendar selected={sel} onSelect={setSel} />
+
+        {/* Swipe sideways for the day before or after; every day shows in full right here. */}
+        <GestureDetector gesture={swipe}>
+        <Animated.View style={[{ gap: space.lg }, slide]}>
+        {sel !== date ? (
+          <>
+            <View style={{ gap: 2 }}>
+              <T v="caption" color={colors.amber}>{relative(sel, date)}</T>
+              <T v="title">{longDate(sel)}</T>
+            </View>
+            <DayDetail date={sel} />
+          </>
+        ) : (
+        <>
 
         {/* Today's training: under way, done (with Completed instead of Start), then still planned */}
         {open && (
@@ -137,7 +161,13 @@ export default function Today() {
             </Card>
           </Section>
         )}
+        </>
+        )}
+        </Animated.View>
+        </GestureDetector>
     </Screen>
+    <DayFlash date={sel} />
+    </View>
   );
 }
 

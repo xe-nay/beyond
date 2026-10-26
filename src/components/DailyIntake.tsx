@@ -63,7 +63,8 @@ export function DailyIntake({ date }: { date: string }) {
           const on = taken(x.id);
           return (
             <Row key={x.id} style={{ padding: space.sm }}>
-              <Press onPress={() => router.push({ pathname: '/intake', params: { id: x.id } })} haptic={false} style={{ flex: 1 }}>
+              {/* Tap ticks it; hold opens it to change. */}
+              <Press onPress={() => tick(x.id)} onLongPress={() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); router.push({ pathname: '/intake', params: { id: x.id } }); }} haptic={false} style={{ flex: 1 }} label={`${x.name}: tap to tick, hold to change`}>
                 <Row>
                   <View style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: x.image ? '#F3F5F9' : alpha(colors.cyan, 0.12) }}>
                     {x.image ? <Image source={x.image} style={{ width: 40, height: 40 }} contentFit="contain" cachePolicy="disk" /> : <Icon name="pills.fill" size={16} color={colors.cyan} />}
@@ -73,7 +74,7 @@ export function DailyIntake({ date }: { date: string }) {
                     <T v="footnote" color={colors.faint}>{formatDose(x)}{x.time ? ` · ${x.time}` : ''}{!on && s.skipped.some((k) => k.supplementId === x.id && k.date === date) ? ' · skipped' : ''}</T>
                     {/* What it adds to the day's nutrition, or a nudge when it adds nothing yet */}
                     <T v="footnote" color={doseMicros(x).length ? colors.cyan : colors.amber} numberOfLines={1}>
-                      {doseMicros(x).length ? doseMicros(x).slice(0, 3).map((v) => `${v.label} ${v.amount} ${v.unit}`).join(' · ') : 'No label values · tap to add'}
+                      {doseMicros(x).length ? doseMicros(x).slice(0, 3).map((v) => `${v.label} ${v.amount} ${v.unit}`).join(' · ') : 'No label values · hold to add'}
                     </T>
                   </View>
                 </Row>
