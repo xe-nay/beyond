@@ -286,3 +286,55 @@ export function restBefore(sets: WorkoutSet[], i: number) {
   const s = (Date.parse(sets[i].completedAt) - Date.parse(sets[i - 1].completedAt)) / 1000;
   return s > 0 && s <= 1800 ? Math.round(s) : null;
 }
+
+/** Warm-up ramps by number of warm-up sets: share of the working weight and reps. */
+const RAMPS: [number, number][][] = [
+  [],
+  [[0.6, 6]],
+  [[0.5, 8], [0.75, 4]],
+  [[0.4, 8], [0.6, 5], [0.8, 3]],
+  [[0.4, 8], [0.55, 5], [0.7, 3], [0.85, 1]],
+  [[0.4, 8], [0.5, 5], [0.6, 4], [0.75, 2], [0.85, 1]],
+];
+
+export interface PlannedSets {
+  workKg: number | null; // per dumbbell when two are used
+  basis: string; // where the working weight comes from
+  warmups: { kg: number | null; reps: number; share: number }[];
+  working: { reps: string; rir: number; restSeconds: number }[];
+}
+
+/**
+ * The sets of one planned exercise with weights: the warm-up ramp up to the working weight, then the
+ * working sets. The working weight is the program's, else the one that should leave the target RIR
+ * at the middle of the rep range from the latest set logged with an RIR (see loadForRir), else the
+ * last weight used. `round` snaps a weight to what the equipment allows.
+ */
+export function planSets(p: Prescription, sessions: Session[], round: (kg: number) => number): PlannedSets {
+  const past = sessions
+    .filter((s) => s.finishedAt)
+    .sort((a, b) => b.finishedAt!.localeCompare(a.finishedAt!))
+    .flatMap((s) => [...working(s.sets)].reverse().filter((x) => x.exerciseId === p.exerciseId && x.reps > 0));
+  const target = Math.round((p.minReps + p.maxReps) / 2);
+  let workKg: number | null = null;
+  let basis = 'No weight yet: pick one you can lift for the reps with the RIR left, then the next plan suggests from it.';
+  const withRir = past.find((x) => x.rir !== null);
+  const est = withRir ? loadForRir(withRir, target, p.rir) : null;
+  if (p.loadKg) {
+    workKg = p.loadKg;
+    basis = 'Weight set in the program.';
+  } else if (withRir && est !== null) {
+    workKg = round(est);
+    basis = `For ${target} reps at RIR ${p.rir}, from your ${withRir.loadKg} × ${withRir.reps} at RIR ${withRir.rir} (reps + RIR possible, Epley).`;
+  } else if (past[0]) {
+    workKg = past[0].loadKg;
+    basis = 'Your last weight; log the RIR to get a weight matched to the target.';
+  }
+  const ramp = RAMPS[Math.min(5, p.warmupSets ?? 0)];
+  return {
+    workKg,
+    basis,
+    warmups: ramp.map(([share, reps]) => ({ share, reps, kg: workKg === null ? null : round(workKg * share) })),
+    working: Array.from({ length: p.sets }, () => ({ reps: p.minReps === p.maxReps ? `${p.minReps}` : `${p.minReps}–${p.maxReps}`, rir: p.rir, restSeconds: p.restSeconds })),
+  };
+}

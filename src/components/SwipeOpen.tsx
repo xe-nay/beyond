@@ -5,7 +5,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { innerSwipe } from '../swipeGuard';
+import { innerSwipe, releaseInner } from '../swipeGuard';
 import { colors } from '../theme';
 import { Icon } from './Icon';
 
@@ -36,7 +36,7 @@ export function SwipeOpen({ children, onOpen, background = 'transparent' }: { ch
       x.set(withSpring(0, { duration: 380, dampingRatio: 0.85 }));
       past.set(0);
     })
-    .onFinalize(() => innerSwipe.set(0));
+    .onFinalize(() => scheduleOnRN(releaseInner));
 
   const row = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }] }));
   const eye = useAnimatedStyle(() => ({

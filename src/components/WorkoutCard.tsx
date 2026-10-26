@@ -17,7 +17,7 @@ import { formatClock } from '../domain/intervals';
 import { formatWeight, toDisplay } from '../domain/plates';
 import type { Prescription, Region, Session, WorkoutSet } from '../domain/types';
 import { today, useStore } from '../store';
-import { innerSwipe } from '../swipeGuard';
+import { innerSwipe, releaseInner } from '../swipeGuard';
 import { alpha, colors, plural, radius, space, type } from '../theme';
 import { BodyMap } from './BodyMap';
 import { menu } from './holdMenu';
@@ -132,7 +132,7 @@ export function PlanCard({ title, label, plan, unit, onStart, notes }: { title: 
           const e = exercise(x.exerciseId);
           const reps = x.minReps === x.maxReps ? `${x.minReps}` : `${x.minReps}–${x.maxReps}`;
           return (
-            <SwipeOpen key={`${x.exerciseId}-${i}`} onOpen={() => router.push(`/exercise/${x.exerciseId}`)}>
+            <SwipeOpen key={`${x.exerciseId}-${i}`} onOpen={() => router.push({ pathname: '/exercise/[id]', params: { id: x.exerciseId, plan: JSON.stringify(x) } })}>
               <Row style={{ alignItems: 'flex-start' }}>
                 <Step n={i + 1} />
                 <View style={{ flex: 1, gap: 6 }}>
@@ -205,7 +205,7 @@ export function DoneWorkoutCard({ x }: { x: Session }) {
       scheduleOnRN(setBack, to === 1);
       scheduleOnRN(settle);
     })
-    .onFinalize(() => innerSwipe.set(0));
+    .onFinalize(() => scheduleOnRN(releaseInner));
   const frontStyle = useAnimatedStyle(() => ({ transform: [{ perspective: 1600 }, { rotateY: `${interpolate(turn.get(), [0, 1], [0, 180])}deg` }], opacity: turn.get() < 0.5 ? 1 : 0 }));
   const backStyle = useAnimatedStyle(() => ({ transform: [{ perspective: 1600 }, { rotateY: `${interpolate(turn.get(), [0, 1], [-180, 0])}deg` }], opacity: turn.get() >= 0.5 ? 1 : 0 }));
   const label = x.date === today() ? 'Completed today' : 'Completed';

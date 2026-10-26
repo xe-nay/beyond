@@ -6,7 +6,7 @@ import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-nati
 import { exercise } from '../../src/catalog';
 import { ExerciseImage } from '../../src/components/ExerciseImage';
 import { Icon } from '../../src/components/Icon';
-import { Button, Card, Chip, Press, Row, Screen, Stat, Stepper, T, Toggle } from '../../src/components/ui';
+import { Button, Card, Chip, Press, Row, Screen, Segmented, Stat, Stepper, T, Toggle } from '../../src/components/ui';
 import { e1rm, groupByExercise, repDrop, restBefore, sessionLoad, sessionMinutes, volumeLoad, working } from '../../src/domain/calc';
 import { formatClock } from '../../src/domain/intervals';
 import { formatWeight, toDisplay, toKg } from '../../src/domain/plates';
@@ -97,6 +97,13 @@ function SetEditor({ set, unit, onChange, onDelete, onCopy }: { set: WorkoutSet;
         <Stepper label={set.implements === 2 ? `Weight each (${unit})` : `Weight (${unit})`} value={shown} onChange={(v) => onChange({ loadKg: toKg(Math.max(0, v), unit) })} step={step} min={0} max={1000} format={(v) => formatWeight(toKg(v, unit), unit)} />
         <Stepper label="Reps" value={set.reps} onChange={(reps) => onChange({ reps })} min={0} max={100} />
       </Row>
+      {set.implements !== undefined && (
+        // Dumbbells: the weight is per dumbbell; volume counts both when there are two.
+        <View style={{ gap: 6 }}>
+          <Segmented<1 | 2> value={set.implements} onChange={(n) => onChange({ implements: n })} options={[{ value: 1, label: 'One dumbbell' }, { value: 2, label: 'Two (weight each)' }]} />
+          <T v="footnote" color={colors.faint}>Counts as {formatWeight(set.loadKg * set.implements, unit)} {unit} a rep in volume.</T>
+        </View>
+      )}
       <View style={{ gap: 6 }}>
         <T v="caption" color={colors.faint}>RIR</T>
         <Row gap={6} style={{ flexWrap: 'wrap' }}>

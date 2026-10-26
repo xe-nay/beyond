@@ -274,7 +274,13 @@ export function Stepper({ value, onChange, step = 1, min = 0, max = 9999, format
         <Press onPress={() => onChange(clamp(value - step))} style={styles.step} hitSlop={6} label={`Less ${label ?? ''}`}><Icon name="minus" size={16} /></Press>
         {typing !== null ? (
           <TextInput
-            autoFocus selectTextOnFocus value={typing} onChangeText={setTyping} onBlur={commit} onSubmitEditing={commit}
+            autoFocus selectTextOnFocus value={typing} onBlur={commit} onSubmitEditing={commit}
+            // Saved as it is typed (within range), so leaving the screen while typing keeps it.
+            onChangeText={(v) => {
+              setTyping(v);
+              const n = readTyped(v, clock);
+              if (n !== null && n >= min && n <= max) onChange(Math.round(n * 1000) / 1000);
+            }}
             keyboardType={clock ? 'numbers-and-punctuation' : 'decimal-pad'} returnKeyType="done"
             style={[...text, { paddingVertical: 0, borderRadius: radius.sm, backgroundColor: colors.surface3 }]}
           />

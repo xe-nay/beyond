@@ -4,10 +4,12 @@
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { formatMicro, MICRO, type MicroUnit } from '../domain/micros';
-import { innerSwipe } from '../swipeGuard';
+import { innerSwipe, releaseInner } from '../swipeGuard';
 import type { Nutrients, NutritionTargets } from '../domain/types';
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon } from './Icon';
@@ -62,6 +64,12 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
   const flip = () => show(!back);
+  // Paging the micros is not a day swipe: the scroll view keeps scrolling natively, and a pan beside
+  // it claims the swipe for the card from the first few points of movement.
+  const pages = Gesture.Simultaneous(
+    Gesture.Native(),
+    Gesture.Pan().activeOffsetX([-6, 6]).onStart(() => innerSwipe.set(1)).onFinalize(() => scheduleOnRN(releaseInner)),
+  );
   // A tap turns the card. (A vertical swipe would fight the page's own scrolling, which iOS lets win.)
 
   const front = useAnimatedStyle(() => ({
@@ -95,14 +103,13 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
         <Animated.View style={[styles.face, rear]} pointerEvents={back ? 'auto' : 'none'}>
           {/* A tap anywhere on the micros turns back to the macros; sideways pages through them. */}
           <Press onPress={flip} haptic={false} label="Back to macros" style={{ flex: 1 }}>
+          <GestureDetector gesture={pages}>
           <ScrollView
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             onScroll={(e) => w && setPage(Math.round(e.nativeEvent.contentOffset.x / w))}
-            // Paging the micros is not a day swipe.
-            onScrollBeginDrag={() => innerSwipe.set(1)}
-            onScrollEndDrag={() => innerSwipe.set(0)}
+
             scrollEventThrottle={32}
             style={{ marginHorizontal: -space.lg }}>
             {w > 0 && PAGES.map((p, i) => (
@@ -115,6 +122,7 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
               </View>
             ))}
           </ScrollView>
+          </GestureDetector>
           </Press>
           <Press onPress={flip} haptic={false} label="Back to macros">
             <Row gap={8} style={{ justifyContent: 'center' }}>

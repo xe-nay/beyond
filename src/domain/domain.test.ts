@@ -413,3 +413,17 @@ test('cardio: WHO minutes, VDOT, Riegel, load ratio', async () => {
   const r = loadReport(days, new Date(2026, 9, 25, 12));
   assert.equal(r.ratio, 2);
 });
+
+test('planned sets: warm-up ramp up to the weight that should leave the target RIR', async () => {
+  const { planSets } = await import('./calc.ts');
+  const p: Prescription = { exerciseId: 'bench-press', sets: 3, minReps: 8, maxReps: 12, rir: 2, restSeconds: 150, loadKg: null, warmupSets: 2 };
+  const done = session('2026-10-20', [set(10, 60, 4, { exerciseId: 'bench-press' })]);
+  const r = planSets(p, [done], (kg) => Math.round(kg / 2.5) * 2.5);
+  // 60 × 10 with 4 left = 14 possible; 10 reps at RIR 2 = 12 possible: heavier.
+  assert.equal(r.workKg, 62.5);
+  assert.deepEqual(r.warmups.map((w) => [w.kg, w.reps]), [[32.5, 8], [47.5, 4]]);
+  assert.equal(r.working.length, 3);
+  assert.equal(r.working[0].reps, '8–12');
+  assert.equal(planSets({ ...p, loadKg: 70 }, [done], (kg) => kg).workKg, 70);
+  assert.equal(planSets(p, [], (kg) => kg).workKg, null);
+});
