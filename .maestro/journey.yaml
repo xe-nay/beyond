@@ -83,6 +83,9 @@ name: First run, workout, food, progress and cardio
 - takeScreenshot: 14-train
 - tapOn: ".*Cardio.*"
 - takeScreenshot: 15-cardio-plan
+- scrollUntilVisible:
+    element: ".*Start ·.*"
+    direction: DOWN
 - tapOn: ".*Start ·.*"
 - tapOn:
     text: "Allow While Using App"
