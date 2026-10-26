@@ -6,10 +6,11 @@ import { View } from 'react-native';
 
 import { exercise } from '../../../src/catalog';
 import { CardioPlanCard } from '../../../src/components/CardioPlanCard';
-import { DayDetail, longDate, PlanCard, relative } from '../../../src/components/DayDetail';
+import { DayDetail, longDate, relative } from '../../../src/components/DayDetail';
 import { Bell } from '../../../src/components/Bell';
-import { DayFlash, shortDate } from '../../../src/components/DayFlash';
-import { DoneCardioCard, DoneWorkoutCard } from '../../../src/components/DoneCards';
+import { shortDate } from '../../../src/components/DayFlash';
+import { DoneCardioCard } from '../../../src/components/DoneCards';
+import { DoneWorkoutCard, Head, PlanCard, Shell } from '../../../src/components/WorkoutCard';
 import { Icon } from '../../../src/components/Icon';
 import { WeekCalendar } from '../../../src/components/WeekCalendar';
 import { Button, Card, Press, Ring, Row, Screen, Section, T } from '../../../src/components/ui';
@@ -69,12 +70,10 @@ export default function Today() {
 
         {/* Today's training: under way, done (with Completed instead of Start), then still planned */}
         {open && (
-          <Card style={{ borderColor: alpha(colors.cyan, 0.4) }} onPress={() => router.push('/workout')}>
-            <T v="caption" color={colors.cyan}>In progress</T>
-            <T v="title" numberOfLines={2}>{open.name}</T>
-            <T v="label" color={colors.dim}>{plural(open.sets.filter((x) => !x.warmup).length, 'set')} logged</T>
+          <Shell>
+            <Head label="● In progress" title={open.name} sub={`${plural(open.sets.filter((x) => !x.warmup).length, 'set')} logged so far`} tint={colors.cyan} />
             <Button title="Resume" icon="play.fill" onPress={() => router.push('/workout')} />
-          </Card>
+          </Shell>
         )}
         {doneToday.map((x) => <DoneWorkoutCard key={x.id} x={x} />)}
         {plan.cardioDone.map((c) => <DoneCardioCard key={c.id} c={c} />)}
@@ -146,7 +145,6 @@ export default function Today() {
         </Animated.View>
         </GestureDetector>
     </Screen>
-    <DayFlash date={sel} />
     </View>
   );
 }

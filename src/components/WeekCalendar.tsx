@@ -68,16 +68,19 @@ export function WeekCalendar({ selected, onSelect }: { selected?: string; onSele
   }, [selected, cell]);
 
   // One tap waits briefly (about the iOS double-tap window) so a second tap can turn it into "back to today".
+  // Returns true when this tap was the second of a double tap (and went back to today).
   const tap = (single?: () => void) => {
     const now = Date.now();
     if (now - lastTap.current < 400) {
       if (pending.current) clearTimeout(pending.current);
       pending.current = null;
       lastTap.current = 0;
-      return goToday();
+      goToday();
+      return true;
     }
     lastTap.current = now;
     if (single) pending.current = setTimeout(() => { pending.current = null; single(); }, 400);
+    return false;
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -106,8 +109,8 @@ export function WeekCalendar({ selected, onSelect }: { selected?: string; onSele
     return (
       <Press haptic={false} onPress={() => {
         if (!onSelect) return tap(() => router.push(`/day/${iso}`));
-        // Picks at once; a quick second tap still means "back to today".
-        tap();
+        // Picks at once; a quick second tap means "back to today" and picks today instead.
+        if (tap()) return;
         onSelect(iso);
         if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
       }} style={{ width: cell, alignItems: 'center', gap: 6 }}>

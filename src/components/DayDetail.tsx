@@ -2,21 +2,16 @@ import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
-import { byId, exercise } from '../catalog';
-import { formatClock } from '../domain/intervals';
 import { formatWeight } from '../domain/plates';
-import type { Prescription, Region } from '../domain/types';
 import { MEALS } from '../meals';
 import { plannedFor } from '../schedule';
 import { eatenOn, intakeNutrients, today, useStore } from '../store';
 import { alpha, colors, plural, space, type } from '../theme';
-import { BodyMap } from './BodyMap';
 import { CardioPlanCard } from './CardioPlanCard';
-import { DoneCardioCard, DoneWorkoutCard } from './DoneCards';
-import { ExerciseImage } from './ExerciseImage';
+import { DoneCardioCard } from './DoneCards';
+import { DoneWorkoutCard, Head, PlanCard, Shell } from './WorkoutCard';
 import { Icon } from './Icon';
 import { NutritionCard } from './NutritionCard';
-import { SwipeOpen } from './SwipeOpen';
 import { Button, Card, Press, Row, Section, Stat, T } from './ui';
 
 /** "Today", "Yesterday", "In 3 days", "5 days ago". */
@@ -62,11 +57,10 @@ export function DayDetail({ date }: { date: string }) {
   return (
     <View style={{ gap: space.lg }}>
       {open && (
-        <Card style={{ borderColor: alpha(colors.cyan, 0.4) }} onPress={() => router.push('/workout')}>
-          <T v="caption" color={colors.cyan}>In progress</T>
-          <T v="title">{open.name}</T>
+        <Shell>
+          <Head label="● In progress" title={open.name} sub={`${plural(open.sets.filter((x) => !x.warmup).length, 'set')} logged so far`} tint={colors.cyan} />
           <Button title="Resume" icon="play.fill" onPress={() => router.push('/workout')} />
-        </Card>
+        </Shell>
       )}
       {done.map((x, i) => (
         <Animated.View key={x.id} entering={reduced ? undefined : FadeInDown.delay(i * 60).duration(280)}>
@@ -154,49 +148,5 @@ export function DayDetail({ date }: { date: string }) {
         </>
       )}
     </View>
-  );
-}
-
-/**
- * A planned workout: the muscles it will work, and every exercise with its sets, warm-ups, reps, RIR and
- * rest. Swipe an exercise left to open it.
- */
-export function PlanCard({ title, label, plan, unit, onStart, notes }: { title: string; label: string; plan: Prescription[]; unit: 'kg' | 'lb'; onStart?: () => void; notes?: string }) {
-  const router = useRouter();
-  const sets = plan.reduce((n, x) => n + x.sets, 0);
-  const regions = [...new Set(plan.flatMap((x) => byId[x.exerciseId]?.primary ?? []))] as Region[];
-  return (
-    <Card>
-      <Row style={{ alignItems: 'flex-start' }}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <T v="caption" color={colors.cyan}>{label}</T>
-          <T v="title" numberOfLines={2}>{title}</T>
-          <T v="footnote" color={colors.dim}>{plural(plan.length, 'exercise')} · {plural(sets, 'set')}</T>
-          <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0, marginTop: 4 }}>Swipe an exercise left to open it</T>
-        </View>
-        <View style={{ marginRight: -space.md, marginTop: -space.sm }} pointerEvents="none">
-          <BodyMap key={title} primary={regions} scale={0.42} toggle={false} />
-        </View>
-      </Row>
-      {plan.map((x, i) => {
-        const e = exercise(x.exerciseId);
-        return (
-          <SwipeOpen key={`${x.exerciseId}-${i}`} onOpen={() => router.push(`/exercise/${x.exerciseId}`)}>
-            <Row>
-              {e && <ExerciseImage exercise={e} thumb style={{ width: 44, height: 44 }} />}
-              <View style={{ flex: 1 }}>
-                <T v="headline" numberOfLines={1}>{x.superset ? `${x.superset} · ` : ''}{e?.name ?? x.exerciseId}</T>
-                <T v="footnote" color={colors.dim} style={type.num}>
-                  {x.warmupSets ? `${x.warmupSets} warm-up + ` : ''}{x.sets} × {x.minReps === x.maxReps ? x.minReps : `${x.minReps}–${x.maxReps}`} · RIR {x.rir} · {formatClock(x.restSeconds)}
-                  {x.loadKg ? ` · ${formatWeight(x.loadKg, unit)} ${unit}` : ''}
-                </T>
-              </View>
-            </Row>
-          </SwipeOpen>
-        );
-      })}
-      {!!notes && <T v="callout" color={colors.dim}>{notes}</T>}
-      {onStart && <Button title="Start workout" icon="play.fill" onPress={onStart} />}
-    </Card>
   );
 }

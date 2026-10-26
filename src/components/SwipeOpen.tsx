@@ -17,7 +17,7 @@ const buzz = () => Platform.OS !== 'web' && Haptics.impactAsync(Haptics.ImpactFe
  * A row that opens by swiping it left: it moves slowly under the finger, an eye appears behind it,
  * and letting go past the eye opens it. A swipe to the right is left to the page (changing day).
  */
-export function SwipeOpen({ children, onOpen }: { children: ReactNode; onOpen: () => void }) {
+export function SwipeOpen({ children, onOpen, background = 'transparent' }: { children: ReactNode; onOpen: () => void; background?: string }) {
   const x = useSharedValue(0);
   const past = useSharedValue(0);
   const pan = Gesture.Pan()
@@ -53,7 +53,7 @@ export function SwipeOpen({ children, onOpen }: { children: ReactNode; onOpen: (
         </Animated.View>
       </View>
       <GestureDetector gesture={pan}>
-        <Animated.View style={[{ backgroundColor: colors.surface }, row]}>{children}</Animated.View>
+        <Animated.View style={[{ backgroundColor: background }, row]}>{children}</Animated.View>
       </GestureDetector>
     </View>
   );

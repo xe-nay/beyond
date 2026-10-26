@@ -10,7 +10,8 @@ import { today, useStore } from '../store';
 import { alpha, colors, space, type } from '../theme';
 import { PHASE } from './CardioVisuals';
 import { Icon, type IconName } from './Icon';
-import { Button, Card, Press, Row, T } from './ui';
+import { Button, Press, Row, T } from './ui';
+import { Head, Shell } from './WorkoutCard';
 
 export const ACTIVITY_ICON: Record<string, IconName> = {
   Running: 'figure.run', Walking: 'figure.walk', Cycling: 'bicycle', Rowing: 'figure.rower', Swimming: 'figure.pool.swim',
@@ -47,18 +48,18 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
   };
 
   return (
-    <Card>
-      <Row>
-        <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.cyan, 0.14) }}>
-          <Icon name={ACTIVITY_ICON[c.activity] ?? 'figure.run'} size={18} color={colors.cyan} />
-        </View>
+    <Shell>
+      <Row style={{ alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>
-          <T v="caption" color={colors.faint}>Planned cardio · {c.activity}</T>
-          <T v="title3" numberOfLines={2}>{c.name ?? c.activity}</T>
+          <Head
+            label={`Planned cardio · ${c.activity}`}
+            title={c.name ?? c.activity}
+            sub={`${formatClock(total)}${km !== null ? ` · ≈ ${(unit === 'mi' ? km / 1.609344 : km).toFixed(1)} ${unit}` : ''}${p.rounds > 1 ? ` · ${p.rounds} rounds` : ''}`}
+            tint={colors.cyan}
+          />
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <T v="title3" style={type.num}>{formatClock(total)}</T>
-          {km !== null && <T v="footnote" color={colors.dim} style={type.num}>≈ {(unit === 'mi' ? km / 1.609344 : km).toFixed(1)} {unit}</T>}
+        <View style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(colors.cyan, 0.14) }}>
+          <Icon name={ACTIVITY_ICON[c.activity] ?? 'figure.run'} size={22} color={colors.cyan} />
         </View>
       </Row>
 
@@ -121,7 +122,7 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
         <Button kind="secondary" icon="slider.horizontal.3" title="Edit" onPress={() => router.push({ pathname: '/cardio', params: { id: c.id } })} style={{ flex: 1 }} />
         {canStart && <Button title="Start" icon="play.fill" onPress={start} style={{ flex: 1 }} />}
       </Row>
-    </Card>
+    </Shell>
   );
 }
 

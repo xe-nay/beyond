@@ -1,12 +1,10 @@
 // The day's nutrition as a card that turns over. Front: energy and the three macros. Back: the
 // micronutrients against their daily values, a few per page; swipe sideways through the pages.
-// Swipe the card up or down (or tap the corner) to turn it.
+// Tap the card (or use the switch above it) to turn it; hold the front to change the goals.
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
 
 import { formatMicro, MICRO, type MicroUnit } from '../domain/micros';
 import { innerSwipe } from '../swipeGuard';
@@ -64,13 +62,7 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
   const flip = () => show(!back);
-  // A clear vertical swipe turns the card; sideways is left to the pages on the back.
-  const pan = Gesture.Pan()
-    .activeOffsetY([-18, 18])
-    .failOffsetX([-14, 14])
-    .onEnd((e) => {
-      if (Math.abs(e.translationY) > 30 || Math.abs(e.velocityY) > 400) scheduleOnRN(flip);
-    });
+  // A tap turns the card. (A vertical swipe would fight the page's own scrolling, which iOS lets win.)
 
   const front = useAnimatedStyle(() => ({
     transform: [{ perspective: 1200 }, { rotateX: `${interpolate(turn.get(), [0, 1], [0, 180])}deg` }],
@@ -84,11 +76,10 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
   return (
     <View style={{ gap: space.sm }}>
     <Segmented options={[{ value: 'macros', label: 'Macros' }, { value: 'micros', label: 'Micros' }]} value={back ? 'micros' : 'macros'} onChange={(v) => show(v === 'micros')} />
-    <GestureDetector gesture={pan}>
       <View style={{ height }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
         <Animated.View style={[styles.face, front]} pointerEvents={back ? 'none' : 'auto'}>
           {/* Held, not tapped, so scrolling past the card never opens the goals. */}
-          <Press onLongPress={onPress && (() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onPress(); })} haptic={false} label="Hold to change your daily goals" style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.xl }}>
+          <Press onPress={flip} onLongPress={onPress && (() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onPress(); })} haptic={false} label="Hold to change your daily goals" style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.xl }}>
             <MacroDonut n={n} size={136} label={`of ${targets.kcal}`} />
             <View style={{ flex: 1, gap: space.md }}>
               <View>
@@ -96,12 +87,14 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
                 <T v="title" color={left >= 0 ? colors.lime : colors.amber} style={type.num}>{Math.abs(left)} kcal</T>
               </View>
               <MacroLegend n={n} targets={targets} />
-              {onPress && <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0 }}>Hold to change goals</T>}
+              <T v="caption" color={colors.faint} style={{ textTransform: 'none', letterSpacing: 0 }}>Tap for micros{onPress ? ' · hold to change goals' : ''}</T>
             </View>
           </Press>
         </Animated.View>
 
         <Animated.View style={[styles.face, rear]} pointerEvents={back ? 'auto' : 'none'}>
+          {/* A tap anywhere on the micros turns back to the macros; sideways pages through them. */}
+          <Press onPress={flip} haptic={false} label="Back to macros" style={{ flex: 1 }}>
           <ScrollView
             horizontal
             pagingEnabled
@@ -122,10 +115,14 @@ export function NutritionCard({ n, targets, onPress }: { n: Nutrients; targets: 
               </View>
             ))}
           </ScrollView>
-          <PageDots count={PAGES.length} index={Math.min(PAGES.length - 1, page)} color={colors.cyan} />
+          </Press>
+          <Press onPress={flip} haptic={false} label="Back to macros">
+            <Row gap={8} style={{ justifyContent: 'center' }}>
+              <PageDots count={PAGES.length} index={Math.min(PAGES.length - 1, page)} color={colors.cyan} />
+            </Row>
+          </Press>
         </Animated.View>
       </View>
-    </GestureDetector>
     </View>
   );
 }

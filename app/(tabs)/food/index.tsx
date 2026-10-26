@@ -8,7 +8,7 @@ import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-nati
 import { Bell } from '../../../src/components/Bell';
 import { DayFlash, shortDate } from '../../../src/components/DayFlash';
 import { DailyIntake } from '../../../src/components/DailyIntake';
-import { Icon } from '../../../src/components/Icon';
+import { Icon, type IconName } from '../../../src/components/Icon';
 import { NutritionCard } from '../../../src/components/NutritionCard';
 import { Card, Press, Row, Screen, Section, T } from '../../../src/components/ui';
 import type { FoodEntry } from '../../../src/domain/types';
@@ -68,11 +68,12 @@ export default function Food() {
 
       <NutritionCard n={total} targets={s.targets} onPress={() => router.push('/targets')} />
 
-      {/* The one action: scan */}
-      <Press onPress={() => router.push({ pathname: '/scan', params: { date } })} style={{ height: 76, borderRadius: radius.xl, backgroundColor: colors.cyan, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.md }}>
-        <Icon name="barcode.viewfinder" size={28} color={colors.black} />
-        <T v="title" color={colors.black}>Scan food</T>
-      </Press>
+      {/* Adding food: scan first, search or type it in beside it */}
+      <Row gap={space.sm}>
+        <AddButton icon="barcode.viewfinder" label="Scan" main onPress={() => router.push({ pathname: '/scan', params: { date } })} />
+        <AddButton icon="magnifyingglass" label="Search" onPress={() => router.push({ pathname: '/food-search', params: { date } })} />
+        <AddButton icon="square.and.pencil" label="Create" onPress={() => router.push({ pathname: '/food-new', params: { date } })} />
+      </Row>
 
       {recent.length > 0 && (
         <Section title="Quick add">
@@ -138,6 +139,18 @@ function EntryRow({ e, onPress }: { e: FoodEntry; onPress: () => void }) {
           <T v="caption" color={colors.faint}>kcal</T>
         </View>
       </Row>
+    </Press>
+  );
+}
+
+function AddButton({ icon, label, onPress, main }: { icon: IconName; label: string; onPress: () => void; main?: boolean }) {
+  return (
+    <Press onPress={onPress} label={label} style={{
+      flex: main ? 1.25 : 1, height: 52, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+      backgroundColor: main ? colors.cyan : colors.surface2, borderWidth: main ? 0 : 1, borderColor: colors.hairline,
+    }}>
+      <Icon name={icon} size={main ? 19 : 16} color={main ? colors.black : colors.cyan} />
+      <T v="headline" color={main ? colors.black : colors.text}>{label}</T>
     </Press>
   );
 }
