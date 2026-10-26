@@ -18,6 +18,7 @@ function coach(runId: string) {
   let last = 0;
   let warned = false;
   let ended = false;
+  let first = true;
   return () => {
     const s = useStore.getState();
     const run = s.cardioRun;
@@ -31,9 +32,13 @@ function coach(runId: string) {
       last = now;
       say(text);
     };
+    // A run already over when the coach starts (the app reopened on an unsaved run) says nothing.
+    const fresh = first;
+    first = false;
     if (!pos.phase) {
       // After the closing tone.
-      if (!ended) { ended = true; setTimeout(() => say(announce(run.plan, phases, phases.length)), 900); }
+      if (!ended && !fresh) setTimeout(() => say(announce(run.plan, phases, phases.length)), 900);
+      ended = true;
       return;
     }
     if (pos.index !== index) { index = pos.index; verdict = 'on'; since = now; warned = false; }
