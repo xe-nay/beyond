@@ -31,9 +31,11 @@ name: First run, workout, food, progress and cardio
 - waitForAnimationToEnd
 - takeScreenshot: 05c-calendar-back-to-today
 - tapOn: "Train"
+- waitForAnimationToEnd
 - tapOn:
     text: "Start .+"
     index: 0
+    retryTapIfNoChange: true
 - extendedWaitUntil:
     visible: ".*Log warm-up.*"
     timeout: 10000
