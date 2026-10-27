@@ -1,7 +1,7 @@
 // The export: everything logged, laid out on A4 pages. One page model feeds the in-app preview, the
 // PDF (as HTML for expo-print) and a plain-text copy, so the preview shows exactly what is exported.
 import { exercise } from './catalog';
-import { personalRecords, restBefore, sessionMinutes, volumeLoad, working } from './domain/calc';
+import { personalRecords, restBefore, sessionMinutes, setKg, volumeLoad, working } from './domain/calc';
 import { pace } from './domain/intervals';
 import { MICROS } from './domain/micros';
 import { sum } from './domain/nutrition';
@@ -67,7 +67,7 @@ export function buildReport(s: State, from: string, to: string): Page[] {
       count[set.exerciseId] = (count[set.exerciseId] ?? 0) + (set.warmup ? 0 : 1);
       lines.push({
         t: 'cells', dim: set.warmup,
-        cells: [exercise(set.exerciseId)?.name ?? set.exerciseId, set.warmup ? 'W' : String(count[set.exerciseId]), `${set.implements === 2 ? '2 × ' : ''}${w(set.loadKg)}`, String(set.reps), set.rir === null ? '—' : String(set.rir), restBefore(x.sets, idx) ? `${restBefore(x.sets, idx)} s` : '—'],
+        cells: [exercise(set.exerciseId)?.name ?? set.exerciseId, set.warmup ? 'W' : String(count[set.exerciseId]), `${set.implements === 2 ? '2 × ' : ''}${w(setKg(set))}`, String(set.reps), set.rir === null ? '—' : String(set.rir), restBefore(x.sets, idx) ? `${restBefore(x.sets, idx)} s` : '—'],
       });
     });
     if (prs.length) lines.push({ t: 'meta', text: `Records: ${prs.map((p) => exercise(p.exerciseId)?.name).join(', ')}` });

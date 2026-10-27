@@ -7,7 +7,7 @@ import { exercise } from '../../src/catalog';
 import { ExerciseImage } from '../../src/components/ExerciseImage';
 import { Icon } from '../../src/components/Icon';
 import { Button, Card, Chip, Press, Row, Screen, Segmented, Stat, Stepper, T, Toggle } from '../../src/components/ui';
-import { e1rm, groupByExercise, repDrop, restBefore, sessionLoad, sessionMinutes, volumeLoad, working } from '../../src/domain/calc';
+import { e1rm, groupByExercise, repDrop, restBefore, sessionLoad, sessionMinutes, setKg, volumeLoad, working } from '../../src/domain/calc';
 import { formatClock } from '../../src/domain/intervals';
 import { formatWeight, toDisplay, toKg } from '../../src/domain/plates';
 import type { WorkoutSet } from '../../src/domain/types';
@@ -50,7 +50,7 @@ export default function SessionDetail() {
       {groupByExercise(x.sets).map((g) => {
         const e = exercise(g.exerciseId);
         const drop = repDrop(g.sets);
-        const best = Math.max(0, ...working(g.sets).map((y) => e1rm(y.loadKg, y.reps) ?? 0));
+        const best = Math.max(0, ...working(g.sets).map((y) => e1rm(setKg(y), y.reps) ?? 0));
         let n = 0;
         return (
           <Card key={g.exerciseId}>
@@ -69,7 +69,7 @@ export default function SessionDetail() {
                   <Press onPress={() => editing && setOpen(open === y.id ? null : y.id)} haptic={false} disabled={!editing}>
                     <Row style={[{ justifyContent: 'space-between', paddingVertical: 4 }, editing && { paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: open === y.id ? alpha(colors.cyan, 0.1) : colors.surface2 }]}>
                       <T v="label" color={y.warmup ? colors.amber : colors.dim} style={{ width: 24 }}>{label}</T>
-                      <T v="headline" style={[type.num, { flex: 1 }]}>{y.implements === 2 ? '2 × ' : ''}{formatWeight(y.loadKg, unit)} {unit} × {y.reps}</T>
+                      <T v="headline" style={[type.num, { flex: 1 }]}>{y.implements === 2 ? '2 × ' : ''}{formatWeight(setKg(y), unit)} {unit} × {y.reps}</T>
                       <T v="label" color={colors.dim} style={type.num}>{y.rir !== null ? `RIR ${y.rir}` : ''}{rest ? ` · ${formatClock(rest)} rest` : ''}</T>
                       {editing && <Icon name={open === y.id ? 'chevron.down' : 'pencil'} size={13} color={colors.cyan} style={{ marginLeft: 8 }} />}
                     </Row>
@@ -94,9 +94,13 @@ function SetEditor({ set, unit, onChange, onDelete, onCopy }: { set: WorkoutSet;
   return (
     <Animated.View entering={FadeIn.duration(160)} style={{ gap: space.md, paddingVertical: space.md }}>
       <Row>
-        <Stepper label={set.implements === 2 ? `Weight each (${unit})` : `Weight (${unit})`} value={shown} onChange={(v) => onChange({ loadKg: toKg(Math.max(0, v), unit) })} step={step} min={0} max={1000} format={(v) => formatWeight(toKg(v, unit), unit)} />
+        <Stepper label={set.implements === 2 ? `Weight each (${unit})` : set.bodyKg !== undefined ? `Added (${unit})` : `Weight (${unit})`} value={shown} onChange={(v) => onChange({ loadKg: toKg(Math.max(0, v), unit) })} step={step} min={0} max={1000} format={(v) => formatWeight(toKg(v, unit), unit)} />
         <Stepper label="Reps" value={set.reps} onChange={(reps) => onChange({ reps })} min={0} max={100} />
       </Row>
+      {set.bodyKg !== undefined && (
+        // Bodyweight: the weight above is what was added; the body's share counts on top.
+        <T v="footnote" color={colors.faint}>Plus {formatWeight(set.bodyKg, unit)} {unit} of body weight: counts as {formatWeight(setKg(set), unit)} {unit} a rep.</T>
+      )}
       {set.implements !== undefined && (
         // Dumbbells: the weight is per dumbbell; volume counts both when there are two.
         <View style={{ gap: 6 }}>

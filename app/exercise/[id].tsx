@@ -5,7 +5,7 @@ import { byId, EQUIPMENT_LABEL, exercises, loadKind } from '../../src/catalog';
 import { BodyMap } from '../../src/components/BodyMap';
 import { ExerciseImage } from '../../src/components/ExerciseImage';
 import { Card, Chip, Press, Row, Screen, Section, Stat, T } from '../../src/components/ui';
-import { bestSet, planSets, REGION_NAMES, strengthTrend } from '../../src/domain/calc';
+import { bestSet, planSets, REGION_NAMES, setKg, strengthTrend } from '../../src/domain/calc';
 import { formatClock } from '../../src/domain/intervals';
 import { dumbbellStep, formatWeight, roundTo, toDisplay, toKg } from '../../src/domain/plates';
 import type { Prescription } from '../../src/domain/types';
@@ -82,7 +82,7 @@ export default function ExerciseDetail() {
         <Card>
           <Row style={{ justifyContent: 'space-between' }}>
             {best && <Stat small label="Best e1RM" value={formatWeight(best.e1rm, unit)} unit={unit} color={colors.lime} />}
-            {best && <Stat small label="Best set" value={`${formatWeight(best.set.loadKg, unit)}×${best.set.reps}`} />}
+            {best && <Stat small label="Best set" value={`${formatWeight(setKg(best.set), unit)}×${best.set.reps}`} />}
           </Row>
           {trend.length > 1 && <LineChart data={trend.map((t) => t.value)} height={90} />}
         </Card>

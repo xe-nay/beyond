@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { LoadKind } from '../catalog';
-import { BARS, dumbbellStep, loadBarbell, roundTo, toDisplay, toKg, type Plate } from '../domain/plates';
+import { BARS, dumbbellStep, formatWeight, loadBarbell, roundTo, toDisplay, toKg, type Plate } from '../domain/plates';
 import type { Unit } from '../domain/types';
 import { alpha, colors, radius, space, type } from '../theme';
 import { Icon } from './Icon';
@@ -384,15 +384,26 @@ export function StackView({ kg, unit, onPick, pulse = 0 }: { kg: number; unit: U
 const formatNum = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
 
 /** The weight picker shown in a workout: visual + number + steps + kg/lb switch (+ one/two for dumbbells). */
-export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count = 1, onCount, motion }: {
+export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count = 1, onCount, motion, body }: {
   kg: number; onChange: (kg: number) => void; unit: Unit; onUnit: (u: Unit) => void; kind: LoadKind; pulse?: number;
   count?: 1 | 2; onCount?: (n: 1 | 2) => void; motion?: Motion;
+  /** Bodyweight exercises: the share of body weight moved and the lifter's weight; `kg` is then the added load. */
+  body?: { share: number | null; weightKg: number | null; band: boolean };
 }) {
   const display = toDisplay(kg, unit);
   const step = kind === 'barbell' ? (unit === 'kg' ? 2.5 : 5) : kind === 'dumbbell' ? dumbbellStep(unit, display) : kind === 'kettlebell' ? (unit === 'kg' ? 4 : 5) : unit === 'kg' ? 2.5 : 5;
   const [text, setText] = useState<string | null>(null);
   const set = (d: number) => onChange(Math.max(0, toKg(roundTo(d, unit === 'kg' ? 0.25 : 0.5), unit)));
-  const label = kind === 'bodyweight' ? (kg > 0 ? `+${formatNum(display)}` : 'BW') : formatNum(display);
+  // A bodyweight exercise shows what it moves: its share of body weight plus any added load.
+  const bodyPart = body?.share && body.weightKg ? body.share * body.weightKg : null;
+  const label = kind !== 'bodyweight' ? formatNum(display)
+    : bodyPart !== null && !body?.band ? formatWeight(bodyPart + kg, unit)
+    : kg > 0 ? `+${formatNum(display)}` : body?.band ? 'Band' : 'BW';
+  const bodyText = !body || kind !== 'bodyweight' ? null
+    : body.band ? (kg > 0 ? 'Band plus added load' : 'Band')
+    : body.share && body.weightKg ? `${Math.round(body.share * 100)}% of your ${formatNum(toDisplay(body.weightKg, unit))} ${unit} body weight${kg > 0 ? ` + ${formatNum(display)} ${unit}` : ''}`
+    : body.share ? `Moves ${Math.round(body.share * 100)}% of body weight · add your weight in Progress to count it`
+    : kg > 0 ? 'Body weight plus added load' : 'Body weight';
   const paired = kind === 'dumbbell' || kind === 'kettlebell';
 
   return (
@@ -405,7 +416,7 @@ export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count =
         {kind === 'bodyweight' && (
           <View style={{ alignItems: 'center', gap: space.sm }}>
             <Icon name="figure.strengthtraining.traditional" size={64} color={colors.cyan} weight="light" />
-            <T v="label" color={colors.dim}>{kg > 0 ? 'Body weight plus added load' : 'Body weight'}</T>
+            <T v="label" color={colors.dim} style={{ textAlign: 'center' }}>{bodyText ?? (kg > 0 ? 'Body weight plus added load' : 'Body weight')}</T>
           </View>
         )}
       </View>}
@@ -428,12 +439,14 @@ export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count =
                 // Sized to its digits so "102.5" never loses a character.
                 const len = String(text ?? label).length;
                 const size = len <= 3 ? 64 : len === 4 ? 56 : 46;
-                return { color: colors.text, textAlign: 'center', fontSize: size, lineHeight: size * 1.15, width: Math.max(90, len * size * 0.64 + 16), padding: 0 };
+                // Letters ("BW", "Band") are wider than digits.
+                const per = /^[+\d.,]*$/.test(String(text ?? label)) ? 0.64 : 0.86;
+                return { color: colors.text, textAlign: 'center', fontSize: size, lineHeight: size * 1.15, width: Math.max(90, len * size * per + 16), padding: 0 };
               })()]}
             />
             <T v="headline" color={colors.dim}>{unit}</T>
           </Row>
-          <T v="caption" color={colors.faint}>{paired ? `each · ± ${step} ${unit}` : `± ${step} ${unit}`}</T>
+          <T v="caption" color={colors.faint}>{paired ? `each · ± ${step} ${unit}` : bodyPart !== null && kind === 'bodyweight' && !body?.band ? `added ${formatNum(display)} ${unit} · ± ${step} ${unit}` : `± ${step} ${unit}`}</T>
         </View>
         <Press onPress={() => set(display + step)} style={styles.bigStep} hitSlop={6}><Icon name="plus" size={20} /></Press>
       </Row>

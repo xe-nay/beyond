@@ -47,7 +47,9 @@ export function loadForRir(set: { loadKg: number; reps: number; rir: number | nu
 export const rirToRpe = (rir: number | null) => (rir === null || rir < 0 || rir > 4 ? null : 10 - rir);
 
 /** Total load moved in a set: two 20 kg dumbbells count as 40 kg. */
-export const totalLoad = (s: WorkoutSet) => s.loadKg * (s.implements ?? 1);
+export const totalLoad = (s: WorkoutSet) => s.loadKg * (s.implements ?? 1) + (s.bodyKg ?? 0);
+/** The weight shown for a set: per dumbbell or kettlebell, and with the body weight a bodyweight exercise moves. */
+export const setKg = (s: Pick<WorkoutSet, 'loadKg' | 'bodyKg'>) => s.loadKg + (s.bodyKg ?? 0);
 export const volumeLoad = (sets: WorkoutSet[]) => working(sets).reduce((n, s) => n + totalLoad(s) * s.reps, 0);
 export const totalReps = (sets: WorkoutSet[]) => working(sets).reduce((n, s) => n + s.reps, 0);
 
@@ -215,23 +217,31 @@ export function previousSets(sessions: Session[], exerciseId: string, excludeId?
 
 export interface Advice { kind: 'increase' | 'reps' | 'hold' | 'reduce' | 'start'; title: string; basis: string; nextKg: number | null }
 
-/** Double progression: add load after every set reaches the top of the range at or above the target RIR, twice in a row. */
-export function progression(sessions: Session[], p: Prescription, stepKg = 2.5): Advice {
+/**
+ * Double progression: add load after every set reaches the top of the range at or above the target RIR,
+ * twice in a row. Bodyweight exercises (`bw`) start from reps, and load is added with a vest or belt.
+ */
+export function progression(sessions: Session[], p: Prescription, stepKg = 2.5, bw = false): Advice {
   const recent = sessions
     .filter((s) => s.finishedAt && working(s.sets).some((x) => x.exerciseId === p.exerciseId))
     .sort((a, b) => b.finishedAt!.localeCompare(a.finishedAt!))
     .slice(0, 2)
     .map((s) => working(s.sets).filter((x) => x.exerciseId === p.exerciseId));
-  if (!recent.length) return { kind: 'start', title: 'Find your working weight', basis: `Pick a load you can lift ${p.maxReps} times with about ${p.rir} reps left.`, nextKg: p.loadKg };
+  if (!recent.length) {
+    return bw
+      ? { kind: 'start', title: 'Find your reps', basis: `Do clean reps up to ${p.maxReps}, stopping with about ${p.rir} left.`, nextKg: p.loadKg }
+      : { kind: 'start', title: 'Find your working weight', basis: `Pick a load you can lift ${p.maxReps} times with about ${p.rir} reps left.`, nextKg: p.loadKg };
+  }
   const last = recent[0];
   const load = last[0].loadKg;
+  const kg = (n: number) => (bw ? (n > 0 ? `+${n} kg` : 'body weight') : `${n} kg`);
   const top = (sets: WorkoutSet[]) => sets.length >= p.sets && sets.every((x) => x.reps >= p.maxReps && (x.rir ?? 0) >= p.rir && x.loadKg === load);
   if (recent.length === 2 && recent.every(top))
-    return { kind: 'increase', title: `Go up to ${load + stepKg} kg`, basis: `Two sessions with all ${p.sets} sets at ${p.maxReps}+ reps and ${p.rir}+ RIR at ${load} kg.`, nextKg: load + stepKg };
+    return { kind: 'increase', title: bw ? `Add ${stepKg} kg (vest or belt) or a harder variation` : `Go up to ${load + stepKg} kg`, basis: `Two sessions with all ${p.sets} sets at ${p.maxReps}+ reps and ${p.rir}+ RIR at ${kg(load)}.`, nextKg: load + stepKg };
   const failed = last.filter((x) => x.reps < p.minReps).length;
   if (failed >= Math.ceil(last.length / 2))
-    return { kind: 'reduce', title: `Hold or drop to ${Math.max(0, load - stepKg)} kg`, basis: `${failed} of ${last.length} sets fell below ${p.minReps} reps last time.`, nextKg: Math.max(0, load - stepKg) };
-  return { kind: 'reps', title: `Stay at ${load} kg, add reps`, basis: `Aim for ${p.maxReps} reps on every set before adding load.`, nextKg: load };
+    return { kind: 'reduce', title: bw && load <= 0 ? 'Hold, or use an easier variation' : `Hold or drop to ${kg(Math.max(0, load - stepKg))}`, basis: `${failed} of ${last.length} sets fell below ${p.minReps} reps last time.`, nextKg: Math.max(0, load - stepKg) };
+  return { kind: 'reps', title: `Stay at ${kg(load)}, add reps`, basis: `Aim for ${p.maxReps} reps on every set before adding load.`, nextKg: load };
 }
 
 export type PRKind = 'first' | 'weight' | 'e1rm' | 'reps' | 'volume';

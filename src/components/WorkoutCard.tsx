@@ -12,7 +12,7 @@ import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedVal
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { byId, exercise } from '../catalog';
-import { groupByExercise, personalRecords, REGION_NAMES, sessionMinutes, volumeLoad, working, type PR } from '../domain/calc';
+import { groupByExercise, personalRecords, REGION_NAMES, sessionMinutes, setKg, volumeLoad, working, type PR } from '../domain/calc';
 import { formatClock } from '../domain/intervals';
 import { formatWeight, toDisplay } from '../domain/plates';
 import type { Prescription, Region, Session, WorkoutSet } from '../domain/types';
@@ -166,7 +166,7 @@ export function Pill({ text, strong, muted, tint }: { text: string; strong?: boo
 
 /** One set as done: "60 × 12" (both dumbbells "2×24"), its RIR, warm-ups faint. */
 function SetChip({ s, unit }: { s: WorkoutSet; unit: 'kg' | 'lb' }) {
-  const w = `${s.implements === 2 ? '2×' : ''}${formatWeight(s.loadKg, unit)}`;
+  const w = `${s.implements === 2 ? '2×' : ''}${formatWeight(setKg(s), unit)}`;
   return <Pill text={`${s.warmup ? 'W ' : ''}${w} × ${s.reps}${s.rir !== null && !s.warmup ? ` · ${s.rir}` : ''}`} muted={s.warmup} strong={!s.warmup} />;
 }
 

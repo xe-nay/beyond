@@ -11,12 +11,13 @@ import { Icon } from '../src/components/Icon';
 import { motionFor, WeightControl } from '../src/components/LoadVisual';
 import { RestBar } from '../src/components/RestBar';
 import { Button, Card, Divider, Press, Row, Stepper, T, thud } from '../src/components/ui';
-import { e1rm, e1rmWithRir, fatigueIndex, loadForRir, planSets, previousSets, progression, repDrop, rirToRpe, volumeLoad, working } from '../src/domain/calc';
+import { bodyShare } from '../src/domain/bodyweight';
+import { e1rm, e1rmWithRir, fatigueIndex, loadForRir, planSets, previousSets, progression, repDrop, rirToRpe, setKg, volumeLoad, working } from '../src/domain/calc';
 import { formatClock } from '../src/domain/intervals';
 import { dumbbellStep, formatWeight, roundTo, toDisplay, toKg } from '../src/domain/plates';
 import type { WorkoutSet } from '../src/domain/types';
 import { prepareAudio } from '../src/sound';
-import { useStore } from '../src/store';
+import { latestWeight, useStore } from '../src/store';
 import { alpha, colors, radius, space, type } from '../src/theme';
 
 interface Draft { kg: number; reps: number; rir: number | null; warmup: boolean; implements: 1 | 2; workKg?: number }
@@ -62,10 +63,16 @@ export default function Workout() {
   const ex = p ? exercise(p.exerciseId) : undefined;
   const kind = loadKind(ex);
   const unit = s.profile.unit;
+  // Bodyweight exercises count the share of body weight they move (see domain/bodyweight.ts).
+  const share = bodyShare(ex);
+  const weighed = latestWeight(s);
+  const bodyNow = share && weighed ? Math.round(share.share * weighed * 10) / 10 : 0;
+  // A set's weight as shown; a bodyweight set with nothing to count says what it is instead of 0.
+  const kgText = (kg: number) => (kind === 'bodyweight' && kg <= 0 ? (ex?.equipment === 'band' ? 'Band' : 'BW') : formatWeight(kg, unit));
   const done = p ? session.sets.filter((x) => x.exerciseId === p.exerciseId) : [];
   const doneWork = working(done);
   const prev = p ? previousSets(history, p.exerciseId, session.id) : [];
-  const advice = p ? progression(history, p) : null;
+  const advice = p ? progression(history, p, 2.5, kind === 'bodyweight') : null;
   // Snaps a weight to what the equipment allows (plates, dumbbell steps).
   const snap = (kg: number) => {
     const v = toDisplay(kg, unit);
@@ -237,7 +244,7 @@ export default function Workout() {
             {advice && (
               <Row gap={space.sm}>
                 <Icon name={advice.kind === 'increase' ? 'arrow.up.right' : 'wand.and.stars'} size={15} color={advice.kind === 'increase' ? colors.lime : colors.cyan} />
-                <T v="label" color={colors.dim} style={{ flex: 1 }}>{advice.title}{prev.length ? ` · last ${prev.map((x) => `${formatWeight(x.loadKg, unit)}×${x.reps}`).join(', ')}` : ''}</T>
+                <T v="label" color={colors.dim} style={{ flex: 1 }}>{advice.title}{prev.length ? ` · last ${prev.map((x) => `${kgText(setKg(x))}×${x.reps}`).join(', ')}` : ''}</T>
               </Row>
             )}
 
@@ -268,7 +275,7 @@ export default function Workout() {
                   <Row style={[styles.setRow, editing === w.id && styles.setEditing]}>
                     <T v="label" color={colors.amber} style={{ width: 28, fontWeight: '700' }}>W{wi + 1}</T>
                     <T v="label" color={colors.faint} style={{ flex: 1 }}>Warm-up</T>
-                    <T v="headline" style={[type.num, { width: 92, textAlign: 'right' }]}>{w.implements === 2 ? '2×' : ''}{formatWeight(w.loadKg, unit)} × {w.reps}</T>
+                    <T v="headline" style={[type.num, { width: 92, textAlign: 'right' }]}>{w.implements === 2 ? '2×' : ''}{kgText(setKg(w))} × {w.reps}</T>
                     <View style={{ width: 40 }} />
                     <Press onPress={() => s.deleteSet(session.id, w.id)} style={{ width: 34, alignItems: 'flex-end' }}><Icon name="xmark" size={12} color={colors.faint} /></Press>
                   </Row>
@@ -298,9 +305,9 @@ export default function Workout() {
                     <Press onPress={() => set && editSet(set)} haptic={false} disabled={!set}>
                       <Row style={[styles.setRow, next && styles.setNext, editing === set?.id && styles.setEditing]}>
                         <T v="label" color={next ? colors.cyan : colors.dim} style={{ width: 28, fontWeight: '700' }}>{i + 1}</T>
-                        <T v="label" color={colors.faint} style={[type.num, { flex: 1 }]}>{pv ? `${formatWeight(pv.loadKg, unit)}×${pv.reps}` : '—'}</T>
+                        <T v="label" color={colors.faint} style={[type.num, { flex: 1 }]}>{pv ? `${kgText(setKg(pv))}×${pv.reps}` : '—'}</T>
                         <T v="headline" color={set ? colors.text : colors.faint} style={[type.num, { width: 92, textAlign: 'right' }]}>
-                          {set ? `${set.implements === 2 ? '2×' : ''}${formatWeight(set.loadKg, unit)} × ${set.reps}` : `${draft.implements === 2 && (kind === 'dumbbell' || kind === 'kettlebell') ? '2×' : ''}${formatWeight(workingKg, unit)} × ${next ? draft.reps : pv?.reps ?? p.maxReps}`}
+                          {set ? `${set.implements === 2 ? '2×' : ''}${kgText(setKg(set))} × ${set.reps}` : `${draft.implements === 2 && (kind === 'dumbbell' || kind === 'kettlebell') ? '2×' : ''}${kgText(workingKg + bodyNow)} × ${next ? draft.reps : pv?.reps ?? p.maxReps}`}
                         </T>
                         <T v="label" color={colors.dim} style={[type.num, { width: 40, textAlign: 'right' }]}>{set ? set.rir ?? '—' : ''}</T>
                         <View style={{ width: 34, alignItems: 'flex-end' }}>
@@ -329,6 +336,7 @@ export default function Workout() {
             {/* Load + reps + effort */}
             <Card style={{ gap: space.xl }}>
               <WeightControl kg={draft.kg} onChange={(kg) => setDraft({ kg })} unit={unit} onUnit={(u) => s.setProfile({ unit: u })} kind={kind} pulse={pulse}
+                body={kind === 'bodyweight' ? { share: share?.share ?? null, weightKg: weighed, band: ex.equipment === 'band' } : undefined}
                 count={draft.implements} onCount={(n) => setDraft({ implements: n })} motion={motionFor(ex.name, ex.group)} />
               <Divider />
               <Row>

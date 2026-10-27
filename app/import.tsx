@@ -102,7 +102,7 @@ export default function Import() {
                   />
                   <T v="footnote" color={colors.dim}>
                     {mode === 'replace'
-                      ? `Everything planned between these dates is removed${removing.length ? ` (${plural(removing.length, 'planned session')})` : ''} and the file's plan goes in. Days with nothing in the file become rest days.${result.doneInPeriod ? ` Your ${plural(result.doneInPeriod, 'logged session')} stay.` : ' Logged workouts always stay.'}`
+                      ? `Everything planned between these dates is removed${removing.length ? ` (${plural(removing.length, 'planned session')})` : ''} and the file's plan goes in. Days with nothing in the file become rest days.${result.doneInPeriod ? ` Your ${plural(result.doneInPeriod, 'logged session')} ${result.doneInPeriod === 1 ? 'stays' : 'stay'}.` : ' Logged workouts always stay.'}`
                       : 'Your plans stay. Where a day already has something, choose below: yours, the import, or both.'}
                   </T>
                   {mode === 'replace' && plan?.rest.days.length ? <T v="footnote" color={colors.cyan}>{plural(plan.rest.days.length, 'rest day')} in this period</T> : null}

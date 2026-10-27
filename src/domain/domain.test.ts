@@ -440,3 +440,37 @@ test('import: warm-ups written out per exercise replace the default ramp', async
   assert.equal(p.warmupSets, 3);
   assert.deepEqual(planSets(p, [], (kg) => kg).warmups.map((w) => [w.kg, w.reps]), [[32, 10], [48, 6], [64, 3]]);
 });
+
+test('bodyweight exercises move their share of body weight, holds and bands none', async () => {
+  const { bodyShare, bodyKg, bodyWeightOn, fillBodyKg } = await import('./bodyweight.ts');
+  const ex = (name: string, extra: Partial<Exercise> = {}) => ({ id: name, name, equipment: 'bodyweight', category: 'strength', force: 'push', ...extra }) as Exercise;
+  assert.equal(bodyShare(ex('Push-Up'))?.share, 0.66);
+  assert.equal(bodyShare(ex('Knee Push Ups'))?.share, 0.52);
+  assert.equal(bodyShare(ex('Decline Push-Up'))?.share, 0.72);
+  assert.equal(bodyShare(ex('Archer Pull Ups', { force: 'pull' }))?.share, 0.96);
+  assert.equal(bodyShare(ex('Behind-the-Neck Pull-Up', { force: 'pull' }))?.share, 0.96);
+  assert.equal(bodyShare(ex('Step-up with Knee Raise'))?.share, 0.89);
+  assert.equal(bodyShare(ex('Hanging Leg Raise', { force: 'pull' }))?.share, 0.41);
+  assert.equal(bodyShare(ex('Bodyweight Squat'))?.share, 0.77);
+  assert.equal(bodyShare(ex('Plank', { force: 'static' })), null);
+  assert.equal(bodyShare(ex('Band Pull Apart', { equipment: 'band' })), null);
+  assert.equal(bodyKg(ex('Push-Up'), 80), 52.8);
+  const body = [{ date: '2026-09-01', weightKg: 80 }, { date: '2026-10-01', weightKg: 78 }];
+  assert.equal(bodyWeightOn(body, '2026-09-20T10:00:00Z'), 80);
+  assert.equal(bodyWeightOn(body, '2026-08-01T10:00:00Z'), 80);
+  const byId = { 'Pull-Up': ex('Pull-Up', { force: 'pull' }), 'bench-press': ex('Bench', { equipment: 'barbell' }) };
+  const old = [session('2026-10-02', [set(10, 0, 2, { exerciseId: 'Pull-Up', completedAt: '2026-10-02T10:00:00Z' }), set(8, 60)])];
+  const filled = fillBodyKg(old, body, byId);
+  assert.equal(filled[0].sets[0].bodyKg, 74.9);
+  assert.equal(filled[0].sets[1].bodyKg, undefined);
+  assert.equal(fillBodyKg(filled, body, byId), filled);
+});
+
+test('body weight counts in load, volume and records', async () => {
+  const { totalLoad, volumeLoad, setKg } = await import('./calc.ts');
+  const pull = set(10, 5, 2, { exerciseId: 'Pull-Up', bodyKg: 76.8 });
+  assert.equal(setKg(pull), 81.8);
+  assert.equal(totalLoad(pull), 81.8);
+  assert.equal(Math.round(volumeLoad([pull])), 818);
+  assert.equal(progression([], { exerciseId: 'Pull-Up', sets: 3, minReps: 6, maxReps: 10, rir: 2, restSeconds: 120, loadKg: null } as Prescription, 2.5, true).title, 'Find your reps');
+});

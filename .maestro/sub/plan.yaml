@@ -17,9 +17,9 @@ name: Your plan, end to end
 - takeScreenshot: 30-import-preview
 - tapOn: "Replace this period"
 - scrollUntilVisible:
-    element: "Replace with.*"
+    element: "(.*, )?Replace with.*"
     direction: DOWN
-- tapOn: "Replace with.*"
+- tapOn: "(.*, )?Replace with.*"
 - waitForAnimationToEnd
 
 # Today shows the imported workout with its body map and every exercise.

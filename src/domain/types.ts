@@ -104,6 +104,7 @@ export interface WorkoutSet {
   rir: number | null;
   warmup: boolean;
   implements?: 1 | 2; // dumbbells or kettlebells used at once; loadKg is per implement
+  bodyKg?: number; // bodyweight exercises: the share of body weight moved, from the weight on that day (loadKg is then the added load)
   completedAt: string;
   restSeconds: number | null; // measured rest before this set
 }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { byId } from './catalog';
+import { bodyKg, fillBodyKg } from './domain/bodyweight';
 import { sum } from './domain/nutrition';
 import { generateProgram, TEMPLATES } from './domain/program';
 import { doseNutrients, formatDose } from './domain/supplements';
@@ -147,7 +148,9 @@ export const useStore = create<State>((set, get) => ({
 
   hydrate() {
     const saved = loadJson<Partial<Data>>('state.json');
-    set({ ...initial, ...saved, profile: { ...initial.profile, ...saved?.profile }, timer: { ...initial.timer, ...saved?.timer }, ready: true });
+    const data = { ...initial, ...saved };
+    // Bodyweight sets logged before body weight counted in their load get it from the weight on their day.
+    set({ ...data, sessions: fillBodyKg(data.sessions, data.body, byId), profile: { ...initial.profile, ...saved?.profile }, timer: { ...initial.timer, ...saved?.timer }, ready: true });
   },
   set(patch) { set(patch); },
   setProfile(patch) { set((s) => ({ profile: { ...s.profile, ...patch } })); },
@@ -221,7 +224,9 @@ export const useStore = create<State>((set, get) => ({
     // started; over 30 minutes it was a break, not rest.
     const since = last ? Math.round((Date.now() - Date.parse(last.completedAt)) / 1000) : null;
     const rest = since !== null && since > 0 && since <= 1800 ? since : null;
-    const entry: WorkoutSet = { ...input, id: uid(), completedAt: new Date().toISOString(), restSeconds: rest };
+    // A bodyweight exercise counts the share of body weight it moves, at today's weight.
+    const body = input.bodyKg ?? bodyKg(byId[input.exerciseId], latestWeight(s));
+    const entry: WorkoutSet = { ...input, ...(body !== null ? { bodyKg: body } : {}), id: uid(), completedAt: new Date().toISOString(), restSeconds: rest };
     set({ sessions: mapSession(s.sessions, sessionId, (x) => ({ ...x, sets: [...x.sets, entry] })) });
     return entry;
   },
@@ -320,7 +325,12 @@ export const useStore = create<State>((set, get) => ({
 
   saveCardio(c) { set((s) => ({ cardio: s.cardio.some((x) => x.id === c.id) ? s.cardio.map((x) => (x.id === c.id ? c : x)) : [...s.cardio, c] })); },
   deleteCardio(id) { set((s) => ({ cardio: s.cardio.filter((x) => x.id !== id) })); },
-  saveBody(b) { set((s) => ({ body: [...s.body.filter((x) => x.id !== b.id), b].sort((a, z) => a.date.localeCompare(z.date)) })); },
+  saveBody(b) {
+    set((s) => {
+      const body = [...s.body.filter((x) => x.id !== b.id), b].sort((a, z) => a.date.localeCompare(z.date));
+      return { body, sessions: fillBodyKg(s.sessions, body, byId) };
+    });
+  },
   deleteBody(id) { set((s) => ({ body: s.body.filter((x) => x.id !== id) })); },
   saveCheck(c) { set((s) => ({ checks: [...s.checks.filter((x) => x.date !== c.date), c] })); },
 
