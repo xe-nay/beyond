@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../src/components/Icon';
 import { Button, Press, Row, T } from '../src/components/ui';
 import { fdcByBarcode } from '../src/domain/fdc';
+import { upcName, type Named } from '../src/domain/upcitemdb';
 import { lookupBarcode } from '../src/domain/nutrition';
 import { useStore } from '../src/store';
 import { alpha, colors, radius, space } from '../src/theme';
@@ -16,7 +17,7 @@ import { alpha, colors, radius, space } from '../src/theme';
 const TYPES: BarcodeType[] = ['ean13', 'ean8', 'upc_a', 'upc_e'];
 const BOX = { w: 280, h: 170 };
 
-type Phase = { kind: 'scanning' } | { kind: 'looking'; code: string } | { kind: 'missing'; code: string; name: string | null } | { kind: 'offline'; code: string };
+type Phase = { kind: 'scanning' } | { kind: 'looking'; code: string } | { kind: 'missing'; code: string; name: string | null; brand?: string | null; image?: string | null } | { kind: 'offline'; code: string };
 
 /** Variants of the same product code: iOS reports UPC-A as EAN-13 with a leading zero. */
 const variants = (code: string) => [...new Set([code, code.length === 13 && code.startsWith('0') ? code.slice(1) : null, code.length === 12 ? `0${code}` : null].filter(Boolean) as string[])];
@@ -82,8 +83,12 @@ export default function Scan() {
         return open(code);
       }
     }
+    // Third: a product directory with names from many countries (no values); it names the product for
+    // the search and for creating it.
+    let named: Named | null = null;
+    if (!offline) named = await upcName(code).catch(() => null);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-    setPhase(offline ? { kind: 'offline', code } : { kind: 'missing', code, name });
+    setPhase(offline ? { kind: 'offline', code } : { kind: 'missing', code, name: name ?? named?.name ?? null, brand: named?.brand ?? null, image: named?.image ?? null });
   };
 
   const again = () => {
@@ -155,7 +160,7 @@ export default function Scan() {
               <T v="label" color={colors.dim}>{phase.name ? `${phase.name} has no nutrition facts yet.` : `No product for ${phase.code}.`} Find it by name and it will open instantly next time you scan it.</T>
             </View>
             <Button icon="magnifyingglass" title="Search by name" onPress={() => router.replace({ pathname: '/food-search', params: { barcode: phase.code, q: phase.name ?? '', date: date ?? '', meal: meal ?? '' } })} />
-            <Button kind="secondary" icon="pencil" title="Create from the label" onPress={() => router.replace({ pathname: '/food-new', params: { barcode: phase.code, q: phase.name ?? '', date: date ?? '', meal: meal ?? '' } })} />
+            <Button kind="secondary" icon="pencil" title="Create from the label" onPress={() => router.replace({ pathname: '/food-new', params: { barcode: phase.code, q: phase.name ?? '', brand: phase.brand ?? '', image: phase.image ?? '', date: date ?? '', meal: meal ?? '' } })} />
             <Button kind="ghost" title="Scan again" onPress={again} />
           </Animated.View>
         )}

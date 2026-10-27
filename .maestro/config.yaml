@@ -1,0 +1,8 @@
+# The walkthrough first (it onboards a new user), then the plan, which builds on it.
+flows:
+  - "*.yaml"
+executionOrder:
+  continueOnFailure: true
+  flowsOrder:
+    - "First run, workout, food, progress and cardio"
+    - "Your plan, end to end"

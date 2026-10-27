@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useScreenOn } from '../src/keepAwake';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition, ZoomIn, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +11,7 @@ import { Icon } from '../src/components/Icon';
 import { motionFor, WeightControl } from '../src/components/LoadVisual';
 import { RestBar } from '../src/components/RestBar';
 import { Button, Card, Divider, Press, Row, Stepper, T, thud } from '../src/components/ui';
-import { e1rm, e1rmWithRir, fatigueIndex, loadForRir, previousSets, progression, repDrop, rirToRpe, volumeLoad, working } from '../src/domain/calc';
+import { e1rm, e1rmWithRir, fatigueIndex, loadForRir, planSets, previousSets, progression, repDrop, rirToRpe, volumeLoad, working } from '../src/domain/calc';
 import { formatClock } from '../src/domain/intervals';
 import { dumbbellStep, formatWeight, roundTo, toDisplay, toKg } from '../src/domain/plates';
 import type { WorkoutSet } from '../src/domain/types';
@@ -19,7 +19,12 @@ import { prepareAudio } from '../src/sound';
 import { useStore } from '../src/store';
 import { alpha, colors, radius, space, type } from '../src/theme';
 
-interface Draft { kg: number; reps: number; rir: number | null; warmup: boolean; implements: 1 | 2 }
+interface Draft { kg: number; reps: number; rir: number | null; warmup: boolean; implements: 1 | 2; workKg?: number }
+
+// Rest after a warm-up set: shorter between warm-ups, a little longer before the first working set.
+// App defaults; studies on warm-ups set the loads, not these rests.
+const WARM_REST = 60;
+const LAST_WARM_REST = 90;
 
 export default function Workout() {
   useScreenOn('workout');
@@ -34,6 +39,13 @@ export default function Workout() {
   const [pulse, setPulse] = useState(0);
   const [, tick] = useState(0);
   const scroll = useRef<ScrollView>(null);
+  const strip = useRef<ScrollView>(null);
+  const chips = useRef<Record<number, { x: number; w: number }>>({});
+  const { width: screenW } = useWindowDimensions();
+  useEffect(() => {
+    const c = chips.current[index];
+    if (c) strip.current?.scrollTo({ x: Math.max(0, c.x + c.w / 2 - screenW / 2), animated: true });
+  }, [index, screenW]);
 
   useEffect(() => {
     prepareAudio();
@@ -54,6 +66,15 @@ export default function Workout() {
   const doneWork = working(done);
   const prev = p ? previousSets(history, p.exerciseId, session.id) : [];
   const advice = p ? progression(history, p) : null;
+  // Snaps a weight to what the equipment allows (plates, dumbbell steps).
+  const snap = (kg: number) => {
+    const v = toDisplay(kg, unit);
+    const step = kind === 'dumbbell' || kind === 'kettlebell' ? dumbbellStep(unit, v) : unit === 'kg' ? 2.5 : 5;
+    return toKg(roundTo(v, step), unit);
+  };
+  // This exercise's plan with weights: the warm-up ramp and the working weight (see planSets).
+  const planned = p ? planSets(p, history, snap) : null;
+  const warmLogged = done.filter((x) => x.warmup).length;
 
   // Where the numbers start: this session's last set (the weight carries forward), else the same
   // set from last time, else the coach's suggestion, else the program, else a sensible default.
@@ -62,19 +83,27 @@ export default function Workout() {
     if (!p) return 0;
     const last = doneWork[doneWork.length - 1];
     if (last) return last.loadKg;
+    if (planned?.workKg) return planned.workKg;
     if (advice?.kind === 'increase' && advice.nextKg) return advice.nextKg;
     if (prevAt(0)) return prevAt(0).loadKg;
     if (p.loadKg !== null) return p.loadKg;
     return kind === 'barbell' ? 20 : kind === 'bodyweight' ? 0 : kind === 'kettlebell' ? 12 : 10;
   };
   const drafts = session.drafts ?? {};
+  const baseKg = fallbackKg();
+  const firstWarm = planned && !doneWork.length && !warmLogged ? planned.warmups[0] : undefined;
   const draft: Draft = (p && drafts[p.exerciseId]) ?? {
-    kg: fallbackKg(),
-    reps: prevAt(doneWork.length)?.reps ?? doneWork[doneWork.length - 1]?.reps ?? p?.maxReps ?? 10,
+    kg: firstWarm ? snap(baseKg * firstWarm.share) : baseKg,
+    reps: firstWarm ? firstWarm.reps : prevAt(doneWork.length)?.reps ?? doneWork[doneWork.length - 1]?.reps ?? p?.maxReps ?? 10,
     rir: p?.rir ?? 2,
-    warmup: false,
+    warmup: !!firstWarm,
     implements: doneWork[doneWork.length - 1]?.implements ?? prevAt(0)?.implements ?? defaultImplements(ex),
+    ...(firstWarm ? { workKg: baseKg } : {}),
   };
+  // The working weight, also while a warm-up is being entered; the warm-ups ramp up to it.
+  const workingKg = draft.warmup ? draft.workKg ?? baseKg : draft.kg;
+  const ramp = (planned?.warmups ?? []).map((w) => ({ ...w, kg: snap(workingKg * w.share) }));
+  const workReps = prevAt(doneWork.length)?.reps ?? doneWork[doneWork.length - 1]?.reps ?? p?.maxReps ?? 10;
   // The weight for the next set's reps at the program's RIR, from the latest set that has an RIR.
   const aim = (() => {
     if (!p || draft.warmup || kind === 'bodyweight') return null;
@@ -102,8 +131,14 @@ export default function Workout() {
     s.logSet(session.id, { exerciseId: p.exerciseId, loadKg: draft.kg, reps: draft.reps, rir: draft.warmup ? null : draft.rir, warmup: draft.warmup, implements: kind === 'dumbbell' || kind === 'kettlebell' ? draft.implements : undefined });
     thud();
     setPulse((n) => n + 1);
+    if (draft.warmup) {
+      const nextWarm = ramp[warmLogged + 1];
+      if (s.timer.autoStart) s.startRest(nextWarm ? WARM_REST : LAST_WARM_REST, p.exerciseId, session.id);
+      return setDraft(nextWarm
+        ? { kg: nextWarm.kg, reps: nextWarm.reps }
+        : { warmup: false, kg: draft.workKg ?? baseKg, reps: workReps, workKg: undefined });
+    }
     // Same weight for the next set; reps start from what that set did last time.
-    if (draft.warmup) return setDraft({ warmup: false });
     setDraft({ reps: prev[doneWork.length + 1]?.reps ?? draft.reps });
 
     // Supersets: go to the next exercise in the group that still has sets; rest after a full round.
@@ -152,19 +187,21 @@ export default function Workout() {
       </View>
 
       {/* Exercise strip */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.md }} style={{ flexGrow: 0 }}>
+      <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.md }} style={{ flexGrow: 0 }}>
         {plan.map((x, i) => {
           const e = exercise(x.exerciseId);
           const n = working(session.sets.filter((y) => y.exerciseId === x.exerciseId)).length;
           const full = n >= x.sets;
           return (
-            <Press key={`${x.exerciseId}-${i}`} onPress={() => { setIndex(i); setEditing(null); }} style={[styles.chip, i === index && styles.chipOn]}>
+            <View key={`${x.exerciseId}-${i}`} onLayout={(e) => { chips.current[i] = { x: e.nativeEvent.layout.x, w: e.nativeEvent.layout.width }; if (i === index && strip.current) strip.current.scrollTo({ x: Math.max(0, e.nativeEvent.layout.x + e.nativeEvent.layout.width / 2 - screenW / 2), animated: false }); }}>
+            <Press onPress={() => { setIndex(i); setEditing(null); }} style={[styles.chip, i === index && styles.chipOn]}>
               {e && <ExerciseImage exercise={e} thumb style={{ width: 28, height: 28, borderRadius: 8 }} />}
               <View>
                 <T v="label" numberOfLines={1} style={{ maxWidth: 110, fontWeight: '600' }} color={i === index ? colors.text : colors.dim}>{e?.name ?? x.exerciseId}</T>
                 <T v="caption" color={full ? colors.lime : colors.faint}>{n}/{x.sets}{x.superset ? ` · ${x.superset}` : ''}</T>
               </View>
             </Press>
+            </View>
           );
         })}
         <Press onPress={() => router.push({ pathname: '/library', params: { pick: 'session' } })} style={[styles.chip, styles.addChip]}>
@@ -226,10 +263,10 @@ export default function Workout() {
                 <T v="caption" color={colors.faint} style={{ width: 40, textAlign: 'right' }}>RIR</T>
                 <View style={{ width: 34 }} />
               </Row>
-              {warmups.map((w) => (
+              {warmups.map((w, wi) => (
                 <Press key={w.id} onPress={() => editSet(w)} haptic={false}>
                   <Row style={[styles.setRow, editing === w.id && styles.setEditing]}>
-                    <T v="label" color={colors.amber} style={{ width: 28, fontWeight: '700' }}>W</T>
+                    <T v="label" color={colors.amber} style={{ width: 28, fontWeight: '700' }}>W{wi + 1}</T>
                     <T v="label" color={colors.faint} style={{ flex: 1 }}>Warm-up</T>
                     <T v="headline" style={[type.num, { width: 92, textAlign: 'right' }]}>{w.implements === 2 ? '2×' : ''}{formatWeight(w.loadKg, unit)} × {w.reps}</T>
                     <View style={{ width: 40 }} />
@@ -237,9 +274,25 @@ export default function Workout() {
                   </Row>
                 </Press>
               ))}
+              {ramp.slice(warmLogged).map((w, k) => {
+                const on = k === 0 && draft.warmup;
+                return (
+                  <Press key={`pw${warmLogged + k}`} haptic={false} onPress={() => setDraft({ warmup: true, workKg: draft.warmup ? draft.workKg : draft.kg, kg: w.kg, reps: w.reps })}>
+                    <Row style={[styles.setRow, on && { backgroundColor: alpha(colors.amber, 0.08) }]}>
+                      <T v="label" color={colors.amber} style={{ width: 28, fontWeight: '700' }}>W{warmLogged + k + 1}</T>
+                      <T v="label" color={colors.faint} style={{ flex: 1 }}>Warm-up · {Math.round(w.share * 100)}%</T>
+                      <T v="headline" color={on ? colors.text : colors.faint} style={[type.num, { width: 92, textAlign: 'right' }]}>{formatWeight(w.kg, unit)} × {w.reps}</T>
+                      <View style={{ width: 40 }} />
+                      <View style={{ width: 34, alignItems: 'flex-end' }}>
+                        <View style={[styles.check, { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: on ? colors.amber : colors.hairlineStrong }]} />
+                      </View>
+                    </Row>
+                  </Press>
+                );
+              })}
               {rows.map((set, i) => {
                 const pv = prev[i];
-                const next = !set && i === doneWork.length;
+                const next = !set && i === doneWork.length && !draft.warmup;
                 return (
                   <Animated.View key={set?.id ?? `p${i}`} layout={reduced ? undefined : LinearTransition.duration(200)}>
                     <Press onPress={() => set && editSet(set)} haptic={false} disabled={!set}>
@@ -247,7 +300,7 @@ export default function Workout() {
                         <T v="label" color={next ? colors.cyan : colors.dim} style={{ width: 28, fontWeight: '700' }}>{i + 1}</T>
                         <T v="label" color={colors.faint} style={[type.num, { flex: 1 }]}>{pv ? `${formatWeight(pv.loadKg, unit)}×${pv.reps}` : '—'}</T>
                         <T v="headline" color={set ? colors.text : colors.faint} style={[type.num, { width: 92, textAlign: 'right' }]}>
-                          {set ? `${set.implements === 2 ? '2×' : ''}${formatWeight(set.loadKg, unit)} × ${set.reps}` : `${draft.implements === 2 && (kind === 'dumbbell' || kind === 'kettlebell') ? '2×' : ''}${formatWeight(draft.kg, unit)} × ${next ? draft.reps : pv?.reps ?? p.maxReps}`}
+                          {set ? `${set.implements === 2 ? '2×' : ''}${formatWeight(set.loadKg, unit)} × ${set.reps}` : `${draft.implements === 2 && (kind === 'dumbbell' || kind === 'kettlebell') ? '2×' : ''}${formatWeight(workingKg, unit)} × ${next ? draft.reps : pv?.reps ?? p.maxReps}`}
                         </T>
                         <T v="label" color={colors.dim} style={[type.num, { width: 40, textAlign: 'right' }]}>{set ? set.rir ?? '—' : ''}</T>
                         <View style={{ width: 34, alignItems: 'flex-end' }}>
@@ -295,7 +348,9 @@ export default function Workout() {
                 </Row>
               </View>
               <Row>
-                <Press onPress={() => setDraft({ warmup: !draft.warmup })} style={[styles.toggle, draft.warmup && { borderColor: colors.amber, backgroundColor: alpha(colors.amber, 0.12) }]}>
+                <Press onPress={() => (draft.warmup
+                  ? setDraft({ warmup: false, kg: draft.workKg ?? draft.kg, reps: workReps, workKg: undefined })
+                  : setDraft({ warmup: true, workKg: draft.kg, kg: ramp[warmLogged]?.kg ?? snap(draft.kg * 0.5), reps: ramp[warmLogged]?.reps ?? 8 }))} style={[styles.toggle, draft.warmup && { borderColor: colors.amber, backgroundColor: alpha(colors.amber, 0.12) }]}>
                   <T v="label" color={draft.warmup ? colors.amber : colors.dim}>Warm-up set</T>
                 </Press>
               </Row>

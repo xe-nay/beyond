@@ -34,13 +34,51 @@ let current: AudioPlayer | null = null;
 let ready = false;
 let cap: ReturnType<typeof setTimeout> | null = null;
 
+// Two ways to share the audio with other apps. "duck" lowers their music while a cue plays (and lets it
+// come back after); "mix" leaves it untouched, for the silent loop that keeps the app awake.
+let mode: 'duck' | 'mix' | null = null;
+async function audioMode(m: 'duck' | 'mix') {
+  if (mode === m) return;
+  mode = m;
+  try {
+    await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: m === 'duck' ? 'duckOthers' : 'mixWithOthers', shouldPlayInBackground: true });
+  } catch {}
+}
+
 export async function prepareAudio() {
   if (ready) return;
   ready = true;
-  try {
-    await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'duckOthers', shouldPlayInBackground: true });
-  } catch {}
+  await audioMode(keeper ? 'mix' : 'duck');
 }
+
+let keeper: AudioPlayer | null = null;
+/**
+ * A silent loop that keeps the app running during a workout or cardio session, with the phone locked
+ * or another app in front, so the rest countdown and its sounds play on time (iOS gives running time
+ * to apps that play audio). It mixes with other audio, so music is not touched.
+ */
+export async function keepAlive(on: boolean) {
+  if (on && keeper) {
+    // Back after an interruption (a call): start the loop again.
+    try { if (!keeper.playing) keeper.play(); } catch {}
+    return;
+  }
+  if (on) {
+    await audioMode('mix');
+    try {
+      const k = createAudioPlayer(S.silence);
+      k.loop = true;
+      k.play();
+      keeper = k;
+    } catch {}
+  } else if (keeper) {
+    try { keeper.pause(); (keeper as any).remove?.(); } catch {}
+    keeper = null;
+    await audioMode('duck');
+  }
+}
+/** Whether the app is being kept awake (its sounds then play in the background, no notification needed). */
+export const awake = () => !!keeper;
 
 function player(key: string, source: number | string) {
   let p = players.get(key);
@@ -76,6 +114,15 @@ function start(key: string, source: number | string, seconds?: number, full = fa
     current = p;
     if (cap) clearTimeout(cap);
     cap = seconds ? setTimeout(() => current === p && stopCue(), seconds * 1000) : null;
+    if (keeper && key !== 'silence') {
+      audioMode('duck');
+      const sub = p.addListener('playbackStatusUpdate', (st: any) => {
+        if (!st?.didJustFinish) return;
+        sub.remove();
+        if (current === p) current = null;
+        if (keeper && !current) audioMode('mix');
+      });
+    }
     whenLoaded(p, () => {
       if (current !== p) return;
       p.seekTo(0).then(() => p.play()).catch(() => p.play());
@@ -89,6 +136,7 @@ export function stopCue() {
     current?.pause();
   } catch {}
   current = null;
+  if (keeper) audioMode('mix');
 }
 
 export function buzz(kind: 'tick' | 'end') {

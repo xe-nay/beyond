@@ -43,7 +43,7 @@ export function RestBar() {
         <Press onPress={() => (rest.paused !== null ? resumeRest() : pauseRest())} style={styles.btn}>
           <Icon name={rest.paused !== null ? 'play.fill' : 'pause.fill'} size={15} />
         </Press>
-        <Press onPress={stopRest} style={[styles.btn, { backgroundColor: alpha(colors.cyan, 0.16) }]}>
+        <Press onPress={stopRest} label="Skip rest" style={[styles.btn, { backgroundColor: alpha(colors.cyan, 0.16) }]}>
           <Icon name="forward.fill" size={15} color={colors.cyan} />
         </Press>
       </Row>

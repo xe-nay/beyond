@@ -1,0 +1,79 @@
+# Your training plan, end to end: import it, start today's workout, warm-ups and their rests, a working
+# set, discard, and the plan still there; then log a food and remove it. The plan (scripts/test-plan.mjs)
+# is put on the simulator's clipboard by CI before this runs.
+appId: app.beyond.fitness
+name: Your plan, end to end
+---
+- launchApp
+- tapOn: "Train"
+- tapOn: "Import"
+- tapOn: "Paste"
+- tapOn:
+    text: "Allow Paste"
+    optional: true
+- waitForAnimationToEnd
+- assertVisible: "Test Upper"
+- takeScreenshot: 30-import-preview
+- tapOn: "Replace this period"
+- scrollUntilVisible:
+    element: "Replace with.*"
+    direction: DOWN
+- tapOn: "Replace with.*"
+- waitForAnimationToEnd
+
+# Today shows the imported workout with its body map and every exercise.
+- tapOn: "Today"
+- waitForAnimationToEnd
+- assertVisible: "Test Upper"
+- takeScreenshot: 31-today-planned
+- scrollUntilVisible:
+    element: "Start workout"
+    direction: DOWN
+- tapOn: "Start workout"
+- waitForAnimationToEnd
+
+# The planned warm-ups are in the session, and the first one is ready to log.
+- assertVisible: "W1"
+- assertVisible: "W2"
+- takeScreenshot: 32-workout-warmups
+- scrollUntilVisible:
+    element: "Log warm-up"
+    direction: DOWN
+- tapOn: "Log warm-up"
+- assertVisible: "Rest"
+- takeScreenshot: 33-rest-after-warmup
+- tapOn: "Skip rest"
+- tapOn: "Log warm-up"
+- tapOn: "Skip rest"
+# After the last warm-up, the working weight (not the warm-up's) is loaded.
+- assertVisible: "Complete set 1"
+- takeScreenshot: 34-first-working-set
+- tapOn: "Complete set 1"
+- tapOn: "Skip rest"
+- takeScreenshot: 35-after-a-set
+
+# Discarding keeps the workout planned for today.
+- tapOn: "Finish"
+- tapOn: "Discard"
+- waitForAnimationToEnd
+- assertVisible: "Test Upper"
+- scrollUntilVisible:
+    element: "Start workout"
+    direction: DOWN
+- takeScreenshot: 36-discard-keeps-the-plan
+
+# Food: search, add, then remove it.
+- tapOn: "Food"
+- tapOn: "Search"
+- inputText: "egg"
+- waitForAnimationToEnd
+- tapOn: "Egg, whole"
+- tapOn: "Add .* kcal"
+- waitForAnimationToEnd
+- assertVisible: "Egg, whole"
+- takeScreenshot: 37-food-logged
+- tapOn: "Egg, whole"
+- tapOn: "Remove from diary"
+- waitForAnimationToEnd
+- assertNotVisible: "Egg, whole"
+- takeScreenshot: 38-food-removed

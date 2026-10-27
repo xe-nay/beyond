@@ -20,11 +20,11 @@ const FIELDS: { key: string; label: string; unit: string; sub?: boolean; require
 
 /** A food typed from its label, for products no database knows. Linked to the scanned barcode when there is one. */
 export default function NewFood() {
-  const { barcode, q, date, meal } = useLocalSearchParams<{ barcode?: string; q?: string; date?: string; meal?: string }>();
+  const { barcode, q, brand: knownBrand, image, date, meal } = useLocalSearchParams<{ barcode?: string; q?: string; brand?: string; image?: string; date?: string; meal?: string }>();
   const router = useRouter();
   const s = useStore();
   const [name, setName] = useState(q ?? '');
-  const [brand, setBrand] = useState('');
+  const [brand, setBrand] = useState(knownBrand ?? '');
   const [basis, setBasis] = useState<'g' | 'ml'>('g');
   const [serving, setServing] = useState('');
   const [v, setV] = useState<Record<string, string>>({});
@@ -40,7 +40,7 @@ export default function NewFood() {
     const id = barcode || `custom-${uid()}`;
     const size = parseFloat(serving.replace(',', '.'));
     const food: Food = {
-      id, barcode: barcode || null, name: name.trim(), brand: brand.trim() || null, image: null, basis,
+      id, barcode: barcode || null, name: name.trim(), brand: brand.trim() || null, image: image || null, basis,
       per100: { kcal: kcal!, protein: num('protein')!, carbs: num('carbs')!, fat: num('fat')!, sugar: num('sugar'), fiber: num('fiber'), satFat: num('satFat'), salt: num('salt') },
       servingSize: Number.isFinite(size) && size > 0 ? size : null, servingLabel: null, nutriScore: null, nova: null, favorite: false, lastUsed: new Date().toISOString(),
     };

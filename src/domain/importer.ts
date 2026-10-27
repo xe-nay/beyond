@@ -127,6 +127,17 @@ export function readIntervals(iv: any): IntervalPlan | string {
   return plan;
 }
 
+/** Warm-ups from an import: [{ "percent": 50, "reps": 8 }, ...]; null when absent or unreadable. */
+function warmups(v: unknown): { share: number; reps: number }[] | null {
+  if (!Array.isArray(v) || !v.length) return null;
+  const out = v.slice(0, 6).flatMap((w: any) => {
+    const pct = Number(w?.percent ?? (w?.share !== undefined ? Number(w.share) * 100 : NaN));
+    const reps = Math.round(Number(w?.reps));
+    return pct > 0 && pct <= 100 && reps >= 1 && reps <= 30 ? [{ share: Math.round(pct) / 100, reps }] : [];
+  });
+  return out.length ? out : null;
+}
+
 export function parseTrainingFile(text: string, all: Exercise[], existing: { sessions: Session[]; cardio: CardioSession[] }): ImportResult {
   const out: ImportResult = { sessions: [], cardio: [], rows: [], errors: [], rest: [], period: null, plannedInPeriod: [], doneInPeriod: 0 };
   let file: any;
@@ -200,7 +211,8 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
         rir: clamp(x.rir ?? 2, 0, 5),
         restSeconds: clamp(+x.restSeconds || 120, 15, 600),
         loadKg: x.loadKg ?? null,
-        warmupSets: clamp(+x.warmupSets || 0, 0, 5),
+        warmupSets: Array.isArray(x.warmups) && x.warmups.length ? Math.min(6, x.warmups.length) : clamp(+x.warmupSets || 0, 0, 5),
+        ...(warmups(x.warmups) ? { warmups: warmups(x.warmups)! } : {}),
         superset: x.superset || undefined,
       });
     }

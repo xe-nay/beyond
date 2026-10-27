@@ -9,6 +9,8 @@ import '../src/gps'; // registers the background location task before iOS delive
 import '../src/reminders'; // plans daily intake reminders and handles their buttons
 import '../src/live'; // the Lock Screen and Dynamic Island view of a live session
 import '../src/cardioCoach'; // spoken phases, rounds and pace during guided cardio
+import '../src/keepAlive'; // keeps rest and cardio sounds going with the phone locked
+import '../src/intakeLive'; // the daily intake reminder on the Lock Screen, with Taken and Skip
 import { screenOptions, sheet } from '../src/nav';
 import { prepareAudio } from '../src/sound';
 import { useStore } from '../src/store';

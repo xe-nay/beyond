@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Icon } from '../src/components/Icon';
 import { Button, Chip, Divider, Press, Row, Stepper, T, Toggle } from '../src/components/ui';
 import { endLive, liveStatus, startLive } from '../modules/live-activity';
+import { resyncLive } from '../src/live';
 import { formatClock } from '../src/domain/intervals';
 import type { Cue } from '../src/domain/types';
 import { downloadPack, englishVoices, packReady, playClip, playCountdown, playVoice, prepareAudio, say } from '../src/sound';
@@ -22,7 +23,8 @@ export default function TimerSettings() {
   const testIsland = async () => {
     await startLive('Beyond', { mode: 'rest', title: 'Test', subtitle: 'Dynamic Island check', symbol: 'timer', accent: '#40E0F0', endsAt: Date.now() + 15000, total: 15 });
     setIsland(liveStatus());
-    setTimeout(() => { endLive().then(() => setIsland(liveStatus())); }, 16000);
+    // Afterwards the workout or cardio in progress, if any, gets its island back.
+    setTimeout(() => { endLive().then(resyncLive).then(() => setIsland(liveStatus())); }, 16000);
   };
   const muted = t.muted ?? [];
   const current = pack(t.cue);

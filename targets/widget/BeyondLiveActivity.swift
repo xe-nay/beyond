@@ -17,6 +17,19 @@ private extension Color {
   }
 }
 
+/// A rest past its end shows as over by itself: with the phone locked the app may not get to update it.
+private func shown(_ s: State, stale: Bool) -> State {
+  guard stale, s.mode == "rest" else { return s }
+  var x = s
+  x.mode = "lift"
+  x.title = "Rest over"
+  x.symbol = "bolt.fill"
+  x.accent = "#C2F95C"
+  x.endsAt = nil
+  x.total = 0
+  return x
+}
+
 private struct Clock: View {
   let state: State
   var body: some View {
@@ -96,9 +109,9 @@ private struct LockScreen: View {
 struct BeyondLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: BeyondActivityAttributes.self) { context in
-      LockScreen(state: context.state)
+      LockScreen(state: shown(context.state, stale: context.isStale))
     } dynamicIsland: { context in
-      let s = context.state
+      let s = shown(context.state, stale: context.isStale)
       let accent = Color(hex: s.accent)
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {

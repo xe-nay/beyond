@@ -421,9 +421,22 @@ test('planned sets: warm-up ramp up to the weight that should leave the target R
   const r = planSets(p, [done], (kg) => Math.round(kg / 2.5) * 2.5);
   // 60 × 10 with 4 left = 14 possible; 10 reps at RIR 2 = 12 possible: heavier.
   assert.equal(r.workKg, 62.5);
-  assert.deepEqual(r.warmups.map((w) => [w.kg, w.reps]), [[32.5, 8], [47.5, 4]]);
+  assert.deepEqual(r.warmups.map((w) => [w.kg, w.reps]), [[25, 6], [50, 4]]);
   assert.equal(r.working.length, 3);
   assert.equal(r.working[0].reps, '8–12');
   assert.equal(planSets({ ...p, loadKg: 70 }, [done], (kg) => kg).workKg, 70);
   assert.equal(planSets(p, [], (kg) => kg).workKg, null);
+});
+
+test('import: warm-ups written out per exercise replace the default ramp', async () => {
+  const { parseTrainingFile } = await import('./importer.ts');
+  const { planSets } = await import('./calc.ts');
+  const all = [{ id: 'bench-press', name: 'Barbell Bench Press', primary: [], secondary: [], equipment: 'barbell' }] as any;
+  const file = JSON.stringify({ format: 'beyond-training', version: 1, id: 'w', entries: [
+    { id: 'a', date: '2030-01-01', type: 'strength', exercises: [{ name: 'Bench Press', sets: 3, minReps: 6, maxReps: 10, loadKg: 80, warmups: [{ percent: 40, reps: 10 }, { percent: 60, reps: 6 }, { percent: 80, reps: 3 }] }] },
+  ] });
+  const r = parseTrainingFile(file, all, { sessions: [], cardio: [] });
+  const p = r.sessions[0].plan[0];
+  assert.equal(p.warmupSets, 3);
+  assert.deepEqual(planSets(p, [], (kg) => kg).warmups.map((w) => [w.kg, w.reps]), [[32, 10], [48, 6], [64, 3]]);
 });

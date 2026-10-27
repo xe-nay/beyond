@@ -73,6 +73,8 @@ export interface Prescription {
   restSeconds: number;
   loadKg: number | null;
   warmupSets?: number;
+  /** Warm-ups written out: each a share of the working weight (0.5 = 50%) and its reps. Wins over the default ramp. */
+  warmups?: { share: number; reps: number }[];
   superset?: string;
 }
 

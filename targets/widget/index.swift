@@ -5,5 +5,6 @@ import WidgetKit
 struct BeyondWidgets: WidgetBundle {
   var body: some Widget {
     BeyondLiveActivity()
+    IntakeLiveActivity()
   }
 }

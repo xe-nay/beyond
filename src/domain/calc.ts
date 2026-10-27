@@ -287,11 +287,15 @@ export function restBefore(sets: WorkoutSet[], i: number) {
   return s > 0 && s <= 1800 ? Math.round(s) : null;
 }
 
-/** Warm-up ramps by number of warm-up sets: share of the working weight and reps. */
+/**
+ * Warm-up ramps by number of warm-up sets: share of the working weight and reps. Two sets follow
+ * Ribeiro et al. (2021: 40% and 80% of the training load before 3 x 6), with fewer reps on the heavier
+ * one; their review found single warm-ups work best when heavier, hence 70% for one.
+ */
 const RAMPS: [number, number][][] = [
   [],
-  [[0.6, 6]],
-  [[0.5, 8], [0.75, 4]],
+  [[0.7, 5]],
+  [[0.4, 6], [0.8, 4]],
   [[0.4, 8], [0.6, 5], [0.8, 3]],
   [[0.4, 8], [0.55, 5], [0.7, 3], [0.85, 1]],
   [[0.4, 8], [0.5, 5], [0.6, 4], [0.75, 2], [0.85, 1]],
@@ -330,7 +334,7 @@ export function planSets(p: Prescription, sessions: Session[], round: (kg: numbe
     workKg = past[0].loadKg;
     basis = 'Your last weight; log the RIR to get a weight matched to the target.';
   }
-  const ramp = RAMPS[Math.min(5, p.warmupSets ?? 0)];
+  const ramp: [number, number][] = p.warmups?.length ? p.warmups.map((w) => [w.share, w.reps]) : RAMPS[Math.min(5, p.warmupSets ?? 0)];
   return {
     workKg,
     basis,

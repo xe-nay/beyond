@@ -23,6 +23,7 @@ export default function FoodSheet() {
   const [mode, setMode] = useState<'serving' | 'amount'>(entry ? 'amount' : serving ? 'serving' : 'amount');
   const [servings, setServings] = useState(entry && serving ? entry.amount / serving : 1);
   const [grams, setGrams] = useState(entry?.amount ?? serving ?? 100);
+  const [typed, setTyped] = useState<string | null>(null);
   const [meal, setMeal] = useState<Meal>((entry?.meal ?? (params.meal as Meal)) || mealNow());
   const [mealPicked, setMealPicked] = useState(!!entry || !!params.meal);
   const [date, setDate] = useState(entry?.date ?? (params.date || today()));
@@ -94,11 +95,13 @@ export default function FoodSheet() {
             <Press onPress={() => (mode === 'serving' ? setServings(Math.max(0.25, servings - 0.5)) : setGrams(Math.max(1, grams - 10)))} style={styles.step}><Icon name="minus" size={18} /></Press>
             <Row gap={6} style={{ alignItems: 'baseline' }}>
               <TextInput
-                value={shown}
-                onChangeText={(t) => { const v = parseFloat(t.replace(',', '.')); if (Number.isFinite(v)) (mode === 'serving' ? setServings(v) : setGrams(v)); }}
+                // What is being typed is kept as typed (an empty field included), the amount follows each valid number.
+                value={typed ?? shown}
+                onChangeText={(t) => { setTyped(t); const v = parseFloat(t.replace(',', '.')); if (Number.isFinite(v)) (mode === 'serving' ? setServings(v) : setGrams(v)); }}
+                onBlur={() => setTyped(null)}
                 keyboardType="decimal-pad" selectTextOnFocus
                 // Sized to its digits: a fixed width cut "230" down to "23" once the keyboard closed.
-                style={[type.hero as any, { color: colors.text, fontSize: digitSize, lineHeight: digitSize * 1.15, width: shown.length * digitSize * 0.64 + 16, textAlign: 'center', padding: 0 }]}
+                style={[type.hero as any, { color: colors.text, fontSize: digitSize, lineHeight: digitSize * 1.15, width: Math.max(1, (typed ?? shown).length) * digitSize * 0.64 + 16, textAlign: 'center', padding: 0 }]}
               />
               <T v="headline" color={colors.dim}>{mode === 'serving' ? (servings === 1 ? 'serving' : 'servings') : unit}</T>
             </Row>

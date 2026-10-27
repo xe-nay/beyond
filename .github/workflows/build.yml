@@ -44,6 +44,9 @@ jobs:
       - name: Test the training calculations
         run: npm test
 
+      - name: App tests (store, flows, Live Activity order)
+        run: npx jest --ci
+
       - name: Set the version
         run: |
           VERSION="1.0.${{ github.run_number }}"
@@ -181,6 +184,8 @@ jobs:
           curl -fsSL "https://get.maestro.mobile.dev" | bash
           export PATH="$PATH:$HOME/.maestro/bin"
           mkdir -p maestro-output
+          # The plan the second flow imports, dated from today, on the simulator's clipboard.
+          node scripts/test-plan.mjs | xcrun simctl pbcopy "$DEVICE"
           maestro --device "$DEVICE" test .maestro --test-output-dir maestro-output || echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
           xcrun simctl io "$DEVICE" screenshot maestro-output/final.png || true
           # The walkthrough ends mid-cardio. iOS hides an app's own Live Activity while the app is in

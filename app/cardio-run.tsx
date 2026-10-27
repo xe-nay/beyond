@@ -11,7 +11,7 @@ import { Button, Press, Row, Stepper, T } from '../src/components/ui';
 import { elapsed, formatClock, pause, position, resume, skip, timeline, totalSeconds } from '../src/domain/intervals';
 import { cueWords, formatPace, formatPaceRange, paceVerdict, rollingPace, tracksDistance } from '../src/domain/track';
 import { gps, pauseGps, startGps, stopGps } from '../src/gps';
-import { buzz, cancelEnd, prepareAudio, scheduleEnd, stopCue } from '../src/sound';
+import { awake, buzz, cancelEnd, prepareAudio, scheduleEnd, stopCue } from '../src/sound';
 import { useStore } from '../src/store';
 import { alpha, colors, space, type } from '../src/theme';
 
@@ -83,7 +83,7 @@ export default function CardioRun() {
   // Backstop for a locked phone: a notification when the current phase ends. Not with background GPS:
   // the app keeps running then and beeps itself, so a notification would only add noise.
   useEffect(() => {
-    if (!run || run.resumedAt === null || !pos.phase || gpsMode === 'background') return void cancelEnd();
+    if (!run || run.resumedAt === null || !pos.phase || gpsMode === 'background' || awake()) return void cancelEnd();
     const next = phases[pos.index + 1];
     scheduleEnd(Date.now() + pos.remaining * 1000, next ? LABEL[next.kind] : 'Done', next?.cue || run.plan.activity, run.plan.countdown, next ? 'phase' : 'end');
   }, [pos.index, run?.resumedAt, gpsMode]);

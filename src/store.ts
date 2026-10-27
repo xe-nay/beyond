@@ -193,14 +193,15 @@ export const useStore = create<State>((set, get) => ({
   startSession({ dayId, sessionId, empty }) {
     const s = get();
     const open = s.sessions.find((x) => x.id === (sessionId ?? s.activeSession) && !x.finishedAt);
-    if (open && (sessionId || !dayId)) {
+    // No day and not "empty" means "resume"; an empty workout is always a new one.
+    if (open && (sessionId || (!dayId && !empty))) {
       set({ activeSession: open.id, sessions: mapSession(s.sessions, open.id, (x) => ({ ...x, startedAt: x.startedAt ?? new Date().toISOString() })) });
       return open.id;
     }
     // Starting something else: an untouched open workout is dropped, one with sets is saved.
     if (open) {
       if (open.sets.length) get().finishSession(open.id, open.sessionRpe);
-      else if (open.source !== 'import') get().discardSession(open.id);
+      else get().discardSession(open.id);
     }
     const program = s.programs.find((p) => p.id === s.activeProgram);
     const day = program?.days.find((d) => d.id === dayId);
@@ -261,7 +262,12 @@ export const useStore = create<State>((set, get) => ({
     }));
   },
   discardSession(sessionId) {
-    set((s) => ({ sessions: s.sessions.filter((x) => x.id !== sessionId), activeSession: s.activeSession === sessionId ? null : s.activeSession, rest: initial.rest }));
+    // A planned (imported) workout is the plan itself: discarding it puts it back as planned, untouched.
+    set((s) => ({
+      sessions: s.sessions.flatMap((x) => (x.id !== sessionId ? [x] : x.source === 'import' && !x.finishedAt ? [{ ...x, startedAt: null, sets: [], drafts: undefined }] : [])),
+      activeSession: s.activeSession === sessionId ? null : s.activeSession,
+      rest: initial.rest,
+    }));
   },
 
   startRest(seconds, exerciseId, sessionId) {

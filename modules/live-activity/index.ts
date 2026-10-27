@@ -11,6 +11,8 @@ export interface LiveState {
   startedAt?: number | null;
   endsAt?: number | null;
   total: number;
+  /** When the content is out of date by itself (a rest that has ended): the island then shows that, without an update. */
+  staleAt?: number | null;
 }
 
 const native = requireOptionalNativeModule<{
@@ -20,6 +22,11 @@ const native = requireOptionalNativeModule<{
   start(name: string, state: LiveState): Promise<string | null>;
   update(state: LiveState): Promise<void>;
   end(): Promise<void>;
+  startIntake(title: string, items: string[], dueAt: number, slot: string): Promise<string | null>;
+  endIntake(slot: string | null): Promise<void>;
+  intakeSlot(): string | null;
+  takeIntakeAnswers(): string[];
+  addListener(event: 'onIntakeAnswer', listener: () => void): { remove(): void };
 }>('LiveActivity');
 
 let lastError: string | null = null;
@@ -54,3 +61,20 @@ export function liveStatus() {
     return { ok: false, text: String(e?.message ?? e) };
   }
 }
+
+/** The daily intake reminder (Taken / Skip): shows the doses due at a time until answered. */
+export const startIntake = (items: string[], dueAt: number, slot: string) =>
+  native?.startIntake ? native.startIntake('Daily intake', items, dueAt, slot).catch(fail) : Promise.resolve(null);
+export const endIntake = (slot: string | null = null) => native?.endIntake?.(slot).catch(fail) ?? Promise.resolve();
+export const intakeSlot = () => { try { return native?.intakeSlot?.() ?? null; } catch { return null; } };
+/** Answers pressed on the reminder since the last call, as { slot, answer }; each is returned once. */
+export function takeIntakeAnswers(): { date: string; time: string; answer: 'taken' | 'skip' }[] {
+  let raw: string[] = [];
+  try { raw = native?.takeIntakeAnswers?.() ?? []; } catch {}
+  return raw.flatMap((r) => {
+    const [date, time, answer] = r.split('|');
+    return date && time && (answer === 'taken' || answer === 'skip') ? [{ date, time, answer }] : [];
+  });
+}
+/** Called when an answer is pressed while the app is running. */
+export const onIntakeAnswer = (listener: () => void) => { try { return native?.addListener?.('onIntakeAnswer', listener) ?? null; } catch { return null; } };

@@ -4,5 +4,5 @@ module.exports = {
   name: 'BeyondLive',
   displayName: 'Beyond',
   deploymentTarget: '16.2',
-  frameworks: ['SwiftUI', 'WidgetKit', 'ActivityKit'],
+  frameworks: ['SwiftUI', 'WidgetKit', 'ActivityKit', 'AppIntents'],
 };

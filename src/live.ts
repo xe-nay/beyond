@@ -49,6 +49,10 @@ export function liveState(s: State): { name: string; state: LiveState } | null {
         accent: '#40E0F0',
         endsAt: s.rest.endsAt,
         total: s.rest.total,
+        // With the phone locked the app may not get to update the island when the rest ends, so the
+        // island turns itself to "rest over" then, still showing the session's clock.
+        startedAt: session.startedAt ? Date.parse(session.startedAt) : null,
+        staleAt: s.rest.endsAt,
       },
     };
   }
@@ -70,7 +74,24 @@ let running = false;
 let last = '';
 let phaseTimer: ReturnType<typeof setTimeout> | null = null;
 
+let busy = false;
+let again = false;
+/**
+ * Updates go out one at a time; one asked for while another is on its way follows it with the latest
+ * state. Two updates sent together could land out of order and leave the older one showing (the
+ * session clock over a rest that had just started).
+ */
 async function sync() {
+  if (busy) { again = true; return; }
+  busy = true;
+  try {
+    do { again = false; await push(); } while (again);
+  } finally {
+    busy = false;
+  }
+}
+
+async function push() {
   if (!liveAvailable()) return liveLog('sync: Live Activities not available or turned off');
   const s = useStore.getState();
   const next = liveState(s);
@@ -96,4 +117,11 @@ async function sync() {
 useStore.subscribe((s, prev) => {
   if (s.ready && (s.sessions !== prev.sessions || s.rest !== prev.rest || s.cardioRun !== prev.cardioRun || s.activeSession !== prev.activeSession)) sync();
 });
+/** Shows the live session again from scratch (after the Dynamic Island test in Timer settings replaced it). */
+export function resyncLive() {
+  running = false;
+  last = '';
+  return sync();
+}
+
 AppState.addEventListener('change', (st) => st === 'active' && sync());

@@ -11,6 +11,7 @@ import { AppState } from 'react-native';
 
 import { BEEP, installSounds } from './notifySounds';
 import { answered, daysLeft, formatAmount, reminderPlan, restockAt, stockLeft, type Reminder } from './domain/supplements';
+import { intakeSlot } from '../modules/live-activity';
 import { answerSlot } from './intakeActions';
 import type { FoodEntry, InboxItem } from './domain/types';
 import { uid, useStore } from './store';
@@ -78,7 +79,13 @@ async function replan() {
     }
     const plan = [
       ...restockPlan(now),
-      ...reminderPlan(supplements, intakes, now, 10, { skipped, nags: NAGS, max: 44 }),
+      // The time the Live Activity reminder is showing needs no notifications.
+      ...reminderPlan(supplements, intakes, now, 10, { skipped, nags: NAGS, max: 44 }).filter((r) => {
+        const live = intakeSlot();
+        if (!live) return true;
+        const { date, time } = slot(r.id);
+        return `${date}|${time}` !== live;
+      }),
       ...mealPlan(entries, now).slice(0, 14),
     ];
     if (!plan.length) return;
@@ -119,15 +126,17 @@ function mealPlan(entries: FoodEntry[], now: Date): Reminder[] {
   }));
 }
 
-const soon = () => {
+/** Plans the notifications again shortly (also after the Live Activity reminder starts or ends). */
+export const soon = () => {
   if (timer) clearTimeout(timer);
   timer = setTimeout(replan, 800);
 };
 
-// Both buttons work from the Lock Screen without opening the app.
+// The buttons open the app, which applies them: a button that leaves the app closed is not reliably
+// delivered to it (the Live Activity reminder is the way to answer without opening the app).
 Notifications.setNotificationCategoryAsync(CATEGORY, [
-  { identifier: 'taken', buttonTitle: 'Taken', options: { opensAppToForeground: false } },
-  { identifier: 'skip', buttonTitle: 'Skip', options: { opensAppToForeground: false, isDestructive: true } },
+  { identifier: 'taken', buttonTitle: 'Taken', options: { opensAppToForeground: true } },
+  { identifier: 'skip', buttonTitle: 'Skip', options: { opensAppToForeground: true, isDestructive: true } },
 ]).catch(() => {});
 
 /** Acts on a tap or a button; waits for the saved data when the app was started by the tap. */
@@ -147,6 +156,14 @@ function respond(res: Notifications.NotificationResponse) {
 }
 
 Notifications.addNotificationResponseReceivedListener(respond);
+// A tap that started the app may arrive before the listener: the last one is checked once (answers are
+// safe to apply twice).
+Notifications.getLastNotificationResponseAsync?.().then((r) => {
+  if (!r) return;
+  respond(r);
+  // Handled once: not again on the next start.
+  try { Notifications.clearLastNotificationResponse?.(); } catch {}
+}).catch(() => {});
 
 useStore.subscribe((s, prev) => {
   if (s.ready && (s.supplements !== prev.supplements || s.intakes !== prev.intakes || s.skipped !== prev.skipped || s.entries !== prev.entries || s.ready !== prev.ready)) soon();
