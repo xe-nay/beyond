@@ -18,6 +18,7 @@ const S = {
   end: require('../assets/sounds/end.wav'),
   phase: require('../assets/sounds/phase.wav'),
   silence: require('../assets/sounds/silence.wav'),
+  keepalive: require('../assets/sounds/keepalive.wav'),
   'count3-end': require('../assets/sounds/count3-end.m4a'),
   'count5-end': require('../assets/sounds/count5-end.m4a'),
   'count10-end': require('../assets/sounds/count10-end.m4a'),
@@ -52,10 +53,14 @@ export async function prepareAudio() {
 }
 
 let keeper: AudioPlayer | null = null;
+let keeperSub: { remove(): void } | null = null;
 /**
  * A silent loop that keeps the app running during a workout or cardio session, with the phone locked
  * or another app in front, so the rest countdown and its sounds play on time (iOS gives running time
  * to apps that play audio). It mixes with other audio, so music is not touched.
+ *
+ * The loop is 20 seconds long: a 0.1 s clip looped by expo-audio ran dry after about a second on the
+ * iPhone ("waiting with no item to play"), and iOS then suspended the app as soon as it left the screen.
  */
 export async function keepAlive(on: boolean) {
   if (on && keeper) {
@@ -66,13 +71,20 @@ export async function keepAlive(on: boolean) {
   if (on) {
     await audioMode('mix');
     try {
-      const k = createAudioPlayer(S.silence);
+      const k = createAudioPlayer(S.keepalive);
       k.loop = true;
       k.play();
       keeper = k;
+      // If the loop stops by itself while it is still wanted, it is started again at once; without it
+      // iOS suspends the app within a second of it leaving the screen.
+      keeperSub = k.addListener('playbackStatusUpdate', (st: any) => {
+        if (keeper !== k || st?.playing !== false || !st?.isLoaded) return;
+        setTimeout(() => { try { if (keeper === k && !k.playing) k.play(); } catch {} }, 250);
+      });
     } catch {}
   } else if (keeper) {
-    try { keeper.pause(); (keeper as any).remove?.(); } catch {}
+    try { keeperSub?.remove(); keeper.pause(); (keeper as any).remove?.(); } catch {}
+    keeperSub = null;
     keeper = null;
     await audioMode('duck');
   }

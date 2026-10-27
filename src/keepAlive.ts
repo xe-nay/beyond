@@ -14,5 +14,6 @@ useStore.subscribe((s) => {
   on = w;
   keepAlive(w);
 });
-// After a call or another app took the audio, coming back starts the loop again.
-AppState.addEventListener('change', (st) => { if (st === 'active' && on) keepAlive(true); });
+// After a call or another app took the audio, coming back starts the loop again; leaving the app checks
+// it is still playing, in the few seconds iOS gives before suspending an app that plays nothing.
+AppState.addEventListener('change', (st) => { if (on && st !== 'unknown') keepAlive(true); });

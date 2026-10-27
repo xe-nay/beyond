@@ -35,9 +35,24 @@ name: First run, workout, food, progress and cardio
     text: "Start .+"
     index: 0
 - extendedWaitUntil:
-    visible: ".*Complete set 1.*"
+    visible: ".*Log warm-up.*"
     timeout: 10000
 - takeScreenshot: 06-workout
+# The workout opens on its warm-ups; each is logged and its short rest skipped.
+- repeat:
+    while:
+      visible: "Log warm-up"
+    commands:
+      - tapOn: "Log warm-up"
+      - tapOn:
+          text: "Allow"
+          optional: true
+      - tapOn:
+          text: "Skip rest"
+          optional: true
+- extendedWaitUntil:
+    visible: ".*Complete set 1.*"
+    timeout: 10000
 - scroll
 - takeScreenshot: 07-barbell
 - tapOn: ".*Complete set 1.*"
