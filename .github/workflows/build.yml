@@ -170,7 +170,15 @@ jobs:
 
       - name: Boot an iPhone simulator and install the app
         run: |
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ids=[x['udid'] for k,v in sorted(d.items()) if 'iOS' in k for x in v if 'iPhone' in x['name'] and 'Pro' in x['name']]; print(ids[-1])")
+          # The same phone as the user's: an iPhone 14 Pro Max on the newest iOS (26). Created when the runner
+          # does not have one; any iPhone Pro otherwise.
+          RUNTIME=$(xcrun simctl list runtimes available -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS']; print(sorted(r, key=lambda x: [int(n) for n in x['version'].split('.')])[-1]['identifier'])")
+          echo "Runtime: $RUNTIME"
+          DEVICE=$(xcrun simctl create "Beyond iPhone 14 Pro Max" com.apple.CoreSimulator.SimDeviceType.iPhone-14-Pro-Max "$RUNTIME" 2>/dev/null || true)
+          if [ -z "$DEVICE" ]; then
+            DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ids=[x['udid'] for k,v in sorted(d.items()) if 'iOS' in k for x in v if 'iPhone' in x['name'] and 'Pro' in x['name']]; print(ids[-1])")
+          fi
+          xcrun simctl list devices | grep "$DEVICE" || true
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           xcrun simctl boot "$DEVICE"
           xcrun simctl bootstatus "$DEVICE" -b
@@ -183,6 +191,8 @@ jobs:
         run: |
           curl -fsSL "https://get.maestro.mobile.dev" | bash
           export PATH="$PATH:$HOME/.maestro/bin"
+          # The test driver can take a while to start on a fresh simulator.
+          export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
           mkdir -p maestro-output
           # The plan the second flow imports, dated from today, on the simulator's clipboard.
           node scripts/test-plan.mjs | xcrun simctl pbcopy "$DEVICE"

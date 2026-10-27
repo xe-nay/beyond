@@ -96,3 +96,6 @@ name: First run, workout, food, progress and cardio
     point: "83%, 88%"
 - waitForAnimationToEnd
 - takeScreenshot: 17-cardio-work
+
+# Then the plan, end to end (import, warm-ups, rests, discard, food): see sub/plan.yaml.
+- runFlow: sub/plan.yaml
