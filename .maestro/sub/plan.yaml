@@ -25,7 +25,10 @@ name: Your plan, end to end
 # Today shows the imported workout with its body map and every exercise.
 - tapOn: "Today"
 - waitForAnimationToEnd
-- assertVisible: "Test Upper"
+# Today lists what is already done first; the planned workout is further down.
+- scrollUntilVisible:
+    element: "Test Upper"
+    direction: DOWN
 - takeScreenshot: 31-today-planned
 - scrollUntilVisible:
     element: "(.*, )?Start workout"
@@ -57,7 +60,9 @@ name: Your plan, end to end
 - tapOn: "Finish"
 - tapOn: "Discard"
 - waitForAnimationToEnd
-- assertVisible: "Test Upper"
+- scrollUntilVisible:
+    element: "Test Upper"
+    direction: DOWN
 - scrollUntilVisible:
     element: "(.*, )?Start workout"
     direction: DOWN
@@ -69,12 +74,12 @@ name: Your plan, end to end
 - inputText: "egg"
 - waitForAnimationToEnd
 - tapOn: "Egg, whole"
-- tapOn: "Add .* kcal"
+- tapOn: "(.*, )?Add .* kcal"
 - waitForAnimationToEnd
 - assertVisible: "Egg, whole"
 - takeScreenshot: 37-food-logged
 - tapOn: "Egg, whole"
-- tapOn: "Remove from diary"
+- tapOn: "(.*, )?Remove from diary"
 - waitForAnimationToEnd
 - assertNotVisible: "Egg, whole"
 - takeScreenshot: 38-food-removed

@@ -394,16 +394,13 @@ export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count =
   const step = kind === 'barbell' ? (unit === 'kg' ? 2.5 : 5) : kind === 'dumbbell' ? dumbbellStep(unit, display) : kind === 'kettlebell' ? (unit === 'kg' ? 4 : 5) : unit === 'kg' ? 2.5 : 5;
   const [text, setText] = useState<string | null>(null);
   const set = (d: number) => onChange(Math.max(0, toKg(roundTo(d, unit === 'kg' ? 0.25 : 0.5), unit)));
-  // A bodyweight exercise shows what it moves: its share of body weight plus any added load.
-  const bodyPart = body?.share && body.weightKg ? body.share * body.weightKg : null;
-  const label = kind !== 'bodyweight' ? formatNum(display)
-    : bodyPart !== null && !body?.band ? formatWeight(bodyPart + kg, unit)
-    : kg > 0 ? `+${formatNum(display)}` : body?.band ? 'Band' : 'BW';
-  const bodyText = !body || kind !== 'bodyweight' ? null
-    : body.band ? (kg > 0 ? 'Band plus added load' : 'Band')
-    : body.share && body.weightKg ? `${Math.round(body.share * 100)}% of your ${formatNum(toDisplay(body.weightKg, unit))} ${unit} body weight${kg > 0 ? ` + ${formatNum(display)} ${unit}` : ''}`
-    : body.share ? `Moves ${Math.round(body.share * 100)}% of body weight · add your weight in Progress to count it`
-    : kg > 0 ? 'Body weight plus added load' : 'Body weight';
+  // Bodyweight exercises read "BW" (or "Band"), "BW + 10" with added load; the kilograms that adds up to
+  // (the exercise's share of body weight plus the added load) sit underneath.
+  const bw = kind === 'bodyweight';
+  const tag = body?.band ? 'Band' : 'BW';
+  const bodyPart = !body?.band && body?.share && body.weightKg ? body.share * body.weightKg : null;
+  const label = formatNum(display);
+  const adding = bw && (kg > 0 || text !== null);
   const paired = kind === 'dumbbell' || kind === 'kettlebell';
 
   return (
@@ -416,39 +413,67 @@ export function WeightControl({ kg, onChange, unit, onUnit, kind, pulse, count =
         {kind === 'bodyweight' && (
           <View style={{ alignItems: 'center', gap: space.sm }}>
             <Icon name="figure.strengthtraining.traditional" size={64} color={colors.cyan} weight="light" />
-            <T v="label" color={colors.dim} style={{ textAlign: 'center' }}>{bodyText ?? (kg > 0 ? 'Body weight plus added load' : 'Body weight')}</T>
+            <T v="label" color={colors.dim} style={{ textAlign: 'center' }}>{body?.band ? (kg > 0 ? 'Band plus added load' : 'Band') : kg > 0 ? 'Body weight plus added load' : 'Body weight'}</T>
           </View>
         )}
       </View>}
       <Row style={{ justifyContent: 'space-between' }}>
-        <Press onPress={() => set(display - step)} style={styles.bigStep} hitSlop={6}><Icon name="minus" size={20} /></Press>
+        {bw && kg <= 0 ? (
+          // Body weight alone is the floor: nothing to take off, so no minus (the space keeps the number centred).
+          <View style={{ width: 52 }} />
+        ) : (
+          <Press onPress={() => set(display - step)} style={styles.bigStep} hitSlop={6} label={bw ? 'Less added load' : undefined}><Icon name="minus" size={20} /></Press>
+        )}
         <View style={{ alignItems: 'center', flex: 1 }}>
           <Row gap={6} style={{ alignItems: 'baseline', justifyContent: 'center' }}>
-            <TextInput
-              value={text ?? label}
-              onFocus={() => setText(kind === 'bodyweight' && kg === 0 ? '' : formatNum(display))}
-              onChangeText={setText}
-              onBlur={() => {
-                const n = parseFloat((text ?? '').replace(',', '.'));
-                if (Number.isFinite(n)) set(n);
-                setText(null);
-              }}
-              keyboardType="decimal-pad"
-              selectTextOnFocus
-              style={[type.hero as any, (() => {
-                // Sized to its digits so "102.5" never loses a character.
-                const len = String(text ?? label).length;
-                const size = len <= 3 ? 64 : len === 4 ? 56 : 46;
-                // Letters ("BW", "Band") are wider than digits.
-                const per = /^[+\d.,]*$/.test(String(text ?? label)) ? 0.64 : 0.86;
-                return { color: colors.text, textAlign: 'center', fontSize: size, lineHeight: size * 1.15, width: Math.max(90, len * size * per + 16), padding: 0 };
-              })()]}
-            />
-            <T v="headline" color={colors.dim}>{unit}</T>
+            {bw && (
+              <Press onPress={() => kg === 0 && text === null && setText('')} haptic={false} label={kg > 0 ? undefined : 'Add load'}>
+                <T style={[type.hero as any, { color: colors.cyan, fontSize: adding ? 52 : 64, lineHeight: (adding ? 52 : 64) * 1.15 }]}>{tag}</T>
+              </Press>
+            )}
+            {bw && adding && <T style={[type.hero as any, { color: colors.faint, fontSize: 40, lineHeight: 52 * 1.15 }]}>+</T>}
+            {(!bw || adding) && (
+              <TextInput
+                value={text ?? label}
+                autoFocus={bw && text === ''}
+                onFocus={() => setText(formatNum(display))}
+                onChangeText={setText}
+                onBlur={() => {
+                  const n = parseFloat((text ?? '').replace(',', '.'));
+                  if (Number.isFinite(n)) set(n);
+                  else if (bw) set(0);
+                  setText(null);
+                }}
+                keyboardType="decimal-pad"
+                selectTextOnFocus
+                style={[type.hero as any, (() => {
+                  // Sized to its digits so "102.5" never loses a character.
+                  const len = Math.max(1, String(text ?? label).length);
+                  const size = bw ? 52 : len <= 3 ? 64 : len === 4 ? 56 : 46;
+                  return { color: colors.text, textAlign: 'center', fontSize: size, lineHeight: size * 1.15, width: Math.max(bw ? 40 : 90, len * size * 0.64 + 16), padding: 0 };
+                })()]}
+              />
+            )}
+            {(!bw || adding) && <T v="headline" color={colors.dim}>{unit}</T>}
           </Row>
-          <T v="caption" color={colors.faint}>{paired ? `each · ± ${step} ${unit}` : bodyPart !== null && kind === 'bodyweight' && !body?.band ? `added ${formatNum(display)} ${unit} · ± ${step} ${unit}` : `± ${step} ${unit}`}</T>
+          <T v="caption" color={colors.faint}>{paired ? `each · ± ${step} ${unit}` : bw && kg <= 0 ? `+ ${step} ${unit}` : `± ${step} ${unit}`}</T>
+          {bw && !body?.band && body?.share ? (
+            // What the set actually moves, worked out.
+            <View style={styles.moved}>
+              {bodyPart !== null ? (
+                <>
+                  <T v="headline" color={colors.lime} style={type.num}>= {formatWeight(bodyPart + kg, unit)} {unit} moved</T>
+                  <T v="footnote" color={colors.dim} style={[type.num, { textAlign: 'center' }]}>
+                    {Math.round(body.share * 100)}% of {formatNum(toDisplay(body.weightKg!, unit))} {unit}{kg > 0 ? ` + ${label} ${unit}` : ''}
+                  </T>
+                </>
+              ) : (
+                <T v="footnote" color={colors.dim} style={{ textAlign: 'center' }}>Moves {Math.round(body.share * 100)}% of your body weight. Add a weigh-in in Progress to see the kilograms.</T>
+              )}
+            </View>
+          ) : null}
         </View>
-        <Press onPress={() => set(display + step)} style={styles.bigStep} hitSlop={6}><Icon name="plus" size={20} /></Press>
+        <Press onPress={() => set(display + step)} style={styles.bigStep} hitSlop={6} label={bw ? 'Add load' : undefined}><Icon name="plus" size={20} /></Press>
       </Row>
       {paired && onCount && (
         <Segmented
@@ -503,5 +528,6 @@ const styles = StyleSheet.create({
   pin: { position: 'absolute', top: (PLATE - 14) / 2, left: 105 - 7, flexDirection: 'row', alignItems: 'center' },
   pinHead: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.lime, borderWidth: 2, borderColor: '#E9FFC2' },
   pinShaft: { width: 56, height: 8, marginLeft: -2, borderTopRightRadius: 4, borderBottomRightRadius: 4, backgroundColor: '#C9CED8' },
+  moved: { marginTop: space.sm, paddingVertical: 6, paddingHorizontal: space.md, borderRadius: radius.md, backgroundColor: alpha(colors.lime, 0.08), alignItems: 'center', gap: 2 },
   bigStep: { width: 52, height: 52, borderRadius: radius.pill, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline },
 });
