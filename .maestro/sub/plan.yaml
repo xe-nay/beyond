@@ -74,11 +74,23 @@ name: Your plan, end to end
 - inputText: "egg"
 - waitForAnimationToEnd
 - tapOn: ".*Egg, whole.*"
+# The add button is under the serving, meal and time pickers.
+- scrollUntilVisible:
+    element: "(.*, )?Add .* kcal"
+    direction: DOWN
 - tapOn: "(.*, )?Add .* kcal"
+- waitForAnimationToEnd
+# Adding goes back to the search (to add another); swiping the sheet down shows the diary.
+- swipe:
+    start: "50%, 12%"
+    end: "50%, 92%"
 - waitForAnimationToEnd
 - assertVisible: ".*Egg, whole.*"
 - takeScreenshot: 37-food-logged
 - tapOn: ".*Egg, whole.*"
+- scrollUntilVisible:
+    element: "(.*, )?Remove from diary"
+    direction: DOWN
 - tapOn: "(.*, )?Remove from diary"
 - waitForAnimationToEnd
 - assertNotVisible: ".*Egg, whole.*"
