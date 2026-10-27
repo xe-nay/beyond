@@ -41,9 +41,9 @@ name: First run, workout, food, progress and cardio
 # The workout opens on its warm-ups; each is logged and its short rest skipped.
 - repeat:
     while:
-      visible: "Log warm-up"
+      visible: ".*Log warm-up.*"
     commands:
-      - tapOn: "Log warm-up"
+      - tapOn: ".*Log warm-up.*"
       - tapOn:
           text: "Allow"
           optional: true

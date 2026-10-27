@@ -37,18 +37,18 @@ name: Your plan, end to end
 - assertVisible: "W2"
 - takeScreenshot: 32-workout-warmups
 - scrollUntilVisible:
-    element: "Log warm-up"
+    element: ".*Log warm-up.*"
     direction: DOWN
-- tapOn: "Log warm-up"
+- tapOn: ".*Log warm-up.*"
 - assertVisible: "Rest"
 - takeScreenshot: 33-rest-after-warmup
 - tapOn: "Skip rest"
-- tapOn: "Log warm-up"
+- tapOn: ".*Log warm-up.*"
 - tapOn: "Skip rest"
 # After the last warm-up, the working weight (not the warm-up's) is loaded.
-- assertVisible: "Complete set 1"
+- assertVisible: ".*Complete set 1.*"
 - takeScreenshot: 34-first-working-set
-- tapOn: "Complete set 1"
+- tapOn: ".*Complete set 1.*"
 - tapOn: "Skip rest"
 - takeScreenshot: 35-after-a-set
 
