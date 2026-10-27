@@ -6,8 +6,9 @@ name: Your plan, end to end
 ---
 - launchApp
 - tapOn: "Train"
-- tapOn: "Import"
-- tapOn: "Paste"
+- waitForAnimationToEnd
+- tapOn: "(.*, )?Import"
+- tapOn: "(.*, )?Paste"
 - tapOn:
     text: "Allow Paste"
     optional: true
@@ -27,9 +28,9 @@ name: Your plan, end to end
 - assertVisible: "Test Upper"
 - takeScreenshot: 31-today-planned
 - scrollUntilVisible:
-    element: "Start workout"
+    element: "(.*, )?Start workout"
     direction: DOWN
-- tapOn: "Start workout"
+- tapOn: "(.*, )?Start workout"
 - waitForAnimationToEnd
 
 # The planned warm-ups are in the session, and the first one is ready to log.
@@ -58,13 +59,13 @@ name: Your plan, end to end
 - waitForAnimationToEnd
 - assertVisible: "Test Upper"
 - scrollUntilVisible:
-    element: "Start workout"
+    element: "(.*, )?Start workout"
     direction: DOWN
 - takeScreenshot: 36-discard-keeps-the-plan
 
 # Food: search, add, then remove it.
 - tapOn: "Food"
-- tapOn: "Search"
+- tapOn: "(.*, )?Search"
 - inputText: "egg"
 - waitForAnimationToEnd
 - tapOn: "Egg, whole"
