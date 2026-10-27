@@ -199,7 +199,21 @@ jobs:
           mkdir -p maestro-output
           # The plan the second flow imports, dated from today, on the simulator's clipboard.
           node scripts/test-plan.mjs | xcrun simctl pbcopy "$DEVICE"
-          maestro --device "$DEVICE" test .maestro --test-output-dir maestro-output || echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
+          run() { set -o pipefail; maestro --device "$DEVICE" test .maestro --test-output-dir maestro-output 2>&1 | tee maestro-output/run.log; }
+          if ! run; then
+            # Maestro's driver sometimes never starts on CI runners (IOSDriverTimeoutException, maestro
+            # issue 1585: no fix; a fresh simulator and a second try is what works). Only then is it retried.
+            if grep -q "iOS driver not ready in time" maestro-output/run.log; then
+              pkill -f maestro || true
+              xcrun simctl shutdown "$DEVICE" || true
+              xcrun simctl boot "$DEVICE"
+              xcrun simctl bootstatus "$DEVICE" -b
+              node scripts/test-plan.mjs | xcrun simctl pbcopy "$DEVICE"
+              run || echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
+            else
+              echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
+            fi
+          fi
           xcrun simctl io "$DEVICE" screenshot maestro-output/final.png || true
           # The walkthrough ends mid-cardio. iOS hides an app's own Live Activity while the app is in
           # front, so open Safari over it and capture the Dynamic Island with the simulator's own
