@@ -23,7 +23,7 @@ private func shown(_ s: State, stale: Bool) -> State {
   var x = s
   x.mode = "lift"
   x.title = "Rest over"
-  x.symbol = "bolt.fill"
+  x.symbol = "dumbbell.fill"
   x.accent = "#C2F95C"
   x.endsAt = nil
   x.total = 0

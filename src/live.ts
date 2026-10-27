@@ -124,4 +124,10 @@ export function resyncLive() {
   return sync();
 }
 
-AppState.addEventListener('change', (st) => st === 'active' && sync());
+// Coming back always resends: an update sent from the background can be dropped by iOS (while the app
+// plays audio), and the island would otherwise keep the old state although the app thinks it is shown.
+AppState.addEventListener('change', (st) => {
+  if (st !== 'active') return;
+  last = '';
+  sync();
+});
