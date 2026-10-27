@@ -119,6 +119,9 @@ jobs:
           node scripts/make-source.mjs "${{ github.repository }}" "$VERSION" "$(stat -f%z Beyond.ipa)" > source.json
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest Beyond.ipa source.json --title "Beyond $VERSION" --notes "Build $VERSION" --latest
+          # The release is made as a draft while its files upload; once it was left a draft, and SideStore
+          # then had no version at all (the previous one is deleted above).
+          gh release edit latest --draft=false --latest
 
       - name: Keep the build log on failure
         if: failure()

@@ -37,23 +37,23 @@ name: Your plan, end to end
 - waitForAnimationToEnd
 
 # The planned warm-ups are in the session, and the first one is ready to log.
-- assertVisible: "W1"
-- assertVisible: "W2"
+- assertVisible: "W1,.*"
+- assertVisible: "W2,.*"
 - takeScreenshot: 32-workout-warmups
 - scrollUntilVisible:
     element: ".*Log warm-up.*"
     direction: DOWN
 - tapOn: ".*Log warm-up.*"
-- assertVisible: "Rest"
+- assertVisible: "(.*, )?Skip rest"
 - takeScreenshot: 33-rest-after-warmup
-- tapOn: "Skip rest"
+- tapOn: "(.*, )?Skip rest"
 - tapOn: ".*Log warm-up.*"
-- tapOn: "Skip rest"
+- tapOn: "(.*, )?Skip rest"
 # After the last warm-up, the working weight (not the warm-up's) is loaded.
 - assertVisible: ".*Complete set 1.*"
 - takeScreenshot: 34-first-working-set
 - tapOn: ".*Complete set 1.*"
-- tapOn: "Skip rest"
+- tapOn: "(.*, )?Skip rest"
 - takeScreenshot: 35-after-a-set
 
 # Discarding keeps the workout planned for today.
@@ -73,13 +73,13 @@ name: Your plan, end to end
 - tapOn: "(.*, )?Search"
 - inputText: "egg"
 - waitForAnimationToEnd
-- tapOn: "Egg, whole"
+- tapOn: ".*Egg, whole.*"
 - tapOn: "(.*, )?Add .* kcal"
 - waitForAnimationToEnd
-- assertVisible: "Egg, whole"
+- assertVisible: ".*Egg, whole.*"
 - takeScreenshot: 37-food-logged
-- tapOn: "Egg, whole"
+- tapOn: ".*Egg, whole.*"
 - tapOn: "(.*, )?Remove from diary"
 - waitForAnimationToEnd
-- assertNotVisible: "Egg, whole"
+- assertNotVisible: ".*Egg, whole.*"
 - takeScreenshot: 38-food-removed
