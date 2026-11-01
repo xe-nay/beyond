@@ -197,8 +197,10 @@ jobs:
           # The test driver can take a while to start on a fresh simulator.
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
           mkdir -p maestro-output
-          # The plan the second flow imports, dated from today, on the simulator's clipboard.
-          node scripts/test-plan.mjs | xcrun simctl pbcopy "$DEVICE"
+          # The plan the second flow imports, dated from today, on the simulator's clipboard. On a busy
+          # runner simctl can time out (error 60), so it gets a few tries instead of ending the step.
+          clip() { for i in 1 2 3 4; do node scripts/test-plan.mjs | xcrun simctl pbcopy "$DEVICE" && return 0; sleep 10; done; return 1; }
+          clip || echo "Could not set the simulator clipboard"
           run() { set -o pipefail; maestro --device "$DEVICE" test .maestro --test-output-dir maestro-output 2>&1 | tee maestro-output/run.log; }
           if ! run; then
             # Maestro's driver sometimes never starts on CI runners (IOSDriverTimeoutException, maestro
@@ -208,7 +210,7 @@ jobs:
               xcrun simctl shutdown "$DEVICE" || true
               xcrun simctl boot "$DEVICE"
               xcrun simctl bootstatus "$DEVICE" -b
-              node scripts/test-plan.mjs | xcrun simctl pbcopy "$DEVICE"
+              clip || true
               run || echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
             else
               echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
