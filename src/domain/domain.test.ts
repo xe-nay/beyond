@@ -474,3 +474,57 @@ test('body weight counts in load, volume and records', async () => {
   assert.equal(Math.round(volumeLoad([pull])), 818);
   assert.equal(progression([], { exerciseId: 'Pull-Up', sets: 3, minReps: 6, maxReps: 10, rir: 2, restSeconds: 120, loadKg: null } as Prescription, 2.5, true).title, 'Find your reps');
 });
+
+test('one live load suggestion: today first (warm-ups count), a 5+ warm-up only raises', async () => {
+  const { liveAim } = await import('./calc.ts');
+  const last = [set(10, 60, 2), set(9, 60, 1)];
+  // Nothing today: from last time's latest rated working set.
+  const a = liveAim([], last, 10, 2)!;
+  assert.equal(a.when, 'last');
+  assert.equal(Math.round(a.kg * 10) / 10, Math.round(((60 * (1 + 10 / 30)) / (1 + 12 / 30)) * 10) / 10);
+  // A warm-up rated 3 just now drives it.
+  const warm = set(5, 70, 3, { warmup: true });
+  const b = liveAim([warm], last, 10, 2)!;
+  assert.equal(b.when, 'today');
+  assert.equal(b.from, warm);
+  assert.equal(b.floor, false);
+  // Rated 5+ it is only a floor.
+  assert.equal(liveAim([set(6, 40, 5, { warmup: true })], [], 10, 2)!.floor, true);
+  // No rated set at all: no suggestion (the progression rule speaks instead).
+  assert.equal(liveAim([set(8, 50, null)], [], 10, 2), null);
+});
+
+test('one-sided sets keep both sides; volume counts each, strength uses the weaker side', async () => {
+  const { eachSide, fromSides, repsText } = await import('./sides.ts');
+  const { setVolume, volumeLoad } = await import('./calc.ts');
+  const ex = (name: string, extra: Partial<Exercise> = {}) => ({ id: name, name, equipment: 'dumbbell', category: 'strength', force: 'pull', ...extra }) as Exercise;
+  assert.equal(eachSide(ex('One-Arm Dumbbell Row')), true);
+  assert.equal(eachSide(ex('Bulgarian Split Squat', { force: 'push' })), true);
+  assert.equal(eachSide(ex('Cable Lateral Raise', { unilateral: true } as any)), true);
+  assert.equal(eachSide(ex('Dumbbell Bench Press')), false);
+  assert.equal(eachSide(ex('Dumbbell Overhead Carry', { unilateral: true } as any)), false);
+  const entered = fromSides({ kg: 12, reps: 10 }, { kg: 14, reps: 8 });
+  assert.equal(entered.loadKg, 12);
+  assert.equal(entered.reps, 8);
+  const s = set(entered.reps, entered.loadKg, 2, { sides: entered.sides });
+  assert.equal(setVolume(s), 12 * 10 + 14 * 8);
+  assert.equal(volumeLoad([s]), 232);
+  assert.equal(repsText(s), '10|8');
+});
+
+test('cable attachments: which exercises, defaults and import names', async () => {
+  const { takesAttachment, defaultAttachment, parseAttachment } = await import('./attachments.ts');
+  const ex = (name: string, equipment = 'cable') => ({ id: name, name, equipment, category: 'strength', force: 'pull' }) as Exercise;
+  assert.equal(takesAttachment(ex('Lat Pulldown')), true);
+  assert.equal(takesAttachment(ex('Seated Cable Row')), true);
+  assert.equal(takesAttachment(ex('One-Arm Lat Pulldown')), false);
+  assert.equal(takesAttachment(ex('Straight-Arm Pulldown')), false);
+  assert.equal(takesAttachment(ex('Barbell Row', 'barbell')), false);
+  assert.equal(defaultAttachment(ex('V-Bar Pulldown')), 'v-handle');
+  assert.equal(defaultAttachment(ex('Wide Grip Seated Cable Row')), 'neutral-wide');
+  assert.equal(defaultAttachment(ex('Seated Cable Row')), 'v-handle');
+  assert.equal(parseAttachment('Medium parallel grip'), 'neutral-medium');
+  assert.equal(parseAttachment('lat-bar'), 'lat-bar');
+  assert.equal(defaultAttachment(ex('Wide-Grip Lat Pulldown')), 'lat-bar');
+  assert.equal(parseAttachment('rope'), undefined);
+});

@@ -29,7 +29,7 @@ export default function CardioEdit() {
       </Row>
       <Row>
         <Stepper label="Effort (RPE)" value={v.rpe} onChange={(rpe) => setV({ ...v, rpe })} min={1} max={10} />
-        <Stepper label="Avg HR" value={v.hr} onChange={(hr) => setV({ ...v, hr })} step={1} max={230} format={(x) => (x ? String(x) : '—')} />
+        <Stepper label="Avg heart rate" value={v.hr} onChange={(hr) => setV({ ...v, hr: v.hr === 0 && hr > 0 ? 130 : hr < 40 ? 0 : hr })} step={1} max={230} format={(x) => (x ? String(x) : '—')} />
       </Row>
       {!!pace(v.minutes, v.km) && <T v="label" color={colors.dim} style={{ textAlign: 'center' }}>{pace(v.minutes, v.km)}</T>}
       <Button kind="lime" icon="checkmark" title="Save" onPress={() => {

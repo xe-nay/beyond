@@ -1,3 +1,4 @@
+import { ATTACHMENTS } from '../src/domain/attachments';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
@@ -15,6 +16,9 @@ import { useStore } from '../src/store';
 import { alpha, colors, plural, space } from '../src/theme';
 
 /** One dated file for plans and history: past entries with results become history, the rest the plan. */
+// Ends the copied exercise list: the attachments lat pulldowns and seated cable rows can name.
+const ATTACHMENT_NOTE = `Lat pulldowns and seated cable rows can name the cable attachment with "attachment": ${ATTACHMENTS.map((a) => `${a.id} (${a.name.toLowerCase()})`).join(', ')}.`;
+
 export default function Import() {
   const router = useRouter();
   const s = useStore();
@@ -46,7 +50,7 @@ export default function Import() {
   };
   const paste = async () => read(await Clipboard.getStringAsync());
   const copy = async (what: 'guide' | 'names') => {
-    await Clipboard.setStringAsync(what === 'guide' ? IMPORT_GUIDE : exercises.map((e) => e.name).join('\n'));
+    await Clipboard.setStringAsync(what === 'guide' ? IMPORT_GUIDE : `${exercises.map((e) => e.name).join('\n')}\n\n${ATTACHMENT_NOTE}`);
     setCopied(what);
   };
 

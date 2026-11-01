@@ -43,6 +43,27 @@ export function loadForRir(set: { loadKg: number; reps: number; rir: number | nu
   return (set.loadKg * (1 + done / 30)) / (1 + want / 30);
 }
 
+export interface Aim { kg: number; from: WorkoutSet; when: 'today' | 'last'; floor: boolean }
+
+/**
+ * The one load suggestion for the working sets, from the latest set rated with an RIR: one done this
+ * session first (warm-ups count), else the last working set from the previous session. Reps done + RIR
+ * gives the reps possible, and the load for the target reps and RIR follows (Epley, as loadForRir).
+ * Autoregulating by RIR this way beat fixed loading for strength (Graham & Cleather 2021, JSCR).
+ * RIR calls are about a rep off and least accurate far from failure (Halperin et al. 2022; Zourdos et
+ * al. 2021), so a warm-up rated 5+ only says "at least": it can raise the weight, never lower it
+ * (`floor`).
+ */
+export function liveAim(today: WorkoutSet[], previous: WorkoutSet[], targetReps: number, targetRir: number): Aim | null {
+  const rated = (x: WorkoutSet) => x.rir !== null && x.loadKg > 0;
+  const now = [...today].reverse().find(rated);
+  const from = now ?? [...previous].reverse().find((x) => !x.warmup && rated(x));
+  if (!from) return null;
+  const floor = from.warmup && (from.rir ?? 0) >= 5;
+  const kg = loadForRir({ ...from, rir: Math.min(from.rir!, 5) }, targetReps, targetRir);
+  return kg === null ? null : { kg, from, when: now ? 'today' : 'last', floor };
+}
+
 /** RPE on the RIR-based scale (Zourdos et al. 2016): RPE = 10 − RIR, for RIR 0–4. */
 export const rirToRpe = (rir: number | null) => (rir === null || rir < 0 || rir > 4 ? null : 10 - rir);
 
@@ -50,7 +71,11 @@ export const rirToRpe = (rir: number | null) => (rir === null || rir < 0 || rir 
 export const totalLoad = (s: WorkoutSet) => s.loadKg * (s.implements ?? 1) + (s.bodyKg ?? 0);
 /** The weight shown for a set: per dumbbell or kettlebell, and with the body weight a bodyweight exercise moves. */
 export const setKg = (s: Pick<WorkoutSet, 'loadKg' | 'bodyKg'>) => s.loadKg + (s.bodyKg ?? 0);
-export const volumeLoad = (sets: WorkoutSet[]) => working(sets).reduce((n, s) => n + totalLoad(s) * s.reps, 0);
+/** Weight × reps of one set; one-sided sets count each side's own weight and reps. */
+export const setVolume = (s: WorkoutSet) => (s.sides
+  ? (['l', 'r'] as const).reduce((n, k) => n + (s.sides![k].kg * (s.implements ?? 1) + (s.bodyKg ?? 0)) * s.sides![k].reps, 0)
+  : totalLoad(s) * s.reps);
+export const volumeLoad = (sets: WorkoutSet[]) => working(sets).reduce((n, s) => n + setVolume(s), 0);
 export const totalReps = (sets: WorkoutSet[]) => working(sets).reduce((n, s) => n + s.reps, 0);
 
 export function effortSummary(sets: WorkoutSet[]) {
@@ -79,7 +104,7 @@ export function repDrop(sets: WorkoutSet[]) {
 export function fatigueIndex(sets: WorkoutSet[]) {
   const work = working(sets);
   if (work.length < 2) return null;
-  const vols = work.map((s) => totalLoad(s) * s.reps || s.reps);
+  const vols = work.map((s) => setVolume(s) || s.reps);
   const best = Math.max(...vols);
   return best ? ((best - vols[vols.length - 1]) / best) * 100 : null;
 }
@@ -282,9 +307,9 @@ export function personalRecords(sessions: Session[], session: Session): PR[] {
       const most = Math.max(0, ...before.filter((y) => totalLoad(y) >= totalLoad(x) - 0.01).map((y) => y.reps));
       if (x.reps > most) return pr('reps', x.reps, most || null, x);
     }
-    const bestV = Math.max(...before.map((x) => totalLoad(x) * x.reps));
-    const v = done.reduce((a, b) => (totalLoad(b) * b.reps > totalLoad(a) * a.reps ? b : a));
-    if (totalLoad(v) * v.reps > bestV + 0.01) return pr('volume', totalLoad(v) * v.reps, bestV, v);
+    const bestV = Math.max(...before.map(setVolume));
+    const v = done.reduce((a, b) => (setVolume(b) > setVolume(a) ? b : a));
+    if (setVolume(v) > bestV + 0.01) return pr('volume', setVolume(v), bestV, v);
     return [];
   });
 }

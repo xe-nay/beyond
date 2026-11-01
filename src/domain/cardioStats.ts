@@ -9,8 +9,8 @@
 // - VDOT (Daniels & Gilbert 1979): oxygen cost of a pace and the share of VO2max held for that long;
 //   from a hard continuous run it estimates aerobic fitness. A performance number, not a lab VO2max.
 // - Riegel (1977): T2 = T1 × (D2 / D1)^1.06 for race predictions; best between similar distances.
-// - Energy: MET values (Compendium of Physical Activities).
-import { METS } from './intervals.ts';
+// - Energy: MET values (Compendium of Physical Activities), or Keytel et al. 2005 from the average heart rate.
+import { cardioKcal, type KcalPerson } from './intervals.ts';
 import type { CardioSession } from './types.ts';
 
 const DAY = 86400000;
@@ -101,7 +101,7 @@ export function loadReport(days: LoadDay[], now: Date) {
   };
 }
 
-export const kcal = (c: CardioSession, weightKg: number | null) => (weightKg ? (METS[c.activity] ?? 5) * weightKg * (c.minutes / 60) : 0);
+export const kcal = (c: CardioSession, weightKg: number | null, who?: KcalPerson) => cardioKcal(c.activity, c.minutes, weightKg, c.avgHr, who) ?? 0;
 
 export interface Insight { tone: 'good' | 'watch' | 'info'; title: string; detail: string }
 

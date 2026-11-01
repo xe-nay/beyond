@@ -104,11 +104,15 @@ export default function Food() {
                   <EntryRow e={e} onPress={() => router.push({ pathname: '/food/[id]', params: { id: e.foodId, entry: e.id } })} />
                 </Animated.View>
               ))}
-              {!list.length && (
-                <Press onPress={() => router.push({ pathname: '/scan', params: { date, meal: m.value } })} haptic={false}>
-                  <Row gap={space.sm}><Icon name="plus" size={13} color={colors.faint} /><T v="label" color={colors.faint}>Scan to add</T></Row>
+              {/* Always there, also once the meal has foods: adds to this meal (and makes it the one new foods go to). */}
+              <Row style={{ paddingHorizontal: list.length ? space.sm : 0, paddingTop: list.length ? space.xs : 0, paddingBottom: list.length ? space.xs : 0 }}>
+                <Press onPress={() => router.push({ pathname: '/food-search', params: { date, meal: m.value } })} haptic={false} style={{ flex: 1 }} label={`Add to ${m.label}`}>
+                  <Row gap={space.sm}><Icon name="plus" size={13} color={colors.cyan} /><T v="label" color={colors.cyan}>Add to {m.label}</T></Row>
                 </Press>
-              )}
+                <Press onPress={() => router.push({ pathname: '/scan', params: { date, meal: m.value } })} hitSlop={8} label={`Scan for ${m.label}`}>
+                  <Icon name="barcode.viewfinder" size={16} color={colors.dim} />
+                </Press>
+              </Row>
             </Card>
           </Section>
         );

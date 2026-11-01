@@ -9,6 +9,7 @@ import { Icon } from '../../src/components/Icon';
 import { Button, Card, Chip, Press, Row, Screen, Segmented, Stat, Stepper, T, Toggle } from '../../src/components/ui';
 import { e1rm, groupByExercise, repDrop, restBefore, sessionLoad, sessionMinutes, setKg, volumeLoad, working } from '../../src/domain/calc';
 import { formatClock } from '../../src/domain/intervals';
+import { repsText } from '../../src/domain/sides';
 import { formatWeight, toDisplay, toKg } from '../../src/domain/plates';
 import type { WorkoutSet } from '../../src/domain/types';
 import { useStore } from '../../src/store';
@@ -69,7 +70,7 @@ export default function SessionDetail() {
                   <Press onPress={() => editing && setOpen(open === y.id ? null : y.id)} haptic={false} disabled={!editing}>
                     <Row style={[{ justifyContent: 'space-between', paddingVertical: 4 }, editing && { paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: open === y.id ? alpha(colors.cyan, 0.1) : colors.surface2 }]}>
                       <T v="label" color={y.warmup ? colors.amber : colors.dim} style={{ width: 24 }}>{label}</T>
-                      <T v="headline" style={[type.num, { flex: 1 }]}>{y.implements === 2 ? '2 × ' : ''}{formatWeight(setKg(y), unit)} {unit} × {y.reps}</T>
+                      <T v="headline" style={[type.num, { flex: 1 }]}>{y.implements === 2 ? '2 × ' : ''}{formatWeight(setKg(y), unit)} {unit} × {repsText(y)}</T>
                       <T v="label" color={colors.dim} style={type.num}>{y.rir !== null ? `RIR ${y.rir}` : ''}{rest ? ` · ${formatClock(rest)} rest` : ''}</T>
                       {editing && <Icon name={open === y.id ? 'chevron.down' : 'pencil'} size={13} color={colors.cyan} style={{ marginLeft: 8 }} />}
                     </Row>

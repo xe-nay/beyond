@@ -49,6 +49,7 @@ interface Data {
   skipped: { supplementId: string; date: string }[]; // doses answered "Skip" in a reminder
   inbox: InboxItem[];
   restDays: string[]; // dates an imported plan leaves empty on purpose: no program workout there
+  mealPick: { date: string; meal: Meal } | null; // the meal chosen by hand: new foods that day go there until another is chosen
 }
 
 const initial: Data = {
@@ -79,6 +80,7 @@ const initial: Data = {
   skipped: [],
   inbox: [],
   restDays: [],
+  mealPick: null,
 };
 
 interface Actions {

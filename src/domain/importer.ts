@@ -1,5 +1,6 @@
 // One dated training file for plans and history. Entries with a "performed" block become history;
 // the rest become scheduled sessions. Also reads the earlier "kinetic-training" v1 files.
+import { parseAttachment } from './attachments.ts';
 import { defaultImplements } from './equipment.ts';
 import { paceInText, readPace } from './track.ts';
 import type { CardioSession, Exercise, IntervalPlan, Prescription, Session, WorkoutSet } from './types.ts';
@@ -214,6 +215,7 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
         warmupSets: Array.isArray(x.warmups) && x.warmups.length ? Math.min(6, x.warmups.length) : clamp(+x.warmupSets || 0, 0, 5),
         ...(warmups(x.warmups) ? { warmups: warmups(x.warmups)! } : {}),
         superset: x.superset || undefined,
+        ...(parseAttachment(x.attachment) ? { attachment: parseAttachment(x.attachment) } : {}),
       });
     }
     let sets: WorkoutSet[] = [];

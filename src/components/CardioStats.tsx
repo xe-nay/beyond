@@ -31,7 +31,7 @@ export function CardioStats({ range, monday, weeks, labels }: { range: number[];
   const inRange = done.filter((c) => t(c.date) >= range[0] && t(c.date) < range[1]);
   const minutes = inRange.reduce((n, c) => n + c.minutes, 0);
   const km = inRange.reduce((n, c) => n + (c.distanceKm ?? 0), 0);
-  const energy = Math.round(inRange.reduce((n, c) => n + kcal(c, weight), 0));
+  const energy = Math.round(inRange.reduce((n, c) => n + kcal(c, weight, s.profile), 0));
   const week = guidelineMinutes(done, monday, monday + 7 * DAY);
   const now = Date.now();
   const pace = { now: averagePace(done, 'Running', now - 28 * DAY, now + DAY), before: averagePace(done, 'Running', now - 56 * DAY, now - 28 * DAY) };

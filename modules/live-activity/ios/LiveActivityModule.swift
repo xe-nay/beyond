@@ -8,6 +8,8 @@ private let beyondLog = os.Logger(subsystem: "app.beyond.fitness", category: "Be
 
 public class LiveActivityModule: Module {
   private var answerObserver: NSObjectProtocol?
+  static let workoutRelevance: Double = 100
+  static let intakeRelevance: Double = 10
 
   public func definition() -> ModuleDefinition {
     Name("LiveActivity")
@@ -41,7 +43,9 @@ public class LiveActivityModule: Module {
       let due = Date(timeIntervalSince1970: dueAt / 1000)
       let state = IntakeActivityAttributes.ContentState(items: items, dueAt: due, slot: slot)
       // Stale at the due time: the reminder turns to "Due now" by itself.
-      let content = ActivityContent(state: state, staleDate: due)
+      // Lower than the workout's: with both running, the Dynamic Island shows the workout (Apple: the
+      // highest relevance score gets the island; on a tie, the one started first).
+      let content = ActivityContent(state: state, staleDate: due, relevanceScore: Self.intakeRelevance)
       if let running = Activity<IntakeActivityAttributes>.activities.first(where: { $0.content.state.slot == slot }) {
         await running.update(content)
         return running.id
@@ -102,7 +106,7 @@ public class LiveActivityModule: Module {
       for activity in Activity<BeyondActivityAttributes>.activities {
         await activity.end(nil, dismissalPolicy: .immediate)
       }
-      let content = ActivityContent(state: Self.parse(state), staleDate: Self.date(state["staleAt"]))
+      let content = ActivityContent(state: Self.parse(state), staleDate: Self.date(state["staleAt"]), relevanceScore: Self.workoutRelevance)
       do {
         // Requested from the main thread, where ActivityKit expects the app to start activities.
         let id = try await MainActor.run {
@@ -118,7 +122,7 @@ public class LiveActivityModule: Module {
 
     AsyncFunction("update") { (state: [String: Any]) in
       guard #available(iOS 16.2, *) else { return }
-      let content = ActivityContent(state: Self.parse(state), staleDate: Self.date(state["staleAt"]))
+      let content = ActivityContent(state: Self.parse(state), staleDate: Self.date(state["staleAt"]), relevanceScore: Self.workoutRelevance)
       for activity in Activity<BeyondActivityAttributes>.activities {
         await activity.update(content)
       }

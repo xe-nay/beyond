@@ -99,6 +99,7 @@ The planned exercises, in the order they are done:
 - warmupSets: warm-up sets before the working sets, 0 to 5. Default 0.
 - warmups (optional): the warm-up sets written out, each a percentage of the working weight and its reps, lightest first, up to 6, such as [{ "percent": 40, "reps": 6 }, { "percent": 80, "reps": 4 }]. They replace the app's default ramp and set warmupSets. Without them the app ramps up to the working weight by itself: 1 set at 70% x 5; 2 sets at 40% x 6 and 80% x 4; 3 sets at 40% x 8, 60% x 5 and 80% x 3. Compound lifts usually take 1 to 3 warm-ups; isolation exercises later in a session often need none.
 - superset (optional): a letter, "A", "B" or "C". Exercises with the same letter are done back to back.
+- attachment (optional, lat pulldowns and seated cable rows only): the bar or handle on the cable, one of "neutral-wide", "neutral-medium", "neutral-shoulder", "neutral-close", "v-handle" (handles with palms facing each other, from wide to hands almost together), "straight-bar", "lat-bar" (the classic wide bar with angled ends). Give one when the plan asks for a particular grip, such as { "name": "Lat Pulldown", "attachment": "neutral-medium" }; the lifter can change it during the workout.
 
 Values outside a range are brought to the nearest allowed value. The app uses the rep range and RIR for its progression advice: when you reach the top of the range at the target RIR, it suggests adding weight.
 

@@ -76,6 +76,7 @@ export interface Prescription {
   /** Warm-ups written out: each a share of the working weight (0.5 = 50%) and its reps. Wins over the default ramp. */
   warmups?: { share: number; reps: number }[];
   superset?: string;
+  attachment?: string; // cable pulldowns and rows: the bar or handle (domain/attachments.ts)
 }
 
 export interface ProgramDay {
@@ -104,6 +105,8 @@ export interface WorkoutSet {
   rir: number | null;
   warmup: boolean;
   implements?: 1 | 2; // dumbbells or kettlebells used at once; loadKg is per implement
+  attachment?: string; // cable pulldowns and rows: the bar or handle used
+  sides?: { l: { kg: number; reps: number }; r: { kg: number; reps: number } }; // one-sided exercises, left and right (loadKg and reps are then the weaker side's)
   bodyKg?: number; // bodyweight exercises: the share of body weight moved, from the weight on that day (loadKg is then the added load)
   completedAt: string;
   restSeconds: number | null; // measured rest before this set
@@ -123,7 +126,7 @@ export interface Session {
   notes: string;
   source?: 'app' | 'import';
   /** Values being entered per exercise, kept so a closed app resumes exactly where it was. */
-  drafts?: Record<string, { kg: number; reps: number; rir: number | null; warmup: boolean; implements: 1 | 2 }>;
+  drafts?: Record<string, { kg: number; reps: number; rir: number | null; warmup: boolean; implements: 1 | 2; workKg?: number; repsR?: number; kgR?: number; side?: 'l' | 'r'; attachment?: string }>;
 }
 
 /** A pace window in seconds per km: `fast` is the quickest allowed, `slow` the slowest (equal for one target). */

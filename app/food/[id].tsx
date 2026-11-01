@@ -24,9 +24,12 @@ export default function FoodSheet() {
   const [servings, setServings] = useState(entry && serving ? entry.amount / serving : 1);
   const [grams, setGrams] = useState(entry?.amount ?? serving ?? 100);
   const [typed, setTyped] = useState<string | null>(null);
-  const [meal, setMeal] = useState<Meal>((entry?.meal ?? (params.meal as Meal)) || mealNow());
-  const [mealPicked, setMealPicked] = useState(!!entry || !!params.meal);
   const [date, setDate] = useState(entry?.date ?? (params.date || today()));
+  // A meal chosen by hand earlier that day stays the default until another is chosen; otherwise the
+  // meal follows the time of day.
+  const sticky = s.mealPick?.date === date ? s.mealPick.meal : null;
+  const [meal, setMeal] = useState<Meal>((entry?.meal ?? (params.meal as Meal)) || sticky || mealNow());
+  const [mealPicked, setMealPicked] = useState(!!entry || !!params.meal || !!sticky);
   const [time, setTime] = useState(entry?.time ?? clock());
   const [when, setWhen] = useState(false);
   const [h, m] = time.split(':').map(Number);
@@ -52,6 +55,7 @@ export default function FoodSheet() {
   const save = () => {
     if (entry) s.deleteEntry(entry.id);
     s.logFood(food, Math.round(amount * 10) / 10, meal, date, n, time);
+    if (mealPicked && !entry) s.set({ mealPick: { date, meal } });
     router.back();
   };
 

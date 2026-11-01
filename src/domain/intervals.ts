@@ -136,5 +136,23 @@ export function pace(minutes: number, km: number | null) {
 export const METS: Record<string, number> = {
   Running: 9.8, Walking: 3.5, Cycling: 7.5, Rowing: 7, Swimming: 6, Elliptical: 5, Stairs: 8.8, HIIT: 8, Treadmill: 8, Other: 5,
 };
-export const cardioKcal = (activity: string, minutes: number, weightKg: number | null) =>
-  weightKg ? Math.round((METS[activity] ?? 5) * weightKg * (minutes / 60)) : null;
+/** Who the estimate is for: with an average heart rate, sex and age, the heart rate drives it. */
+export interface KcalPerson { sex: 'male' | 'female' | null; birthYear: number | null }
+
+/**
+ * Energy of a cardio session. With an average heart rate (90–200 bpm, from a watch or strap), sex and
+ * age it uses Keytel et al. 2005 (J Sports Sci 23:289, from heart rate during submaximal exercise):
+ * men kJ/min = −55.0969 + 0.6309·HR + 0.1988·kg + 0.2017·age; women −20.4022 + 0.4472·HR − 0.1263·kg
+ * + 0.074·age. Otherwise MET × kg × hours.
+ */
+export function cardioKcal(activity: string, minutes: number, weightKg: number | null, avgHr?: number | null, who?: KcalPerson, year = new Date().getFullYear()) {
+  if (!weightKg) return null;
+  const age = who?.birthYear ? year - who.birthYear : null;
+  if (avgHr && avgHr >= 90 && avgHr <= 200 && age && who?.sex) {
+    const kj = who.sex === 'male'
+      ? -55.0969 + 0.6309 * avgHr + 0.1988 * weightKg + 0.2017 * age
+      : -20.4022 + 0.4472 * avgHr - 0.1263 * weightKg + 0.074 * age;
+    if (kj > 0) return Math.round((kj / 4.184) * minutes);
+  }
+  return Math.round((METS[activity] ?? 5) * weightKg * (minutes / 60));
+}

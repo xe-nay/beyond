@@ -9,14 +9,15 @@ const supp = (id: string, time: string): Supplement => ({
   id, name: id, brand: null, image: null, barcode: null, dose: 5, unit: 'g', time, per100: null, servingG: null, micros: [], createdAt: '2026-01-01T00:00:00Z',
 });
 
-test('the reminder shows the first unanswered time, if within 8 hours', () => {
-  const now = new Date(2026, 9, 27, 7, 0);
+test('the reminder shows 15 minutes before its time, and stays until answered', () => {
   const s = { supplements: [supp('creatine', '08:00'), supp('multi', '20:00')], intakes: [], skipped: [] };
-  expect(nextSlot(s, now)?.time).toBe('08:00');
-  expect(nextSlot(s, now)?.items).toEqual(['creatine · 5 g']);
-  const answered = { ...s, skipped: [{ supplementId: 'creatine', date: today(now) }] };
-  expect(nextSlot(answered, now)).toBeNull(); // 20:00 is 13 h away: too far for a Live Activity
-  expect(nextSlot(answered, new Date(2026, 9, 27, 13, 0))?.time).toBe('20:00');
+  expect(nextSlot(s, new Date(2026, 9, 27, 7, 0))).toBeNull(); // an hour early: not yet
+  expect(nextSlot(s, new Date(2026, 9, 27, 7, 45))?.time).toBe('08:00');
+  expect(nextSlot(s, new Date(2026, 9, 27, 7, 45))?.items).toEqual(['creatine · 5 g']);
+  expect(nextSlot(s, new Date(2026, 9, 27, 9, 30))?.time).toBe('08:00'); // due and unanswered
+  const answered = { ...s, skipped: [{ supplementId: 'creatine', date: today(new Date(2026, 9, 27, 7, 0)) }] };
+  expect(nextSlot(answered, new Date(2026, 9, 27, 13, 0))).toBeNull();
+  expect(nextSlot(answered, new Date(2026, 9, 27, 19, 50))?.time).toBe('20:00');
 });
 
 test('Taken pressed on the reminder while the app was closed is applied when it starts', () => {

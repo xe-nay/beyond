@@ -1,8 +1,8 @@
 // The daily intake reminder as a Live Activity on the Lock Screen and in the Dynamic Island, with Taken
-// and Skip that work without opening the app. iOS lets an app start one only while it is open, so it is
-// started (or refreshed) whenever the app comes to the front: for the next time something is still to
-// take today, up to 8 hours ahead (how long iOS keeps one running), or one already due and unanswered.
-// Answers pressed while the app was closed are applied when it next starts.
+// and Skip that work without opening the app. It appears 15 minutes before the time (or once that time
+// has passed, until answered). iOS lets an app start one only while it is open on screen, so with Beyond
+// closed then, the reminder notification at the time stands in for it. Answers pressed while the app was
+// closed are applied when it next starts.
 import { AppState } from 'react-native';
 
 import { endIntake, intakeSlot, onIntakeAnswer, startIntake, takeIntakeAnswers } from '../modules/live-activity';
@@ -12,9 +12,9 @@ import { answerSlot } from './intakeActions';
 import { soon as replanReminders } from './reminders';
 import { today, useStore } from './store';
 
-const AHEAD = 8 * 3600 * 1000;
+const AHEAD = 15 * 60 * 1000;
 
-/** The first reminder time today with something unanswered, if it is due within the next 8 hours. */
+/** The first reminder time today with something unanswered, if it is due within the next 15 minutes (or already). */
 export function nextSlot(
   s: { supplements: Supplement[]; intakes: Intake[]; skipped: { supplementId: string; date: string }[] },
   now = new Date(),
@@ -65,8 +65,26 @@ const soon = () => {
   timer = setTimeout(refresh, 600);
 };
 
+// With the app open, the reminder appears on its own when the next time comes within 15 minutes.
+let upcoming: ReturnType<typeof setTimeout> | null = null;
+function watchNext() {
+  if (upcoming) clearTimeout(upcoming);
+  upcoming = null;
+  const s = useStore.getState();
+  if (!s.ready || AppState.currentState !== 'active') return;
+  const date = today();
+  const times = [...new Set(s.supplements.map((x) => x.time).filter((t): t is string => !!t))].sort();
+  const now = Date.now();
+  const next = times.map((t) => new Date(`${date}T${t}:00`).getTime() - AHEAD).find((at) => at > now);
+  if (next) upcoming = setTimeout(() => { soon(); watchNext(); }, Math.min(next - now + 1000, 2 ** 31 - 1));
+}
+
 onIntakeAnswer(() => applyAnswers());
 useStore.subscribe((s, prev) => {
   if (s.ready && (s.supplements !== prev.supplements || s.intakes !== prev.intakes || s.skipped !== prev.skipped || s.ready !== prev.ready)) soon();
 });
-AppState.addEventListener('change', (st) => st === 'active' && soon());
+AppState.addEventListener('change', (st) => {
+  if (st === 'active') soon();
+  watchNext();
+});
+useStore.subscribe((s, prev) => { if (s.ready && (s.supplements !== prev.supplements || s.ready !== prev.ready)) watchNext(); });

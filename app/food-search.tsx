@@ -45,8 +45,21 @@ export default function FoodSearch() {
     return () => clearTimeout(t);
   }, [query]);
 
-  const mine = Object.values(s.foods).filter((f) => query.length > 1 && f.name.toLowerCase().includes(query.toLowerCase()));
-  const local = [...searchBasics(query), ...mine.filter((f) => !f.id.startsWith('usda-'))];
+  // Foods logged before come first, most recent first; typing filters them like everything else.
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (f: Food) => words.every((w) => `${f.name} ${f.brand ?? ''}`.toLowerCase().includes(w));
+  const lastLogged = new Map<string, string>();
+  for (const e of s.entries) if (!lastLogged.has(e.foodId) || `${e.date} ${e.time ?? ''}` > lastLogged.get(e.foodId)!) lastLogged.set(e.foodId, `${e.date} ${e.time ?? ''}`);
+  const logged = [...lastLogged.keys()].map((id) => s.foods[id]).filter((f): f is Food => !!f && matches(f))
+    .sort((a, b) => lastLogged.get(b.id)!.localeCompare(lastLogged.get(a.id)!));
+  const searching = query.trim().length >= 2;
+  const others = (searching ? [...searchBasics(query), ...Object.values(s.foods).filter((f) => matches(f) && !f.id.startsWith('usda-')), ...results] : basicFoods)
+    .filter((f, i, all) => !lastLogged.has(f.id) && all.findIndex((x) => x.id === f.id) === i);
+  type Item = { head: string } | { food: Food };
+  const items: Item[] = [
+    ...(logged.length ? [{ head: 'Logged before' }, ...logged.map((food) => ({ food }))] : []),
+    ...(others.length ? [{ head: searching ? (logged.length ? 'More results' : 'Results') : 'Basic foods' }, ...others.map((food) => ({ food }))] : []),
+  ];
   const choose = (f: Food) => {
     // Remember the product under the scanned barcode so the next scan is instant, a basic food too.
     const id = barcode || f.id;
@@ -59,10 +72,8 @@ export default function FoodSearch() {
   return (
     <FlatList
       style={{ flex: 1 }}
-      data={query.trim().length < 2
-        ? [...Object.values(s.foods).sort((a, b) => b.lastUsed.localeCompare(a.lastUsed)).slice(0, 8), ...basicFoods.filter((b) => !s.foods[b.id])]
-        : [...local, ...results.filter((r) => !local.some((l) => l.id === r.id))]}
-      keyExtractor={(x, i) => `${x.id}-${i}`}
+      data={items}
+      keyExtractor={(x, i) => ('head' in x ? `h-${x.head}` : `${x.food.id}-${i}`)}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       stickyHeaderIndices={[0]}
@@ -79,7 +90,10 @@ export default function FoodSearch() {
           {state === 'down' && <T v="label" color={colors.amber}>Open Food Facts isn't answering right now. Try again in a minute, or create the food yourself.</T>}
         </View>
       }
-      renderItem={({ item }) => (
+      renderItem={({ item: it }) => {
+        if ('head' in it) return <T v="caption" color={colors.faint} style={{ paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: space.xs }}>{it.head}</T>;
+        const item = it.food;
+        return (
         <Press onPress={() => choose(item)} style={{ paddingHorizontal: space.xl }}>
           <Row style={{ paddingVertical: space.sm }}>
             <View style={[styles.thumb, !!item.image && { backgroundColor: '#F3F5F9' }]}>
@@ -95,7 +109,8 @@ export default function FoodSearch() {
             </View>
           </Row>
         </Press>
-      )}
+        );
+      }}
       // Whatever the search found, a food can always be typed from its label.
       ListFooterComponent={
         <Press onPress={() => router.replace({ pathname: '/food-new', params: { barcode: barcode ?? '', q: query, date: date ?? '', meal: meal ?? '' } })} style={{ marginHorizontal: space.xl, marginTop: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.hairlineStrong }}>

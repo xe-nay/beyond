@@ -31,6 +31,7 @@ export default function CardioRun() {
   const [gpsMode, setGpsMode] = useState<'background' | 'foreground' | 'off'>('off');
   const synced = useRef(0);
   const [rpe, setRpe] = useState(6);
+  const [hr, setHr] = useState(0);
   const tickRef = useRef<number | null>(null);
 
   const phases = run ? timeline(run.plan) : [];
@@ -98,7 +99,7 @@ export default function CardioRun() {
     cancelEnd();
     stopGps();
     const s = useStore.getState();
-    if (save) s.saveCardio({ id: run.id, date: run.date, activity: run.plan.activity, minutes: Math.max(1, Math.round(t / 60)), distanceKm: km || null, rpe, avgHr: null, plan: run.plan, completed: true, notes: '' });
+    if (save) s.saveCardio({ id: run.id, date: run.date, activity: run.plan.activity, minutes: Math.max(1, Math.round(t / 60)), distanceKm: km || null, rpe, avgHr: hr || null, plan: run.plan, completed: true, notes: '' });
     s.set({ cardioRun: null });
     router.back();
   };
@@ -114,7 +115,12 @@ export default function CardioRun() {
             <Row><Stepper label="Distance km" value={km} onChange={setKm} step={0.1} max={300} format={(v) => v.toFixed(2)} big /></Row>
             {tracked && <T v="footnote" color={colors.faint} style={{ textAlign: 'center' }}>Measured by GPS · adjust if needed</T>}
           </View>
-          <Row><Stepper label="Effort (RPE)" value={rpe} onChange={setRpe} min={1} max={10} /></Row>
+          <Row>
+            <Stepper label="Effort (RPE)" value={rpe} onChange={setRpe} min={1} max={10} />
+            {/* From a watch or chest strap, when one was worn; the first step lands on a typical value. */}
+            <Stepper label="Avg heart rate" value={hr} onChange={(v) => setHr(hr === 0 && v > 0 ? 130 : v < 40 ? 0 : v)} step={1} max={230} format={(x) => (x ? `${x}` : '—')} />
+          </Row>
+          <T v="footnote" color={colors.faint} style={{ textAlign: 'center' }}>Average heart rate (bpm) from a watch or chest strap, if you wore one: it makes the calories more accurate. Leave it at — otherwise.</T>
           <Button kind="lime" icon="checkmark" title="Save" onPress={() => finish(true)} />
           <Press onPress={() => finish(false)}><T v="label" color={colors.red} style={{ textAlign: 'center' }}>Discard</T></Press>
         </Animated.View>

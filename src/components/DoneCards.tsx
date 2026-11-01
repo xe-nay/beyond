@@ -17,7 +17,8 @@ import { Row } from './ui';
 export function DoneCardioCard({ c }: { c: CardioSession }) {
   const router = useRouter();
   const weight = useStore(latestWeight);
-  const kcal = cardioKcal(c.activity, c.minutes, weight);
+  const profile = useStore((s) => s.profile);
+  const kcal = cardioKcal(c.activity, c.minutes, weight, c.avgHr, profile);
   const p = pace(c.minutes, c.distanceKm);
   const open = () => menu([
     { label: 'Edit time, distance or effort', go: () => router.push({ pathname: '/cardio-edit', params: { id: c.id } }) },

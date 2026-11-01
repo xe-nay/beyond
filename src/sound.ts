@@ -1,7 +1,7 @@
 // Timer sounds and cues. The audio session "ducks" other apps: Spotify or Apple Music gets
 // quieter only while a cue plays, and expo-audio restores it when the cue finishes. Each countdown
 // is one file, so music dips once per countdown rather than on every tick.
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync, type AudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
@@ -86,11 +86,33 @@ export async function keepAlive(on: boolean) {
     try { keeperSub?.remove(); keeper.pause(); (keeper as any).remove?.(); } catch {}
     keeperSub = null;
     keeper = null;
+    ducked = false;
     await audioMode('duck');
   }
 }
 /** Whether the app is being kept awake (its sounds then play in the background, no notification needed). */
 export const awake = () => !!keeper;
+
+// Music dips for a cue or the coach's voice. iOS lowers other apps' audio when the session is *activated*
+// with the duck option and brings it back when the session is deactivated (Apple, AVAudioSession
+// duckOthers); switching the option on a session that is already active does nothing. While the
+// keep-awake loop holds the session open, it is closed and reopened around each cue. The app stays
+// running meanwhile (background location, keepAlive.ts) and the loop starts again right after.
+let ducked = false;
+let duckQueue: Promise<void> = Promise.resolve();
+function duck(on: boolean) {
+  duckQueue = duckQueue.then(async () => {
+    if (!keeper || ducked === on) return;
+    ducked = on;
+    try {
+      await setIsAudioActiveAsync(false);
+      await audioMode(on ? 'duck' : 'mix');
+      await setIsAudioActiveAsync(true);
+    } catch {}
+    try { keeper?.play(); } catch {}
+  });
+  return duckQueue;
+}
 
 function player(key: string, source: number | string) {
   let p = players.get(key);
@@ -126,18 +148,20 @@ function start(key: string, source: number | string, seconds?: number, full = fa
     current = p;
     if (cap) clearTimeout(cap);
     cap = seconds ? setTimeout(() => current === p && stopCue(), seconds * 1000) : null;
-    if (keeper && key !== 'silence') {
-      audioMode('duck');
+    const kept = keeper && key !== 'silence';
+    if (kept) {
       const sub = p.addListener('playbackStatusUpdate', (st: any) => {
         if (!st?.didJustFinish) return;
         sub.remove();
         if (current === p) current = null;
-        if (keeper && !current) audioMode('mix');
+        if (!current) duck(false);
       });
     }
     whenLoaded(p, () => {
       if (current !== p) return;
-      p.seekTo(0).then(() => p.play()).catch(() => p.play());
+      const go = () => { if (current === p) p.seekTo(0).then(() => p.play()).catch(() => p.play()); };
+      if (kept) duck(true).then(go);
+      else go();
     });
   } catch {}
 }
@@ -148,7 +172,7 @@ export function stopCue() {
     current?.pause();
   } catch {}
   current = null;
-  if (keeper) audioMode('mix');
+  if (keeper) duck(false);
 }
 
 export function buzz(kind: 'tick' | 'end') {
@@ -203,10 +227,14 @@ export function say(text: string) {
   const { sound, volume } = useStore.getState().timer;
   if (!sound || volume <= 0) return;
   buzz('end');
-  voiceFor().then((voice) => {
+  voiceFor().then(async (voice) => {
+    // While kept awake the session is open, so the music is lowered by reopening it (duck above), and
+    // brought back up afterwards; otherwise a silent clip hands the session back.
+    const after = () => { if (keeper) duck(false); else start('silence', S.silence); };
+    if (keeper) await duck(true);
     try {
       Speech.stop();
-      Speech.speak(text, { language: 'en-US', voice, rate: 0.95, volume, onDone: () => start('silence', S.silence), onError: () => start('silence', S.silence) });
+      Speech.speak(text, { language: 'en-US', voice, rate: 0.95, volume, useApplicationAudioSession: true, onDone: after, onStopped: after, onError: after });
     } catch {}
   });
 }
