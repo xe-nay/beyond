@@ -114,5 +114,5 @@ name: First run, workout, food, progress and cardio
 - waitForAnimationToEnd
 - takeScreenshot: 17-cardio-work
 
-# Then the plan, end to end (import, warm-ups, rests, discard, food): see sub/plan.yaml.
-- runFlow: sub/plan.yaml
+# The plan, end to end (import, warm-ups, rests, discard, food), runs next on its own (sub/plan.yaml):
+# CI puts the plan on the clipboard just before it.
