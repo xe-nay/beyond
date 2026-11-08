@@ -117,11 +117,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           node scripts/make-source.mjs "${{ github.repository }}" "$VERSION" "$(stat -f%z Beyond.ipa)" > source.json
-          # SideStore downloads the app from the store branch (raw.githubusercontent.com), which kept
-          # working while GitHub's release downloads timed out (504) for hours. It goes up first, so the
-          # source never points at a file that is not there yet. One commit, replaced each build.
-          mkdir -p store-branch && cp Beyond.ipa store-branch/ && cd store-branch
-          git init -q -b store && git add Beyond.ipa
+          # SideStore reads the source and downloads the app from the store branch
+          # (raw.githubusercontent.com/<repo>/store/source.json), which kept working while GitHub's release
+          # downloads answered 504 or nothing for hours ("not valid JSON" in SideStore). The release keeps
+          # copies for older links. One commit, replaced each build, app and source together.
+          mkdir -p store-branch && cp Beyond.ipa source.json store-branch/ && cd store-branch
+          git init -q -b store && git add Beyond.ipa source.json
           git -c user.name=Beyond -c user.email=beyond@users.noreply.github.com commit -q -m "Beyond $VERSION"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" store
           cd ..

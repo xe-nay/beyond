@@ -11,7 +11,8 @@ A minimal iPhone app for strength training, cardio, nutrition and progress. Ever
 ## Build
 
 Built on GitHub Actions (`.github/workflows/build.yml`): an unsigned `Beyond.ipa` plus a SideStore source at
-`https://github.com/<owner>/beyond/releases/latest/download/source.json`. A second job runs the app in an iOS
+`https://raw.githubusercontent.com/<owner>/beyond/store/source.json` (the release keeps a copy, but GitHub's
+release downloads were unreliable). A second job runs the app in an iOS
 simulator with Maestro (`.maestro/`) and keeps the screenshots.
 
 Locally: `npm install`, `node scripts/build-exercises.mjs`, then `npx expo start --web` for the browser preview and `npm test` for the calculation tests.
