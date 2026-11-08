@@ -1,11 +1,12 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { byId, EQUIPMENT_LABEL, exercises, loadKind } from '../../src/catalog';
-import { BodyMap } from '../../src/components/BodyMap';
+import { MuscleDetail } from '../../src/components/MusclePeek';
 import { ExerciseImage } from '../../src/components/ExerciseImage';
 import { Card, Chip, Press, Row, Screen, Section, Stat, T } from '../../src/components/ui';
-import { bestSet, planSets, REGION_NAMES, setKg, strengthTrend } from '../../src/domain/calc';
+import { anatomy } from '../../src/domain/anatomy';
+import { bestSet, planSets, setKg, strengthTrend } from '../../src/domain/calc';
 import { formatClock } from '../../src/domain/intervals';
 import { dumbbellStep, formatWeight, roundTo, toDisplay, toKg } from '../../src/domain/plates';
 import type { Prescription } from '../../src/domain/types';
@@ -18,8 +19,11 @@ export default function ExerciseDetail() {
   const { id, plan: planned } = useLocalSearchParams<{ id: string; plan?: string }>();
   const router = useRouter();
   const s = useStore();
+  const { width } = useWindowDimensions();
   const e = byId[id];
   if (!e) return null;
+  const muscles = anatomy(e);
+  const sex = s.profile.sex === 'female' ? 'female' : 'male';
   const done = s.sessions.filter((x) => x.finishedAt);
   const best = bestSet(done, e.id);
   const trend = strengthTrend(done, e.id);
@@ -88,12 +92,13 @@ export default function ExerciseDetail() {
         </Card>
       )}
 
-      <Card style={{ alignItems: 'center' }}>
-        <BodyMap primary={e.primary} secondary={e.secondary} scale={0.85} />
-        <T v="label" color={colors.dim} style={{ textAlign: 'center' }}>
-          {e.primary.map((r) => REGION_NAMES[r]).join(' · ')}{e.secondary.length ? `  +  ${e.secondary.map((r) => REGION_NAMES[r]).join(' · ')}` : ''}
-        </T>
-      </Card>
+      {muscles && (
+        <Section title="Muscles worked">
+          <Card>
+            <MuscleDetail a={muscles} sex={sex} width={width - space.lg * 4} />
+          </Card>
+        </Section>
+      )}
 
       {e.steps.length > 0 && (
         <Section title="How to">

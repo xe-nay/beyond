@@ -10,7 +10,7 @@ import { ExerciseImage } from '../src/components/ExerciseImage';
 import { Icon } from '../src/components/Icon';
 import { AttachmentPicker } from '../src/components/AttachmentPicker';
 import { motionFor, WeightControl } from '../src/components/LoadVisual';
-import { MusclesWorked } from '../src/components/MusclesWorked';
+import { MusclePanel } from '../src/components/MusclePeek';
 import { SessionVolume } from '../src/components/SessionVolume';
 import { RestBar } from '../src/components/RestBar';
 import { Button, Card, Divider, Press, Row, Segmented, Stepper, T, thud } from '../src/components/ui';
@@ -50,6 +50,8 @@ export default function Workout() {
   const strip = useRef<ScrollView>(null);
   const chips = useRef<Record<number, { x: number; w: number }>>({});
   const { width: screenW } = useWindowDimensions();
+  // The exercise picture is square; the body beside it takes the rest of the row.
+  const hero = Math.min(210, Math.round((screenW - space.lg * 2) * 0.54));
   useEffect(() => {
     const c = chips.current[index];
     if (c) strip.current?.scrollTo({ x: Math.max(0, c.x + c.w / 2 - screenW / 2), animated: true });
@@ -230,7 +232,7 @@ export default function Workout() {
       </View>
 
       {/* Exercise strip */}
-      <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.md }} style={{ flexGrow: 0 }}>
+      <ScrollView ref={strip} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.md }} style={{ flexGrow: 0, flexShrink: 0 }}>
         {plan.map((x, i) => {
           const e = exercise(x.exerciseId);
           const n = working(session.sets.filter((y) => y.exerciseId === x.exerciseId)).length;
@@ -263,7 +265,11 @@ export default function Workout() {
           <Animated.View key={p.exerciseId + index} entering={reduced ? undefined : FadeIn.duration(180)} style={{ gap: space.lg }}>
             {/* Exercise hero */}
             <View>
-              <ExerciseImage exercise={ex} style={{ height: 200 }} />
+              {/* The movement, square as the pictures are, and beside it the body it works. */}
+              <Row gap={space.sm}>
+                <ExerciseImage exercise={ex} style={{ width: hero, height: hero }} />
+                <MusclePanel e={ex} attachment={attach} width={screenW - space.lg * 2 - space.sm - hero} height={hero} />
+              </Row>
               <Row style={styles.heroBar}>
                 <View style={{ flex: 1 }}>
                   <T v="title" numberOfLines={2}>{ex.name}</T>
@@ -441,8 +447,6 @@ export default function Workout() {
             </Card>
 
             <EffortNumbers sets={doneWork} draft={draft} unit={unit} />
-
-            <MusclesWorked e={ex} attachment={attach} />
 
             <TextInput
               placeholder="Notes"

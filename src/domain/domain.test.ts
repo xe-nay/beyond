@@ -586,3 +586,26 @@ test('muscle fatigue and strength views from logged sets', async () => {
   assert.equal(s.chest.lifts.length, 1);
   assert.equal(s.quadriceps.change, null);
 });
+
+test('detailed anatomy: parts of a muscle differ by exercise', async () => {
+  const { anatomy } = await import('./anatomy.ts');
+  const ex = (name: string, primary: string[], secondary: string[] = [], muscles: string[] = []) => ({ id: name, name, equipment: 'cable', category: 'strength', primary, secondary, muscles }) as unknown as Exercise;
+  const lead = (name: string, primary: string[], attachment?: string, muscles: string[] = []) => anatomy(ex(name, primary, [], muscles), attachment)!.parts.filter(([, l]) => l === 3).map(([p]) => p).sort();
+  // A pulldown and a chest-supported row light different parts of the back.
+  assert.deepEqual(lead('Lat Pulldown', ['upper-back']), ['lats']);
+  assert.deepEqual(lead('Chest Supported Row', ['upper-back']), ['lats', 'midTraps']);
+  assert.deepEqual(lead('Chest Supported Row', ['upper-back'], 'neutral-wide'), ['midTraps', 'rearDelts']);
+  // Incline against flat (Rodríguez-Ridao 2020).
+  assert.deepEqual(lead('Incline Dumbbell Press', ['chest']), ['upperChest']);
+  assert.deepEqual(lead('Barbell Bench Press', ['chest']), ['lowerChest']);
+  // Deltoid heads (Campos 2020) and calves (Kinoshita 2023).
+  assert.deepEqual(lead('Dumbbell Lateral Raise', ['deltoids']), ['sideDelts']);
+  assert.deepEqual(lead('Seated Dumbbell Shoulder Press', ['deltoids']), ['frontDelts']);
+  assert.deepEqual(lead('Seated Calf Raise', ['calves']), ['soleus']);
+  assert.deepEqual(lead('Standing Calf Raise', ['calves']), ['calves']);
+  // Rectus femoris only leads in the leg extension (Ema 2016).
+  assert.deepEqual(lead('Leg Extension', ['quadriceps']), ['quads', 'rectusFemoris']);
+  assert.ok(!lead('Barbell Back Squat', ['quadriceps', 'gluteal']).includes('rectusFemoris'));
+  // Without a rule, the named muscles narrow the group: only the rear delts of "shoulders".
+  assert.deepEqual(lead('Band Something', ['deltoids'], undefined, ['posterior deltoid']), ['rearDelts']);
+});

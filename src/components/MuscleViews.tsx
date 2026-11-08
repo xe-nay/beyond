@@ -29,9 +29,10 @@ const pct = (v: number) => `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`;
 export function MuscleViews({ done, inRange, sets, width, unit }: { done: Session[]; inRange: Session[]; sets: Record<Region, number>; width: number; unit: 'kg' | 'lb' }) {
   const [view, setView] = useState<View3>('worked');
   const [region, setRegion] = useState<Region | null>(null);
-  const now = Date.now();
-  const fatigue = useMemo(() => muscleFatigue(done, byId, now), [done]);
-  const strength = useMemo(() => muscleStrength(done, byId, now), [done]);
+  // The time the screen opened: render stays pure.
+  const [now] = useState(() => Date.now());
+  const fatigue = useMemo(() => muscleFatigue(done, byId, now), [done, now]);
+  const strength = useMemo(() => muscleStrength(done, byId, now), [done, now]);
   const regions = REGIONS.filter((r) => r !== 'neck');
 
   // What colours the body in each view: share of the most-worked muscle, recent load, gains.
