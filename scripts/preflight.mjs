@@ -51,8 +51,13 @@ check('App tests (jest), nothing left running', () => {
 });
 check('Lint: no new errors', () => {
   const base = JSON.parse(readFileSync('scripts/lint-baseline.json', 'utf8')).errors;
-  const r = run('npx', ['eslint', '.', '-f', 'json']);
-  const files = JSON.parse(r.stdout || '[]');
+  // Results go to a file: through a pipe they once came back empty and read as "0 errors".
+  const out = join(mkdtempSync(join(tmpdir(), 'beyond-lint-')), 'lint.json');
+  const r = run('npx', ['eslint', '.', '-f', 'json', '-o', out]);
+  if (!existsSync(out)) return `ESLint wrote no results.
+${tail(r)}`;
+  const files = JSON.parse(readFileSync(out, 'utf8') || '[]');
+  if (!files.length) return 'ESLint checked no files: something is wrong with its setup.';
   const errors = files.reduce((n, f) => n + f.errorCount, 0);
   if (errors > base) {
     const list = files.flatMap((f) => f.messages.filter((m) => m.severity === 2).map((m) => `${f.filePath.replace(process.cwd(), '')}:${m.line} ${m.ruleId}`));
