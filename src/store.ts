@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import { byId } from './catalog';
-import { bodyKg, fillBodyKg } from './domain/bodyweight';
+import { bodyKg, fillBodyKg, refillBodyKg } from './domain/bodyweight';
 import { sum } from './domain/nutrition';
 import { generateProgram, TEMPLATES } from './domain/program';
 import { doseNutrients, formatDose } from './domain/supplements';
@@ -330,10 +330,17 @@ export const useStore = create<State>((set, get) => ({
   saveBody(b) {
     set((s) => {
       const body = [...s.body.filter((x) => x.id !== b.id), b].sort((a, z) => a.date.localeCompare(z.date));
-      return { body, sessions: fillBodyKg(s.sessions, body, byId) };
+      // A corrected weigh-in moves the bodyweight sets of its days with it; a new one fills those missing.
+      const corrected = s.body.some((x) => x.id === b.id);
+      return { body, sessions: corrected ? refillBodyKg(s.sessions, body, byId) : fillBodyKg(s.sessions, body, byId) };
     });
   },
-  deleteBody(id) { set((s) => ({ body: s.body.filter((x) => x.id !== id) })); },
+  deleteBody(id) {
+    set((s) => {
+      const body = s.body.filter((x) => x.id !== id);
+      return { body, sessions: refillBodyKg(s.sessions, body, byId) };
+    });
+  },
   saveCheck(c) { set((s) => ({ checks: [...s.checks.filter((x) => x.date !== c.date), c] })); },
 
   importData(sessions, cardio, remove = [], rest) {

@@ -22,7 +22,7 @@ jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn(() => Promise.resolve
 jest.mock('../modules/live-activity', () => ({
   liveAvailable: jest.fn(() => true), startLive: jest.fn(() => Promise.resolve('a')), updateLive: jest.fn(() => Promise.resolve()), endLive: jest.fn(() => Promise.resolve()),
   liveLog: jest.fn(), liveStatus: jest.fn(() => 'Ready'),
-  startIntake: jest.fn(() => Promise.resolve('i')), endIntake: jest.fn(() => Promise.resolve()), intakeSlot: jest.fn(() => null),
+  startIntake: jest.fn(() => Promise.resolve('i')), endIntake: jest.fn(() => Promise.resolve()), intakeSlot: jest.fn(() => null), planIntakes: jest.fn(() => Promise.resolve([])), intakeSlots: jest.fn(() => []),
   takeIntakeAnswers: jest.fn(() => []), onIntakeAnswer: jest.fn(() => null),
 }));
 // Animation libraries: their own official mocks.

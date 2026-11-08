@@ -43,19 +43,20 @@ private struct Clock: View {
   }
 }
 
-/// Width of the compact timer: room for the digits it will show and no more. A countdown only
-/// shrinks, so its starting length decides (M:SS, MM:SS, H:MM:SS); a session clock counting up gets
-/// MM:SS until 50 minutes, then H:MM:SS.
-private func compactWidth(_ s: State) -> CGFloat {
-  let digit: CGFloat = 8.8, colon: CGFloat = 4.6
+/// Width of a clock at a font size: room for the digits it will show and no more (a timer otherwise
+/// takes all the width it is offered). A countdown only shrinks, so its starting length decides (M:SS,
+/// MM:SS, H:MM:SS). A session clock counting up keeps running between updates without the layout being
+/// redone, so from 30 minutes in it has room for the hours: past an hour, "1:10:59" no longer wraps.
+private func clockWidth(_ s: State, size: CGFloat) -> CGFloat {
+  let digit = size * 0.63, colon = size * 0.33
   func width(_ seconds: TimeInterval) -> CGFloat {
     if seconds >= 3600 { return 5 * digit + 2 * colon }
     if seconds >= 600 { return 4 * digit + colon }
     return 3 * digit + colon
   }
   if let end = s.endsAt, end > Date() { return width(end.timeIntervalSinceNow) + 2 }
-  if let start = s.startedAt { return width(max(600, Date().timeIntervalSince(start) + 600)) + 2 }
-  return 46
+  if let start = s.startedAt { return width(max(600, Date().timeIntervalSince(start) + 1800)) + 2 }
+  return size * 3.3
 }
 
 /// A ring that drains over the countdown; a plain symbol when there is nothing to count down.
@@ -98,7 +99,9 @@ private struct LockScreen: View {
         .monospacedDigit()
         .foregroundStyle(Color(hex: state.accent))
         .multilineTextAlignment(.trailing)
-        .frame(maxWidth: 120, alignment: .trailing)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .frame(width: clockWidth(state, size: 34), alignment: .trailing)
     }
     .padding(16)
     .activityBackgroundTint(Color.black.opacity(0.85))
@@ -123,7 +126,9 @@ struct BeyondLiveActivity: Widget {
             .monospacedDigit()
             .foregroundStyle(accent)
             .multilineTextAlignment(.trailing)
-            .frame(maxWidth: 110, alignment: .trailing)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(width: clockWidth(s, size: 30), alignment: .trailing)
         }
         DynamicIslandExpandedRegion(.bottom) {
           VStack(alignment: .leading, spacing: 2) {
@@ -144,7 +149,7 @@ struct BeyondLiveActivity: Widget {
           .multilineTextAlignment(.trailing)
           .lineLimit(1)
           .minimumScaleFactor(0.8)
-          .frame(width: compactWidth(s), alignment: .trailing)
+          .frame(width: clockWidth(s, size: 14), alignment: .trailing)
       } minimal: {
         Badge(state: s, size: 22)
       }

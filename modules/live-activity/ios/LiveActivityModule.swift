@@ -10,6 +10,8 @@ public class LiveActivityModule: Module {
   private var answerObserver: NSObjectProtocol?
   static let workoutRelevance: Double = 100
   static let intakeRelevance: Double = 10
+  /// The intake reminder appears this long before its time.
+  static let intakeLead: TimeInterval = 15 * 60
 
   public func definition() -> ModuleDefinition {
     Name("LiveActivity")
@@ -60,6 +62,59 @@ public class LiveActivityModule: Module {
         beyondLog.error("intake failed: \(String(describing: error), privacy: .public)")
         throw error
       }
+    }
+
+    /// Sets the intake reminders to exactly these times: one Live Activity per time, starting 15 minutes
+    /// before it. A time already showing is updated; a later one is scheduled (iOS 26: the system starts
+    /// it at that moment, also with the app closed, and alerts like a notification); one already due starts
+    /// now. Any other intake activity, shown or still waiting to start, is ended. Must run with the app in
+    /// front (iOS refuses to start or schedule one from the background). Returns the times covered.
+    AsyncFunction("planIntakes") { (title: String, plans: [IntakePlan]) -> [String] in
+      guard #available(iOS 16.2, *) else { return [] }
+      let wanted = Set(plans.map { $0.slot })
+      for activity in Activity<IntakeActivityAttributes>.activities where !wanted.contains(activity.content.state.slot) {
+        await activity.end(nil, dismissalPolicy: .immediate)
+      }
+      var covered: [String] = []
+      for plan in plans {
+        let due = Date(timeIntervalSince1970: plan.dueAt / 1000)
+        let state = IntakeActivityAttributes.ContentState(items: plan.items, dueAt: due, slot: plan.slot)
+        // Stale at the due time: the reminder turns to "Due now" by itself.
+        let content = ActivityContent(state: state, staleDate: due, relevanceScore: Self.intakeRelevance)
+        if let running = Activity<IntakeActivityAttributes>.activities.first(where: { $0.content.state.slot == plan.slot }) {
+          if running.content.state != state { await running.update(content) }
+          covered.append(plan.slot)
+          continue
+        }
+        let start = due.addingTimeInterval(-Self.intakeLead)
+        do {
+          if start <= Date() {
+            _ = try await MainActor.run { try Activity.request(attributes: IntakeActivityAttributes(title: title), content: content, pushType: nil) }
+            beyondLog.notice("intake: started \(plan.slot, privacy: .public)")
+          } else if #available(iOS 26.0, *) {
+            let alert = AlertConfiguration(
+              title: LocalizedStringResource(stringLiteral: title),
+              body: LocalizedStringResource(stringLiteral: plan.items.joined(separator: ", ")),
+              sound: .default)
+            _ = try await MainActor.run {
+              try Activity.request(attributes: IntakeActivityAttributes(title: title), content: content, pushType: nil, style: .standard, alertConfiguration: alert, start: start)
+            }
+            beyondLog.notice("intake: scheduled \(plan.slot, privacy: .public)")
+          } else {
+            continue
+          }
+          covered.append(plan.slot)
+        } catch {
+          beyondLog.error("intake failed for \(plan.slot, privacy: .public): \(String(describing: error), privacy: .public)")
+        }
+      }
+      return covered
+    }
+
+    /// The times the intake reminders cover: shown, or scheduled and waiting to start.
+    Function("intakeSlots") { () -> [String] in
+      guard #available(iOS 16.2, *) else { return [] }
+      return Activity<IntakeActivityAttributes>.activities.map { $0.content.state.slot }
     }
 
     /// Closes the intake reminder (all of them, or the one for a slot).
@@ -156,4 +211,11 @@ public class LiveActivityModule: Module {
       total: s["total"] as? Double ?? 0
     )
   }
+}
+
+/// One intake time for planIntakes: its key ("2026-11-08|07:00"), what to take, and when (ms since 1970).
+struct IntakePlan: Record {
+  @Field var slot: String = ""
+  @Field var items: [String] = []
+  @Field var dueAt: Double = 0
 }

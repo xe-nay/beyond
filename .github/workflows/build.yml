@@ -197,10 +197,10 @@ jobs:
           # The test driver can take a while to start on a fresh simulator.
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
           mkdir -p maestro-output
-          # The plan the second flow imports, dated from today, on the simulator's clipboard. On a busy
-          # runner simctl can time out (error 60), so it gets a few tries instead of ending the step.
-          clip() { for i in 1 2 3 4; do node scripts/test-plan.mjs | xcrun simctl pbcopy "$DEVICE" && return 0; sleep 10; done; echo "Could not set the simulator clipboard"; return 1; }
-          attempt() { set -o pipefail; maestro --device "$DEVICE" test "$1" --test-output-dir maestro-output 2>&1 | tee "maestro-output/$2.log"; }
+          # The plan the second flow imports, dated from today, as a beyond://import link (the simulator's
+          # clipboard is unreliable in recent Xcode: Apple forums, "Clipboard issues with simulators").
+          export PLAN_URL="beyond://import?text=$(node -e 'process.stdout.write(encodeURIComponent(require("child_process").execSync("node scripts/test-plan.mjs").toString().trim()))')"
+          attempt() { set -o pipefail; maestro --device "$DEVICE" test -e PLAN_URL="$PLAN_URL" "$1" --test-output-dir maestro-output 2>&1 | tee "maestro-output/$2.log"; }
           # Maestro's driver sometimes never starts on CI runners (IOSDriverTimeoutException, maestro
           # issue 1585: no fix; a fresh simulator and a second try is what works). Only then is it retried.
           walk() {
@@ -210,17 +210,13 @@ jobs:
               xcrun simctl shutdown "$DEVICE" || true
               xcrun simctl boot "$DEVICE"
               xcrun simctl bootstatus "$DEVICE" -b
-              [ "$3" = clip ] && { clip || true; }
               attempt "$1" "$2" && return 0
             fi
             echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
             return 1
           }
           walk .maestro/journey.yaml journey || true
-          # The plan's import pastes from the clipboard: set it right before, so nothing in the first
-          # walkthrough can have changed it.
-          clip || true
-          walk .maestro/sub/plan.yaml plan clip || true
+          walk .maestro/sub/plan.yaml plan || true
           xcrun simctl io "$DEVICE" screenshot maestro-output/final.png || true
           # The walkthrough ends mid-cardio. iOS hides an app's own Live Activity while the app is in
           # front, so open Safari over it and capture the Dynamic Island with the simulator's own

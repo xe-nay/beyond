@@ -1,34 +1,41 @@
-// The daily intake reminder as a Live Activity on the Lock Screen and in the Dynamic Island, with Taken
-// and Skip that work without opening the app. It appears 15 minutes before the time (or once that time
-// has passed, until answered). iOS lets an app start one only while it is open on screen, so with Beyond
-// closed then, the reminder notification at the time stands in for it. Answers pressed while the app was
-// closed are applied when it next starts.
+// The daily intake reminders as Live Activities on the Lock Screen and in the Dynamic Island, with Taken
+// and Skip that work without opening the app: one for each time something is still to take, appearing
+// 15 minutes before it and staying ("Due now") until answered. Whenever the app is open it schedules the
+// next 24 hours: on iOS 26 the system starts each one at its moment even with Beyond closed (before,
+// one could only start while the app was on screen, so a reminder came only as a notification). Two
+// times close together each get their own. Answers pressed while the app was closed are applied when
+// it next starts.
 import { AppState } from 'react-native';
 
-import { endIntake, intakeSlot, onIntakeAnswer, startIntake, takeIntakeAnswers } from '../modules/live-activity';
+import { endIntake, intakeSlots, onIntakeAnswer, planIntakes, takeIntakeAnswers } from '../modules/live-activity';
 import { answered, formatDose } from './domain/supplements';
 import type { Intake, Supplement } from './domain/types';
 import { answerSlot } from './intakeActions';
 import { soon as replanReminders } from './reminders';
 import { today, useStore } from './store';
 
-const AHEAD = 15 * 60 * 1000;
+const DAY = 86400000;
 
-/** The first reminder time today with something unanswered, if it is due within the next 15 minutes (or already). */
-export function nextSlot(
+/**
+ * Every reminder time from now to 24 hours ahead with something unanswered, and today's earlier times
+ * still unanswered (shown as due).
+ */
+export function upcomingSlots(
   s: { supplements: Supplement[]; intakes: Intake[]; skipped: { supplementId: string; date: string }[] },
   now = new Date(),
 ) {
-  const date = today(now);
   const times = [...new Set(s.supplements.map((x) => x.time).filter((t): t is string => !!t))].sort();
-  for (const time of times) {
-    const due = s.supplements.filter((x) => x.time === time && x.createdAt.slice(0, 10) <= date && !answered(x.id, date, s.intakes, s.skipped));
-    if (!due.length) continue;
-    const dueAt = new Date(`${date}T${time}:00`).getTime();
-    if (dueAt - now.getTime() > AHEAD) return null;
-    return { date, time, slot: `${date}|${time}`, dueAt, items: due.map((x) => `${x.name} · ${formatDose(x)}`) };
+  const out: { date: string; time: string; slot: string; dueAt: number; items: string[] }[] = [];
+  for (const offset of [0, 1]) {
+    const date = today(new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 12));
+    for (const time of times) {
+      const dueAt = new Date(`${date}T${time}:00`).getTime();
+      if (dueAt - now.getTime() > DAY) continue;
+      const due = s.supplements.filter((x) => x.time === time && x.createdAt.slice(0, 10) <= date && !answered(x.id, date, s.intakes, s.skipped));
+      if (due.length) out.push({ date, time, slot: `${date}|${time}`, dueAt, items: due.map((x) => `${x.name} · ${formatDose(x)}`) });
+    }
   }
-  return null;
+  return out;
 }
 
 /** Applies Taken / Skip pressed on the reminder. */
@@ -42,18 +49,15 @@ async function refresh() {
   running = true;
   try {
     applyAnswers();
-    const next = nextSlot(useStore.getState());
-    const showing = intakeSlot();
-    if (!next) {
-      if (showing) await endIntake(null);
-      return;
+    const plans = upcomingSlots(useStore.getState());
+    if (AppState.currentState === 'active') {
+      // Schedules, starts, updates and ends them all; then notifications skip the times they cover.
+      await planIntakes(plans.map(({ slot, items, dueAt }) => ({ slot, items, dueAt })));
+    } else {
+      // In the background they cannot be started, only closed once answered.
+      for (const slot of intakeSlots()) if (!plans.some((p) => p.slot === slot)) await endIntake(slot);
     }
-    // A new one can only be started with the app in front; one already up can be updated any time.
-    if (AppState.currentState === 'active' || showing === next.slot) {
-      await startIntake(next.items, next.dueAt, next.slot);
-      // That time no longer needs its notifications.
-      if (showing !== next.slot) replanReminders();
-    }
+    replanReminders();
   } finally {
     running = false;
   }
@@ -65,26 +69,8 @@ const soon = () => {
   timer = setTimeout(refresh, 600);
 };
 
-// With the app open, the reminder appears on its own when the next time comes within 15 minutes.
-let upcoming: ReturnType<typeof setTimeout> | null = null;
-function watchNext() {
-  if (upcoming) clearTimeout(upcoming);
-  upcoming = null;
-  const s = useStore.getState();
-  if (!s.ready || AppState.currentState !== 'active') return;
-  const date = today();
-  const times = [...new Set(s.supplements.map((x) => x.time).filter((t): t is string => !!t))].sort();
-  const now = Date.now();
-  const next = times.map((t) => new Date(`${date}T${t}:00`).getTime() - AHEAD).find((at) => at > now);
-  if (next) upcoming = setTimeout(() => { soon(); watchNext(); }, Math.min(next - now + 1000, 2 ** 31 - 1));
-}
-
 onIntakeAnswer(() => applyAnswers());
 useStore.subscribe((s, prev) => {
   if (s.ready && (s.supplements !== prev.supplements || s.intakes !== prev.intakes || s.skipped !== prev.skipped || s.ready !== prev.ready)) soon();
 });
-AppState.addEventListener('change', (st) => {
-  if (st === 'active') soon();
-  watchNext();
-});
-useStore.subscribe((s, prev) => { if (s.ready && (s.supplements !== prev.supplements || s.ready !== prev.ready)) watchNext(); });
+AppState.addEventListener('change', (st) => st === 'active' && soon());

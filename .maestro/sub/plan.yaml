@@ -1,16 +1,16 @@
 # Your training plan, end to end: import it, start today's workout, warm-ups and their rests, a working
 # set, discard, and the plan still there; then log a food and remove it. The plan (scripts/test-plan.mjs)
-# is put on the simulator's clipboard by CI before this runs.
+# comes in as a beyond://import link that CI passes in PLAN_URL.
 appId: app.beyond.fitness
 name: Your plan, end to end
 ---
 - launchApp
-- tapOn: "Train"
-- waitForAnimationToEnd
-- tapOn: "(.*, )?Import"
-- tapOn: "(.*, )?Paste"
+# The plan arrives as a link (CI passes it in PLAN_URL): the simulator's clipboard is unreliable in
+# recent Xcode versions (Apple forums, "Clipboard issues with simulators").
+- openLink: ${PLAN_URL}
+# iOS may ask before a link opens the app.
 - tapOn:
-    text: "Allow Paste"
+    text: "Open"
     optional: true
 - waitForAnimationToEnd
 - assertVisible: "Test Upper"
@@ -59,6 +59,8 @@ name: Your plan, end to end
 # Discarding keeps the workout planned for today.
 - tapOn: "Finish"
 - tapOn: "Discard"
+# Discarding asks first.
+- tapOn: "Discard workout"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Test Upper"

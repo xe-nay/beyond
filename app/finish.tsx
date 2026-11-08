@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, useWindowDimensions, View } from 'react-native';
+import { Alert, ScrollView, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -56,7 +56,13 @@ export default function Finish() {
       }} />
       <Row style={{ justifyContent: 'center' }} gap={space.xl}>
         <Press onPress={() => router.back()}><T v="label" color={colors.dim}>Keep training</T></Press>
-        <Press onPress={() => { s.discardSession(session.id); router.dismissAll(); }}><T v="label" color={colors.red}>Discard</T></Press>
+        {/* Discarding cannot be undone, so it asks first. */}
+        <Press onPress={() => Alert.alert('Discard this workout?', session.source === 'import'
+          ? `The ${session.sets.length ? 'sets you logged are' : 'session is'} removed; the workout stays planned.`
+          : `The ${session.sets.length} set${session.sets.length === 1 ? '' : 's'} you logged will be deleted. This can't be undone.`, [
+          { text: 'Keep', style: 'cancel' },
+          { text: 'Discard workout', style: 'destructive', onPress: () => { s.discardSession(session.id); router.dismissAll(); } },
+        ])}><T v="label" color={colors.red}>Discard</T></Press>
       </Row>
     </ScrollView>
   );

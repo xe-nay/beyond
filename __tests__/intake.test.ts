@@ -2,22 +2,27 @@
 // The daily intake reminder: which time it shows, and answers given on it while the app was closed.
 import { takeIntakeAnswers } from '../modules/live-activity';
 import type { Supplement } from '../src/domain/types';
-import { nextSlot } from '../src/intakeLive';
+import { upcomingSlots } from '../src/intakeLive';
 import { today, useStore } from '../src/store';
 
 const supp = (id: string, time: string): Supplement => ({
   id, name: id, brand: null, image: null, barcode: null, dose: 5, unit: 'g', time, per100: null, servingG: null, micros: [], createdAt: '2026-01-01T00:00:00Z',
 });
 
-test('the reminder shows 15 minutes before its time, and stays until answered', () => {
-  const s = { supplements: [supp('creatine', '08:00'), supp('multi', '20:00')], intakes: [], skipped: [] };
-  expect(nextSlot(s, new Date(2026, 9, 27, 7, 0))).toBeNull(); // an hour early: not yet
-  expect(nextSlot(s, new Date(2026, 9, 27, 7, 45))?.time).toBe('08:00');
-  expect(nextSlot(s, new Date(2026, 9, 27, 7, 45))?.items).toEqual(['creatine · 5 g']);
-  expect(nextSlot(s, new Date(2026, 9, 27, 9, 30))?.time).toBe('08:00'); // due and unanswered
-  const answered = { ...s, skipped: [{ supplementId: 'creatine', date: today(new Date(2026, 9, 27, 7, 0)) }] };
-  expect(nextSlot(answered, new Date(2026, 9, 27, 13, 0))).toBeNull();
-  expect(nextSlot(answered, new Date(2026, 9, 27, 19, 50))?.time).toBe('20:00');
+test('every time in the next 24 hours gets its own reminder; answered times drop out', () => {
+  const s = { supplements: [supp('creatine', '08:00'), supp('multi', '08:10'), supp('omega', '20:00')], intakes: [], skipped: [] };
+  const now = new Date(2026, 9, 27, 7, 0);
+  const slots = upcomingSlots(s, now);
+  // Today 08:00, 08:10 and 20:00 (each its own, though close together), tomorrow 07:00 is past the 24 h.
+  expect(slots.map((x) => x.time)).toEqual(['08:00', '08:10', '20:00']);
+  expect(slots[0].items).toEqual(['creatine · 5 g']);
+  // In the evening, tomorrow's times (up to 24 hours ahead) are planned too.
+  expect(upcomingSlots(s, new Date(2026, 9, 27, 21, 0)).map((x) => `${x.date} ${x.time}`)).toEqual([
+    `${today(now)} 08:00`, `${today(now)} 08:10`, `${today(now)} 20:00`,
+    `${today(new Date(2026, 9, 28, 12))} 08:00`, `${today(new Date(2026, 9, 28, 12))} 08:10`, `${today(new Date(2026, 9, 28, 12))} 20:00`,
+  ]);
+  const answered = { ...s, skipped: [{ supplementId: 'creatine', date: today(now) }] };
+  expect(upcomingSlots(answered, now).map((x) => x.time)).toEqual(['08:10', '20:00']);
 });
 
 test('Taken pressed on the reminder while the app was closed is applied when it starts', () => {

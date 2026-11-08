@@ -25,6 +25,8 @@ const native = requireOptionalNativeModule<{
   startIntake(title: string, items: string[], dueAt: number, slot: string): Promise<string | null>;
   endIntake(slot: string | null): Promise<void>;
   intakeSlot(): string | null;
+  planIntakes(title: string, plans: IntakePlan[]): Promise<string[]>;
+  intakeSlots(): string[];
   takeIntakeAnswers(): string[];
   addListener(event: 'onIntakeAnswer', listener: () => void): { remove(): void };
 }>('LiveActivity');
@@ -67,6 +69,16 @@ export const startIntake = (items: string[], dueAt: number, slot: string) =>
   native?.startIntake ? native.startIntake('Daily intake', items, dueAt, slot).catch(fail) : Promise.resolve(null);
 export const endIntake = (slot: string | null = null) => native?.endIntake?.(slot).catch(fail) ?? Promise.resolve();
 export const intakeSlot = () => { try { return native?.intakeSlot?.() ?? null; } catch { return null; } };
+export interface IntakePlan { slot: string; items: string[]; dueAt: number }
+/**
+ * Sets the intake reminders to these times: one Live Activity each, from 15 minutes before (scheduled
+ * ahead on iOS 26, so it appears with the app closed). Others are ended. Run with the app in front.
+ * Returns the times that have one.
+ */
+export const planIntakes = (plans: IntakePlan[]) =>
+  native?.planIntakes ? native.planIntakes('Daily intake', plans).catch((e) => { fail(e); return [] as string[]; }) : Promise.resolve([] as string[]);
+/** The times the intake reminders cover, shown or waiting to start. */
+export const intakeSlots = (): string[] => { try { return native?.intakeSlots?.() ?? []; } catch { return []; } };
 /** Answers pressed on the reminder since the last call, as { slot, answer }; each is returned once. */
 export function takeIntakeAnswers(): { date: string; time: string; answer: 'taken' | 'skip' }[] {
   let raw: string[] = [];

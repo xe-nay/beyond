@@ -12,7 +12,7 @@
 // 0.6 of the way (their centre of mass sits 0.4 down from the hip), the shins and feet hardly at all:
 // 0.59 + 0.29 × 0.6 = 0.77 (ExRx's figure for the squat is about 0.72).
 // Holds, stretches, crawls and jumps are timed or not lifting, so they get none.
-import type { Exercise, Session } from './types';
+import type { Exercise, Session, WorkoutSet } from './types';
 
 export interface BodyShare {
   share: number;
@@ -106,6 +106,30 @@ export function fillBodyKg(sessions: Session[], entries: { date: string; weightK
       const kg = bodyKg(byId[x.exerciseId], bodyWeightOn(entries, x.completedAt));
       return kg === null ? x : { ...x, bodyKg: kg };
     });
+    changed = true;
+    return { ...session, sets };
+  });
+  return changed ? next : sessions;
+}
+
+/**
+ * After a weigh-in is corrected or deleted: every bodyweight set takes the weight of its day again from
+ * the history (the same weight it was logged with, unless that weigh-in changed). Returns the same
+ * array when nothing changed.
+ */
+export function refillBodyKg(sessions: Session[], entries: { date: string; weightKg: number | null }[], byId: Record<string, Exercise>) {
+  let changed = false;
+  const next = sessions.map((session) => {
+    let touched = false;
+    const sets = session.sets.map((x): WorkoutSet => {
+      if (!bodyShare(byId[x.exerciseId])) return x;
+      const kg = bodyKg(byId[x.exerciseId], bodyWeightOn(entries, x.completedAt));
+      if ((kg ?? undefined) === x.bodyKg) return x;
+      touched = true;
+      const { bodyKg: _, ...rest } = x;
+      return kg === null ? rest : { ...x, bodyKg: kg };
+    });
+    if (!touched) return session;
     changed = true;
     return { ...session, sets };
   });

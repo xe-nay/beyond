@@ -47,6 +47,7 @@ export default function Progress() {
   const [period, setPeriod] = useState<'week' | 'last' | 'month' | 'all'>('week');
   const [region, setRegion] = useState<Region | null>(null);
   const [detail, setDetail] = useState<'basic' | 'detailed'>('basic');
+  const [allBody, setAllBody] = useState(false);
   const { width } = useWindowDimensions();
   const inner = width - space.lg * 4;
 
@@ -223,12 +224,32 @@ export default function Progress() {
             <>
               <Row style={{ justifyContent: 'space-between' }}>
                 <Stat small label="Weight" value={formatWeight(weights[weights.length - 1].weightKg!, unit)} unit={unit} />
-                {weights.length > 1 && <Stat small label="Change" value={`${weights[weights.length - 1].weightKg! >= weights[0].weightKg! ? '+' : ''}${formatWeight(weights[weights.length - 1].weightKg! - weights[0].weightKg!, unit)}`} unit={unit} />}
+                {weights.length > 1 && <Stat small label="Change" value={`${weights[weights.length - 1].weightKg! >= weights[0].weightKg! ? '+' : ''}${(Math.round(toDisplay(weights[weights.length - 1].weightKg! - weights[0].weightKg!, unit) * 10) / 10).toFixed(1)}`} unit={unit} />}
                 {latest.find((b) => b.waistCm) && <Stat small label="Waist" value={latest.find((b) => b.waistCm)!.waistCm!} unit="cm" />}
               </Row>
               {weights.length > 1 && <LineChart data={weights.map((w) => toDisplay(w.weightKg!, unit))} color={colors.lime} height={90} />}
             </>
           ) : <Button small kind="secondary" icon="scalemass.fill" title="Log your weight" onPress={() => router.push('/body-entry')} />}
+          {/* Every weigh-in, newest first: tap one to correct or delete it. */}
+          {s.body.length > 0 && (
+            <View style={{ gap: 0 }}>
+              {[...s.body].reverse().slice(0, allBody ? undefined : 5).map((b) => (
+                <Press key={b.id} onPress={() => router.push({ pathname: '/body-entry', params: { id: b.id } })} haptic={false} label={`Edit ${b.date}`}>
+                  <Row style={{ paddingVertical: space.sm, borderTopWidth: 0.5, borderTopColor: colors.hairline }}>
+                    <T v="label" color={colors.dim} style={{ flex: 1 }}>{new Date(`${b.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</T>
+                    <T v="headline" style={type.num}>{b.weightKg ? `${(Math.round(toDisplay(b.weightKg, unit) * 10) / 10).toFixed(1)} ${unit}` : '—'}</T>
+                    {b.waistCm ? <T v="label" color={colors.faint} style={[type.num, { width: 64, textAlign: 'right' }]}>{b.waistCm} cm</T> : <View style={{ width: 64 }} />}
+                    <Icon name="chevron.right" size={12} color={colors.faint} style={{ marginLeft: space.sm }} />
+                  </Row>
+                </Press>
+              ))}
+              {s.body.length > 5 && (
+                <Press onPress={() => setAllBody(!allBody)} haptic={false} style={{ paddingTop: space.sm }}>
+                  <T v="label" color={colors.cyan} style={{ textAlign: 'center' }}>{allBody ? 'Show fewer' : `Show all ${s.body.length}`}</T>
+                </Press>
+              )}
+            </View>
+          )}
           {photos.length > 0 && (
             <Row gap={6}>
               {photos.map((b) => <Image key={b.id} source={b.photo!} style={{ flex: 1, aspectRatio: 0.75, borderRadius: radius.sm, maxWidth: 80 }} contentFit="cover" />)}

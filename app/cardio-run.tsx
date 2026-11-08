@@ -1,7 +1,7 @@
 import { useScreenOn } from '../src/keepAwake';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { Alert, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -122,7 +122,10 @@ export default function CardioRun() {
           </Row>
           <T v="footnote" color={colors.faint} style={{ textAlign: 'center' }}>Average heart rate (bpm) from a watch or chest strap, if you wore one: it makes the calories more accurate. Leave it at — otherwise.</T>
           <Button kind="lime" icon="checkmark" title="Save" onPress={() => finish(true)} />
-          <Press onPress={() => finish(false)}><T v="label" color={colors.red} style={{ textAlign: 'center' }}>Discard</T></Press>
+          <Press onPress={() => Alert.alert('Discard this session?', "It won't be saved. This can't be undone.", [
+            { text: 'Keep', style: 'cancel' },
+            { text: 'Discard session', style: 'destructive', onPress: () => finish(false) },
+          ])}><T v="label" color={colors.red} style={{ textAlign: 'center' }}>Discard</T></Press>
         </Animated.View>
       </View>
     );

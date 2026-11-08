@@ -3,11 +3,9 @@
 // straight bar and the classic lat bar with angled ends. The choice is kept per set, so loads are
 // compared only with sets done on the same attachment.
 //
-// What the grips change (EMG studies; differences are small): grip width hardly changes lat activity in
-// the pulldown, with a slight edge for a medium grip (Andersen et al. 2014); an overhand grip works the
-// lats a little more than an underhand one (Lusk et al. 2010). A parallel grip usually lets more
-// weight be moved and is easier on the shoulders.
-import type { Exercise, Region } from './types';
+// What each grip changes for the muscles is in backFocus.ts (pulldowns: hardly anything; rows: narrow
+// for the lats, wide for the traps and delts).
+import type { Exercise } from './types';
 
 export interface Attachment { id: string; name: string; full: string; group: 'parallel' | 'bar' }
 
@@ -43,17 +41,4 @@ export function parseAttachment(v: unknown) {
   if (typeof v !== 'string') return undefined;
   const k = v.trim().toLowerCase();
   return ATTACHMENTS.find((a) => a.id === k || a.name.toLowerCase() === k || a.full.toLowerCase().startsWith(k))?.id;
-}
-
-/**
- * What a grip changes, in words, and the muscles it brings in more. Studies find the differences
- * small: width barely moves lat activity (Andersen et al. 2014), overhand a little more than
- * underhand (Lusk et al. 2010); a closer grip lengthens the pull with the elbows by the sides.
- */
-export function attachmentFocus(id: string | undefined): { more: Region[]; note: string } | null {
-  if (id === 'neutral-wide' || id === 'lat-bar') return { more: [], note: 'Wide: a shorter pull led by the lats and upper back. Width changes lat work only a little in studies.' };
-  if (id === 'neutral-medium') return { more: [], note: 'Medium: in studies a slight edge for the lats; the parallel grip usually lets you pull more weight.' };
-  if (id === 'neutral-shoulder' || id === 'neutral-close' || id === 'v-handle') return { more: ['trapezius', 'biceps'], note: 'Close: a longer pull with the elbows by your sides, so the mid back and biceps share more of the work.' };
-  if (id === 'straight-bar') return { more: [], note: 'Overhand works the lats a little more than underhand in studies; underhand lets the biceps help more.' };
-  return null;
 }

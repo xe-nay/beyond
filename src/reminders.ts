@@ -11,7 +11,7 @@ import { AppState } from 'react-native';
 
 import { BEEP, installSounds } from './notifySounds';
 import { answered, daysLeft, formatAmount, reminderPlan, restockAt, stockLeft, type Reminder } from './domain/supplements';
-import { intakeSlot } from '../modules/live-activity';
+import { intakeSlots } from '../modules/live-activity';
 import { answerSlot } from './intakeActions';
 import type { FoodEntry, InboxItem } from './domain/types';
 import { uid, useStore } from './store';
@@ -77,14 +77,13 @@ async function replan() {
       const { date, time } = slot(id);
       if (supplements.filter((x) => x.time === time).every((x) => answered(x.id, date, intakes, skipped))) Notifications.dismissNotificationAsync(id).catch(() => {});
     }
+    const covered = new Set(intakeSlots());
     const plan = [
       ...restockPlan(now),
-      // The time the Live Activity reminder is showing needs no notifications.
+      // Times a Live Activity reminder covers (shown, or scheduled to appear) need no notifications.
       ...reminderPlan(supplements, intakes, now, 10, { skipped, nags: NAGS, max: 44 }).filter((r) => {
-        const live = intakeSlot();
-        if (!live) return true;
         const { date, time } = slot(r.id);
-        return `${date}|${time}` !== live;
+        return !covered.has(`${date}|${time}`);
       }),
       ...mealPlan(entries, now).slice(0, 14),
     ];

@@ -11,6 +11,7 @@ import { Icon } from '../src/components/Icon';
 import { AttachmentPicker } from '../src/components/AttachmentPicker';
 import { motionFor, WeightControl } from '../src/components/LoadVisual';
 import { MusclesWorked } from '../src/components/MusclesWorked';
+import { SessionVolume } from '../src/components/SessionVolume';
 import { RestBar } from '../src/components/RestBar';
 import { Button, Card, Divider, Press, Row, Segmented, Stepper, T, thud } from '../src/components/ui';
 import { defaultAttachment, takesAttachment } from '../src/domain/attachments';
@@ -211,7 +212,12 @@ export default function Workout() {
         <Press onPress={() => router.back()} style={styles.round} hitSlop={8}><Icon name="chevron.down" size={18} /></Press>
         <View style={{ alignItems: 'center' }}>
           <T v="headline" numberOfLines={1}>{session.name}</T>
-          <T v="footnote" color={colors.cyan} style={[type.num, { fontWeight: "600" }]}>{formatClock(elapsed)}</T>
+          {/* The clock and the weight lifted so far, side by side. */}
+          <Row gap={6}>
+            <T v="footnote" color={colors.cyan} style={[type.num, { fontWeight: "600" }]}>{formatClock(elapsed)}</T>
+            <T v="footnote" color={colors.faint}>·</T>
+            <SessionVolume kg={volumeLoad(session.sets)} unit={unit} />
+          </Row>
         </View>
         <Button small kind="lime" title="Finish" onPress={() => router.push('/finish')} />
       </Row>

@@ -1,9 +1,10 @@
 // The export: everything logged, laid out on A4 pages. One page model feeds the in-app preview, the
 // PDF (as HTML for expo-print) and a plain-text copy, so the preview shows exactly what is exported.
-import { exercise } from './catalog';
+import { byId, exercise } from './catalog';
 import { repsText } from './domain/sides';
-import { personalRecords, restBefore, sessionMinutes, setKg, volumeLoad, working } from './domain/calc';
-import { pace } from './domain/intervals';
+import { effortSummary, fatigueReport, groupByExercise, personalRecords, REGION_NAMES, regionSets, restBefore, sessionMinutes, setKg, strengthTrend, volumeLoad, weekStart, working } from './domain/calc';
+import { fitness, guidelineMinutes } from './domain/cardioStats';
+import { formatClock, pace } from './domain/intervals';
 import { MICROS } from './domain/micros';
 import { sum } from './domain/nutrition';
 import { formatWeight, toDisplay } from './domain/plates';
@@ -55,6 +56,87 @@ export function buildReport(s: State, from: string, to: string): Page[] {
     { t: 'cells', cells: ['Food days', String(foodDays.length), 'Average intake', kcalDays.length ? `${n0(kcalDays.reduce((n, k) => n + k.kcal, 0) / kcalDays.length)} kcal · ${n0(kcalDays.reduce((n, k) => n + k.protein, 0) / kcalDays.length)} g protein` : '—'] },
     { t: 'cells', cells: ['Targets', `${s.targets.kcal} kcal`, 'Protein · carbs · fat', `${s.targets.protein} · ${s.targets.carbs} · ${s.targets.fat} g`] },
   ], [22, 18, 24, 36]);
+
+  // Progress over the period, as on the Progress tab: strength, sets per muscle, weekly volume, effort,
+  // cardio fitness and body weight.
+  const DAY = 86400000;
+  const start = sessions.length || cardio.length ? Math.min(...[...sessions.map((x) => Date.parse(`${x.date}T12:00:00`)), ...cardio.map((c) => Date.parse(`${c.date}T12:00:00`))]) : Date.parse(`${from}T12:00:00`);
+  const end = Math.min(Date.parse(`${to}T12:00:00`), Date.now());
+  const weeks = Math.max(1, Math.ceil((end - Math.max(start, Date.parse(`${from}T12:00:00`) || start) + DAY) / (7 * DAY)));
+  const signed = (v: number, text: string) => `${v >= 0 ? '+' : ''}${text}`;
+  const kg1 = (kg: number) => `${Math.round(toDisplay(kg, unit) * 10) / 10} ${unit}`;
+  const pct = (a: number, b: number) => (a > 0 ? `${signed(b - a, String(Math.round(((b - a) / a) * 100)))}%` : '—');
+  if (sessions.length || cardio.length || body.length) heading = [{ t: 'gap' }, { t: 'title', text: 'Progress' }];
+
+  const lifts = groupByExercise(sessions.flatMap((x) => working(x.sets))).sort((a, b) => b.sets.length - a.sets.length).slice(0, 10);
+  const trends = lifts.map((g) => ({ id: g.exerciseId, sets: g.sets.length, t: strengthTrend(sessions, g.exerciseId) })).filter((x) => x.t.length);
+  if (trends.length) {
+    add([
+      { t: 'h', text: 'Strength', right: 'estimated 1RM (Epley), first and latest session' },
+      { t: 'cells', head: true, cells: ['Exercise', 'Sets', 'First', 'Latest', 'Change'] },
+      ...trends.map(({ id, sets, t }): Line => {
+        const a = t[0].value;
+        const b = t[t.length - 1].value;
+        return { t: 'cells', cells: [exercise(id)?.name ?? id, String(sets), w(a), w(b), t.length > 1 ? `${signed(b - a, w(b - a))} (${pct(a, b)})` : '—'] };
+      }),
+    ], [40, 8, 16, 16, 20]);
+  }
+
+  if (sessions.length) {
+    const perMuscle = Object.entries(regionSets(sessions, byId)).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    add([
+      { t: 'h', text: 'Sets per muscle', right: 'supporting muscles count half · about 10 hard sets a week each is a common target' },
+      { t: 'cells', head: true, cells: ['Muscle', 'Sets', 'Per week', 'Muscle', 'Sets', 'Per week'] },
+      ...Array.from({ length: Math.ceil(perMuscle.length / 2) }, (_, i): Line => {
+        const cell = (e?: [string, number]) => (e ? [REGION_NAMES[e[0] as keyof typeof REGION_NAMES], String(Math.round(e[1] * 10) / 10), String(Math.round((e[1] / weeks) * 10) / 10)] : ['', '', '']);
+        return { t: 'cells', cells: [...cell(perMuscle[i * 2]), ...cell(perMuscle[i * 2 + 1])] };
+      }),
+    ], [20, 10, 20, 20, 10, 20]);
+
+    const weekRows: Line[] = [];
+    for (let at = weekStart(new Date(start)).getTime(); at <= end; at += 7 * DAY) {
+      const ws = sessions.filter((x) => { const d = Date.parse(`${x.date}T12:00:00`); return d >= at && d < at + 7 * DAY; });
+      weekRows.push({ t: 'cells', cells: [fmtDate(new Date(at + DAY / 2).toISOString().slice(0, 10)), String(ws.length), String(ws.reduce((n, x) => n + working(x.sets).length, 0)), `${n0(toDisplay(ws.reduce((n, x) => n + volumeLoad(x.sets), 0), unit))} ${unit}`] });
+    }
+    add([
+      { t: 'h', text: 'Weekly volume', right: 'weight × reps of working sets' },
+      { t: 'cells', head: true, cells: ['Week of', 'Workouts', 'Sets', 'Volume'] },
+      ...weekRows.slice(-26),
+    ], [34, 18, 18, 30]);
+
+    const all = sessions.flatMap((x) => x.sets);
+    const effort = effortSummary(all);
+    const rests = working(all).filter((x) => x.restSeconds !== null);
+    const fatigue = fatigueReport(s.sessions.filter((x) => x.finishedAt), s.checks);
+    add([
+      { t: 'h', text: 'Effort and recovery' },
+      { t: 'cells', cells: ['Average RIR', effort.averageRir === null ? '—' : effort.averageRir.toFixed(1), 'Sets at 0–1 RIR', String(effort.nearFailure)] },
+      { t: 'cells', cells: ['Sets rated', `${effort.rated} of ${effort.sets}`, 'Average rest', rests.length ? formatClock(rests.reduce((n, x) => n + x.restSeconds!, 0) / rests.length) : '—'] },
+      { t: 'cells', cells: ['Fatigue now', fatigue.status, 'Total reps', n0(effort.reps)] },
+    ], [22, 24, 26, 28]);
+  }
+
+  if (cardio.length) {
+    const g = guidelineMinutes(cardio, start, end + DAY);
+    const fit = fitness(cardio);
+    const lines: Line[] = [
+      { t: 'h', text: 'Cardio fitness', right: 'WHO: 150–300 moderate minutes a week, vigorous count double' },
+      { t: 'cells', cells: ['Per week (moderate equivalent)', `${n0(g.equivalent / weeks)} min`, 'Moderate · vigorous', `${g.moderate} · ${g.vigorous} min`] },
+    ];
+    if (fit) lines.push({ t: 'cells', cells: ['VDOT (Daniels)', String(fit.vdot), 'Predicted 5 km · 10 km', `${formatClock(fit.fiveK * 60)} · ${formatClock(fit.tenK * 60)}`] });
+    add(lines, [30, 18, 26, 26]);
+  }
+
+  const weighed = body.filter((b) => b.weightKg);
+  if (weighed.length > 1) {
+    const a = weighed[0].weightKg!;
+    const b = weighed[weighed.length - 1].weightKg!;
+    add([
+      { t: 'h', text: 'Body weight' },
+      // Body weight to 0.1, not to a plate step.
+      { t: 'cells', cells: [`${fmtDate(weighed[0].date)} → ${fmtDate(weighed[weighed.length - 1].date)}`, `${kg1(a)} → ${kg1(b)}`, signed(b - a, kg1(b - a)), `${signed(b - a, String(Math.round(((b - a) / a) * 1000) / 10))}%`] },
+    ], [46, 24, 15, 15]);
+  }
 
   if (sessions.length) heading = [{ t: 'gap' }, { t: 'title', text: 'Workouts' }];
   for (const x of sessions) {

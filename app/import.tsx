@@ -1,7 +1,7 @@
 import { ATTACHMENTS } from '../src/domain/attachments';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -22,7 +22,9 @@ const ATTACHMENT_NOTE = `Lat pulldowns and seated cable rows can name the cable 
 export default function Import() {
   const router = useRouter();
   const s = useStore();
-  const [result, setResult] = useState<ImportResult | null>(null);
+  // A plan shared as a link (beyond://import?text=…) opens here ready to review.
+  const { text: linked } = useLocalSearchParams<{ text?: string }>();
+  const [result, setResult] = useState<ImportResult | null>(() => (linked ? parseTrainingFile(linked, exercises, { sessions: s.sessions, cardio: s.cardio }) : null));
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [mode, setMode] = useState<'keep' | 'replace'>('keep');
   // Clashes: settled all at once, or day by day (with a jump to each one).

@@ -528,3 +528,36 @@ test('cable attachments: which exercises, defaults and import names', async () =
   assert.equal(defaultAttachment(ex('Wide-Grip Lat Pulldown')), 'lat-bar');
   assert.equal(parseAttachment('rope'), undefined);
 });
+
+test('back in detail: pulldown grips change little, row grips move lats vs traps', async () => {
+  const { backFocus } = await import('./backFocus.ts');
+  const ex = (name: string, equipment = 'cable') => ({ id: name, name, equipment, category: 'strength', force: 'pull' }) as Exercise;
+  const lead = (b: any) => b.parts.filter(([, l]: any) => l === 3).map(([p]: any) => p).sort();
+  // Every pulldown grip: the lats lead (2025, 7 grips; Andersen 2014).
+  for (const a of ['neutral-wide', 'v-handle', 'lat-bar']) assert.deepEqual(lead(backFocus(ex('Lat Pulldown'), a)), ['lats']);
+  // Rows: close for the lats, wide for the traps and rear delts (Padovan 2025).
+  assert.deepEqual(lead(backFocus(ex('Seated Cable Row'), 'v-handle')), ['lats']);
+  assert.deepEqual(lead(backFocus(ex('Seated Cable Row'), 'neutral-wide')), ['midTraps', 'rearDelts']);
+  assert.deepEqual(lead(backFocus(ex('Wide Grip Seated Cable Row'))), ['midTraps', 'rearDelts']);
+  // The bent-over row loads the lower back most (Fenwick 2009).
+  assert.ok(backFocus(ex('Bent-Over Barbell Row', 'barbell'))!.parts.some(([p, l]) => p === 'lowerBack' && l === 3));
+  // Chin-ups bring in the biceps (Youdas 2010).
+  assert.deepEqual(lead(backFocus(ex('Chin-Ups', 'bodyweight'))), ['biceps', 'lats']);
+  // Not back exercises.
+  for (const n of ['Crow Pose', 'Narrow Stance Squats', 'Barbell Upright Row', 'Medicine Ball Side Throw']) assert.equal(backFocus(ex(n)), null);
+});
+
+test('correcting a weigh-in moves the bodyweight sets of its days with it', async () => {
+  const { refillBodyKg } = await import('./bodyweight.ts');
+  const pull = { id: 'pull-up', name: 'Pull-Up', equipment: 'bodyweight', category: 'strength', force: 'pull' } as Exercise;
+  const byId = { 'pull-up': pull };
+  const sessions = [
+    session('2026-10-02', [set(10, 0, 2, { exerciseId: 'pull-up', completedAt: '2026-10-02T10:00:00Z', bodyKg: 76.8 })]),
+    session('2026-10-20', [set(10, 0, 2, { exerciseId: 'pull-up', completedAt: '2026-10-20T10:00:00Z', bodyKg: 74.9 })]),
+  ];
+  // The first weigh-in (80 kg) was really 82 kg: only the set before the second weigh-in changes.
+  const out = refillBodyKg(sessions, [{ date: '2026-10-01', weightKg: 82 }, { date: '2026-10-15', weightKg: 78 }], byId);
+  assert.equal(out[0].sets[0].bodyKg, 78.7);
+  assert.equal(out[1].sets[0].bodyKg, 74.9);
+  assert.equal(out[1], sessions[1]);
+});
