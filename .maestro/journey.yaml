@@ -14,6 +14,14 @@ name: First run, workout, food, progress and cardio
 - tapOn: "Continue"
 - tapOn: "Continue"
 - takeScreenshot: 04-about
+# On a busy runner a quick tap can be missed: Continue again until the last step shows.
+- repeat:
+    while:
+      notVisible: ".*Build my program.*"
+    times: 4
+    commands:
+      - tapOn: "Continue"
+      - waitForAnimationToEnd
 - tapOn: ".*Build my program.*"
 # Today shows only today's plan, which depends on the date, so the walkthrough starts its workout from Train.
 - extendedWaitUntil:
