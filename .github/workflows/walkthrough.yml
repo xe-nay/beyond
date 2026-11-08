@@ -97,8 +97,12 @@ jobs:
         run: |
           curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o maestro.zip             "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
           unzip -q maestro.zip -d maestro-unzip
+          # Wherever the zip keeps it, the folder holding bin/maestro becomes ~/.maestro.
+          BIN=$(find maestro-unzip -path '*/bin/maestro' -type f | head -1)
+          test -n "$BIN" || { echo "::error::No bin/maestro in the Maestro zip"; find maestro-unzip -maxdepth 3; exit 1; }
           rm -rf "$HOME/.maestro" && mkdir -p "$HOME/.maestro"
-          cp -R maestro-unzip/maestro/* "$HOME/.maestro/"
+          cp -R "$(dirname "$(dirname "$BIN")")"/. "$HOME/.maestro/"
+          chmod +x "$HOME/.maestro/bin/maestro"
           "$HOME/.maestro/bin/maestro" --version
 
       - name: Walk through the app with Maestro
