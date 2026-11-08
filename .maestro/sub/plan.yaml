@@ -89,11 +89,15 @@ name: Your plan, end to end
 - waitForAnimationToEnd
 - assertVisible: ".*Egg, whole.*"
 - takeScreenshot: 37-food-logged
-- tapOn: ".*Egg, whole.*"
+# The food shows twice now: its Quick add tile first, then the diary entry, which is the one to open.
+- tapOn:
+    text: ".*Egg, whole.*"
+    index: 1
 - scrollUntilVisible:
     element: "(.*, )?Remove from diary"
     direction: DOWN
 - tapOn: "(.*, )?Remove from diary"
 - waitForAnimationToEnd
-- assertNotVisible: ".*Egg, whole.*"
+# The diary entry ("time · Basic food · 50 g") is gone; the Quick add tile stays.
+- assertNotVisible: ".*Basic food.*"
 - takeScreenshot: 38-food-removed
