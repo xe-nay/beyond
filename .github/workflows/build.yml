@@ -1,13 +1,17 @@
 name: Build
 
-# iOS: builds an unsigned Beyond.ipa on a cloud Mac and publishes it with a SideStore source.
-# Test: builds for the iOS simulator and walks through the app with Maestro, saving screenshots.
+# iOS: builds an unsigned Beyond.ipa on a cloud Mac and publishes it with a SideStore source; every run
+# is a new version. Changes to the walkthrough alone (tests, docs) do not make one: they run only
+# walkthrough.yml.
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths-ignore:
       - '**.md'
+      - 'docs/**'
+      - '.maestro/**'
+      - '.github/workflows/walkthrough.yml'
 
 permissions:
   contents: write
@@ -23,9 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select the newest stable Xcode
+      # Held on Xcode 26: the runners also carry newer ones, and Xcode 27 broke Maestro's driver until
+      # Maestro 2.12 (mobile-dev-inc/Maestro#3701). Moving up is a deliberate change, not a surprise.
+      - name: Select Xcode 26
         run: |
-          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          XCODE=$(ls -d /Applications/Xcode_26*.app | grep -vi beta | sort -V | tail -1)
+          test -n "$XCODE" || { echo "::error::No Xcode 26 on this runner"; ls -d /Applications/Xcode_*.app; exit 1; }
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
 
@@ -139,136 +146,3 @@ jobs:
           name: xcodebuild-log
           path: xcodebuild.log
           retention-days: 7
-
-  simulator:
-    runs-on: macos-latest
-    timeout-minutes: 75
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select the newest stable Xcode
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
-          sudo xcode-select -s "$XCODE"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-      - run: node scripts/build-exercises.mjs
-      - run: npx expo prebuild --platform ios --no-install
-
-      - name: Cache CocoaPods
-        uses: actions/cache@v4
-        with:
-          path: ios/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - run: cd ios && pod install
-
-      - name: Build for the simulator
-        run: |
-          WORKSPACE=$(ls -d ios/*.xcworkspace | head -1)
-          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-          set +e
-          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' -derivedDataPath build > xcodebuild-sim.log 2>&1
-          STATUS=$?
-          set -e
-          grep -E "error:|\*\* BUILD" xcodebuild-sim.log | tail -60 || true
-          exit $STATUS
-
-      - name: Boot an iPhone simulator and install the app
-        run: |
-          # The same phone as the user's: an iPhone 14 Pro Max on the newest iOS (26). Created when the runner
-          # does not have one; any iPhone Pro otherwise.
-          RUNTIME=$(xcrun simctl list runtimes available -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS']; print(sorted(r, key=lambda x: [int(n) for n in x['version'].split('.')])[-1]['identifier'])")
-          echo "Runtime: $RUNTIME"
-          DEVICE=$(xcrun simctl create "Beyond iPhone 14 Pro Max" com.apple.CoreSimulator.SimDeviceType.iPhone-14-Pro-Max "$RUNTIME" 2>/dev/null || true)
-          if [ -z "$DEVICE" ]; then
-            DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ids=[x['udid'] for k,v in sorted(d.items()) if 'iOS' in k for x in v if 'iPhone' in x['name'] and 'Pro' in x['name']]; print(ids[-1])")
-          fi
-          xcrun simctl list devices | grep "$DEVICE" || true
-          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
-          xcrun simctl boot "$DEVICE"
-          xcrun simctl bootstatus "$DEVICE" -b
-          APP=$(find build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' | head -1)
-          xcrun simctl install "$DEVICE" "$APP"
-          xcrun simctl privacy "$DEVICE" grant notifications app.beyond.fitness || true
-          xcrun simctl privacy "$DEVICE" grant location-always app.beyond.fitness || true
-
-      - name: Walk through the app with Maestro
-        run: |
-          # Its download comes from GitHub releases, which sometimes answer 504: try a few times.
-          for i in 1 2 3 4 5; do
-            curl -fsSL "https://get.maestro.mobile.dev" | bash && [ -x "$HOME/.maestro/bin/maestro" ] && break
-            echo "Maestro install failed (attempt $i), retrying"; sleep $((i * 15))
-          done
-          export PATH="$PATH:$HOME/.maestro/bin"
-          # The test driver can take a while to start on a fresh simulator.
-          export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
-          mkdir -p maestro-output
-          # The plan the second flow imports, dated from today, as a beyond://import link (the simulator's
-          # clipboard is unreliable in recent Xcode: Apple forums, "Clipboard issues with simulators").
-          export PLAN_URL="beyond://import?text=$(node -e 'process.stdout.write(encodeURIComponent(require("child_process").execSync("node scripts/test-plan.mjs").toString().trim()))')"
-          attempt() { set -o pipefail; maestro --device "$DEVICE" test -e PLAN_URL="$PLAN_URL" "$1" --test-output-dir maestro-output 2>&1 | tee "maestro-output/$2.log"; }
-          # Maestro's driver sometimes never starts on CI runners (IOSDriverTimeoutException, maestro
-          # issue 1585: no fix; a fresh simulator and a second try is what works). Only then is it retried.
-          walk() {
-            attempt "$1" "$2" && return 0
-            if grep -q "iOS driver not ready in time" "maestro-output/$2.log"; then
-              pkill -f maestro || true
-              xcrun simctl shutdown "$DEVICE" || true
-              xcrun simctl boot "$DEVICE"
-              xcrun simctl bootstatus "$DEVICE" -b
-              attempt "$1" "$2" && return 0
-            fi
-            echo "MAESTRO_FAILED=1" >> "$GITHUB_ENV"
-            return 1
-          }
-          walk .maestro/journey.yaml journey || true
-          walk .maestro/sub/plan.yaml plan || true
-          xcrun simctl io "$DEVICE" screenshot maestro-output/final.png || true
-          # The walkthrough ends mid-cardio. iOS hides an app's own Live Activity while the app is in
-          # front, so open Safari over it and capture the Dynamic Island with the simulator's own
-          # screenshot (the walkthrough's screenshots leave the island out).
-          xcrun simctl openurl "$DEVICE" "https://www.apple.com" || true
-          sleep 6
-          xcrun simctl io "$DEVICE" screenshot maestro-output/island-cardio.png || true
-          # What iOS said about the Live Activity, and whether the app carries what it needs.
-          {
-            APP=$(find build/Build/Products -maxdepth 2 -name '*.app' -path '*iphonesimulator*' | head -1)
-            echo "== app: $APP"
-            plutil -p "$APP/Info.plist" | grep -i -E "LiveActivit|CFBundleIdentifier" || true
-            echo "== extensions"; ls "$APP/PlugIns" 2>&1 || true
-            for EX in "$APP"/PlugIns/*.appex; do plutil -p "$EX/Info.plist" | grep -i -E "CFBundleIdentifier|NSExtensionPointIdentifier|MinimumOSVersion" || true; done
-            echo "== log"
-            xcrun simctl spawn "$DEVICE" log show --last 30m --style compact --info \
-              --predicate 'subsystem == "app.beyond.fitness" OR (process == "Beyond" AND subsystem CONTAINS[c] "activitykit") OR (process == "liveactivitiesd" AND eventMessage CONTAINS[c] "beyond")' | head -600
-          } > maestro-output/live.log 2>&1 || true
-
-      # Screenshots on their own, so they download in seconds; the large logs go separately.
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: simulator-screens
-          path: |
-            maestro-output/**/*.png
-            maestro-output/**/commands*.json
-            maestro-output/live.log
-          retention-days: 14
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: simulator-logs
-          path: |
-            maestro-output
-            xcodebuild-sim.log
-          retention-days: 14
-
-      - name: Fail if the walkthrough failed
-        if: env.MAESTRO_FAILED == '1'
-        run: exit 1

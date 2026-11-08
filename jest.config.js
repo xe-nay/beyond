@@ -4,6 +4,7 @@ module.exports = {
   preset: 'jest-expo/ios',
   testMatch: ['<rootDir>/__tests__/**/*.test.ts?(x)'],
   setupFiles: ['<rootDir>/__tests__/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/__tests__/timers.ts'],
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|react-native-body-highlighter|@bacons/.*|standard-navigation|expo-router))',
   ],
