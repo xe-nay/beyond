@@ -4,11 +4,11 @@ import { useMemo, useState } from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { byId, exercise } from '../../../src/catalog';
-import { SwipeBody } from '../../../src/components/BodyMap';
 import { ExerciseImage } from '../../../src/components/ExerciseImage';
 import { Radar } from '../../../src/components/Radar';
 import { Bell } from '../../../src/components/Bell';
 import { CardioStats } from '../../../src/components/CardioStats';
+import { MuscleViews } from '../../../src/components/MuscleViews';
 import { BarChart, LineChart } from '../../../src/components/Charts';
 import { Icon } from '../../../src/components/Icon';
 import { Button, Card, Chip, Press, Row, Screen, Section, Segmented, Stat, T } from '../../../src/components/ui';
@@ -64,8 +64,6 @@ export default function Progress() {
     ? GROUPS.map((g) => ({ key: g.key, label: g.label, value: Math.round(g.regions.reduce((n, r) => n + sets[r], 0) * 10) / 10 }))
     : REGIONS.filter((r) => r !== 'neck').map((r) => ({ key: r, label: REGION_NAMES[r], value: Math.round(sets[r] * 10) / 10 }));
   const radarMax = Math.max(target * 1.4, ...axes.map((a) => a.value));
-  const maxSets = Math.max(10 * weeks, ...Object.values(sets));
-  const heat = Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, v / maxSets])) as Record<Region, number>;
 
   const series = weeklySeries(done, 8);
   const consistency = series.filter((w) => w.sessions > 0).length;
@@ -111,25 +109,7 @@ export default function Progress() {
       </Card>
 
       <Section title="Muscles">
-        <Card style={{ alignItems: 'center' }}>
-          <SwipeBody width={inner} heat={heat} onSelect={setRegion} selected={region} onClear={() => setRegion(null)} />
-          {region ? (
-            <View style={{ alignSelf: 'stretch', gap: 4 }}>
-              <Row style={{ justifyContent: 'space-between' }}>
-                <Row gap={space.sm}>
-                  <T v="headline">{REGION_NAMES[region]}</T>
-                  <Chip label="Show all" icon="xmark" onPress={() => setRegion(null)} />
-                </Row>
-                <T v="headline" color={colors.cyan} style={type.num}>{sets[region].toFixed(1)} sets</T>
-              </Row>
-              <T v="label" color={colors.dim}>
-                {groupByExercise(inRange.flatMap((x) => working(x.sets))).filter((g) => byId[g.exerciseId]?.primary.includes(region)).map((g) => `${exercise(g.exerciseId)?.name} ×${g.sets.length}`).join(' · ') || 'No direct work in this period'}
-              </T>
-            </View>
-          ) : (
-            <T v="label" color={colors.faint} style={{ textAlign: 'center' }}>Tap a muscle. Primary target = 1 set, supporting = ½ (an approximation).</T>
-          )}
-        </Card>
+        <MuscleViews done={done} inRange={inRange} sets={sets} width={inner} unit={unit} />
       </Section>
 
       <Section title="Sets per muscle" action={<Segmented style={{ width: 170 }} options={[{ value: 'basic', label: 'Basic' }, { value: 'detailed', label: 'Detailed' }]} value={detail} onChange={(v) => setDetail(v as any)} />}>

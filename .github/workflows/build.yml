@@ -200,7 +200,11 @@ jobs:
 
       - name: Walk through the app with Maestro
         run: |
-          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          # Its download comes from GitHub releases, which sometimes answer 504: try a few times.
+          for i in 1 2 3 4 5; do
+            curl -fsSL "https://get.maestro.mobile.dev" | bash && [ -x "$HOME/.maestro/bin/maestro" ] && break
+            echo "Maestro install failed (attempt $i), retrying"; sleep $((i * 15))
+          done
           export PATH="$PATH:$HOME/.maestro/bin"
           # The test driver can take a while to start on a fresh simulator.
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000

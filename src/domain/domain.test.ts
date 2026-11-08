@@ -561,3 +561,28 @@ test('correcting a weigh-in moves the bodyweight sets of its days with it', asyn
   assert.equal(out[1].sets[0].bodyKg, 74.9);
   assert.equal(out[1], sessions[1]);
 });
+
+test('muscle fatigue and strength views from logged sets', async () => {
+  const { muscleFatigue, muscleStrength } = await import('./muscles.ts');
+  const chest = { id: 'bench', name: 'Bench', equipment: 'barbell', category: 'strength', force: 'push', primary: ['chest'], secondary: ['triceps'] } as unknown as Exercise;
+  const byId = { bench: chest };
+  const now = Date.parse('2026-11-08T18:00:00Z');
+  const at = (h: number) => new Date(now - h * 3600000).toISOString();
+  // 6 hard sets yesterday, two at 1 RIR: fatigued for 48 h (Morán-Navarro 2017), triceps half.
+  const yesterday = session('2026-11-07', Array.from({ length: 6 }, (_, i) => set(8, 80, i < 2 ? 1 : 2, { exerciseId: 'bench', completedAt: at(20) })));
+  const f = muscleFatigue([yesterday], byId as any, now);
+  assert.equal(f.chest.hardSets, 6);
+  assert.equal(f.chest.nearFailure, 2);
+  assert.equal(f.chest.status, 'fatigued');
+  assert.equal(Math.round((f.chest.freshAt! - now) / 3600000), 28);
+  assert.equal(f.triceps.hardSets, 3);
+  assert.equal(f.quadriceps.status, 'fresh');
+  assert.equal(f.quadriceps.lastAt, null);
+  // Strength: 80 × 8 five weeks ago, 85 × 8 last week at the same RIR: about +6%.
+  const old = session('2026-10-04', [set(8, 80, 2, { exerciseId: 'bench', completedAt: at(24 * 35) })]);
+  const recent = session('2026-11-01', [set(8, 85, 2, { exerciseId: 'bench', completedAt: at(24 * 7) })]);
+  const s = muscleStrength([old, recent], byId as any, now);
+  assert.equal(Math.round(s.chest.change! * 1000) / 10, 6.3);
+  assert.equal(s.chest.lifts.length, 1);
+  assert.equal(s.quadriceps.change, null);
+});
