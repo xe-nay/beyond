@@ -116,6 +116,35 @@ for (const e of fedb) {
   });
 }
 
+// Machines neither dataset has, written for Beyond (src 'b').
+const OWN = [
+  {
+    id: 'b-calf-extension-machine',
+    name: 'Calf Extension Machine',
+    // Seated, legs nearly straight, the balls of the feet on a platform, pressing through the toes: both
+    // calf heads work, the gastrocnemius most with the knees near straight (with the knees bent, as in
+    // the Seated Calf Raise, the soleus takes over).
+    primary: ['calves'],
+    muscles: ['gastrocnemius', 'soleus'],
+    force: 'push',
+    steps: [
+      'Sit on the machine and place the balls of your feet on the platform, heels free.',
+      'Set the pad so your legs are held with the knees nearly straight, but not locked.',
+      'Press through your toes to lift the weight as high as your ankles allow.',
+      'Hold the top for a second, then lower your heels slowly until your calves stretch.',
+    ],
+    tips: ["Don't bounce out of the bottom: the stretch is where the calves work hardest.", 'Keep the knee angle the same throughout; only the ankles move.'],
+  },
+];
+for (const e of OWN) {
+  if (seen.has(key(e.name))) continue;
+  seen.add(key(e.name));
+  out.push({
+    src: 'b', category: 'strength', equipment: 'machine', secondary: [], level: 'beginner', mechanic: 'isolation',
+    unilateral: false, group: null, description: '', met: null, images: [], ...e,
+  });
+}
+
 out.sort((a, b) => a.name.localeCompare(b.name));
 mkdirSync('src/data', { recursive: true });
 writeFileSync('src/data/exercises.json', JSON.stringify(out));

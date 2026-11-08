@@ -12,7 +12,7 @@ export type Equipment =
 export interface Exercise {
   id: string;
   name: string;
-  src: 'r' | 'f';
+  src: 'r' | 'f' | 'b'; // RepDB, free-exercise-db, or written for Beyond
   category: string;
   equipment: Equipment;
   primary: Region[];
