@@ -75,7 +75,11 @@ name: Your plan, end to end
 - tapOn: "(.*, )?Search"
 - inputText: "egg"
 - waitForAnimationToEnd
-- tapOn: ".*Egg, whole.*"
+# The online results arrive while it settles; on a slow runner a tap landing as the list redraws was
+# lost (no food page opened), so it taps again until the screen changes.
+- tapOn:
+    text: ".*Egg, whole.*"
+    retryTapIfNoChange: true
 # The add button is under the serving, meal and time pickers.
 - scrollUntilVisible:
     element: "(.*, )?Add .* kcal"
@@ -93,6 +97,7 @@ name: Your plan, end to end
 - tapOn:
     text: ".*Egg, whole.*"
     index: 1
+    retryTapIfNoChange: true
 - scrollUntilVisible:
     element: "(.*, )?Remove from diary"
     direction: DOWN
