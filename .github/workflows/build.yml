@@ -117,6 +117,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           node scripts/make-source.mjs "${{ github.repository }}" "$VERSION" "$(stat -f%z Beyond.ipa)" > source.json
+          # SideStore downloads the app from the store branch (raw.githubusercontent.com), which kept
+          # working while GitHub's release downloads timed out (504) for hours. It goes up first, so the
+          # source never points at a file that is not there yet. One commit, replaced each build.
+          mkdir -p store-branch && cp Beyond.ipa store-branch/ && cd store-branch
+          git init -q -b store && git add Beyond.ipa
+          git -c user.name=Beyond -c user.email=beyond@users.noreply.github.com commit -q -m "Beyond $VERSION"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" store
+          cd ..
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest Beyond.ipa source.json --title "Beyond $VERSION" --notes "Build $VERSION" --latest
           # The release is made as a draft while its files upload; once it was left a draft, and SideStore

@@ -7,6 +7,9 @@ if (!repository || !version || !size) {
 }
 
 const downloads = `https://github.com/${repository}/releases/latest/download`;
+// The app itself is served from the store branch: GitHub's release-download address timed out (504) for
+// hours at a time while raw.githubusercontent.com kept working. The release keeps a copy too.
+const ipa = `https://raw.githubusercontent.com/${repository}/store/Beyond.ipa`;
 const date = new Date().toISOString();
 const description = 'Training, nutrition and progress in one minimal app. Your data stays on the iPhone.';
 
@@ -27,14 +30,14 @@ const source = {
       localizedDescription: description,
       iconURL: `https://raw.githubusercontent.com/${repository}/main/assets/icon.png`,
       tintColor: '37E5F3',
-      downloadURL: `${downloads}/Beyond.ipa`,
+      downloadURL: ipa,
       screenshotURLs: [],
       versions: [
         {
           version,
           date,
           localizedDescription: `Build ${version}`,
-          downloadURL: `${downloads}/Beyond.ipa`,
+          downloadURL: ipa,
           size: Number(size),
         },
       ],
