@@ -80,6 +80,8 @@ jobs:
           xcrun simctl bootstatus "$DEVICE" -b
           APP=$(find build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' | head -1)
           xcrun simctl install "$DEVICE" "$APP"
+          # A fresh simulator shows iOS's one-time "slide to type" keyboard tip over the first text field.
+          xcrun simctl spawn "$DEVICE" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true || true
           xcrun simctl privacy "$DEVICE" grant notifications app.beyond.fitness || true
           xcrun simctl privacy "$DEVICE" grant location-always app.beyond.fitness || true
 
