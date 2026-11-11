@@ -653,3 +653,15 @@ test('cardio machines: settings per phase, spoken and shown; indoor means no GPS
   assert.match(readIntervals({ machine: 'hoverboard', workSeconds: 60 }) as string, /not one of treadmill/);
   assert.match(readIntervals({ workSeconds: 60, workSettings: { level: 5 } }) as string, /needs a "machine"/);
 });
+
+test('treadmill distance from the speeds set, for the time done', async () => {
+  const { readIntervals } = await import('./importer.ts');
+  const { timeline } = await import('./intervals.ts');
+  const { machineKm } = await import('./machines.ts');
+  const p = readIntervals({ machine: 'treadmill', warmupSeconds: 300, warmupSettings: { speedKmh: 6 }, workSeconds: 1200, workSettings: { speedKmh: '9-11' } }) as any;
+  // 5 min at 6 km/h = 0.5 km, then 20 min at 10 km/h = 3.33 km.
+  assert.equal(Math.round(machineKm(timeline(p), 1500)! * 100) / 100, 3.83);
+  // Stopped after 10 minutes: 0.5 + 5 min at 10 km/h.
+  assert.equal(Math.round(machineKm(timeline(p), 600)! * 100) / 100, 1.33);
+  assert.equal(machineKm(timeline(readIntervals({ machine: 'rower', workSeconds: 60 }) as any), 60), null);
+});

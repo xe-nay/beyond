@@ -1,4 +1,4 @@
-import { usesGps } from '../src/domain/machines';
+import { EDIT, machineById, machinesFor, SETTINGS, settingValueText, usesGps, type SettingKey } from '../src/domain/machines';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, ScrollView, View } from 'react-native';
@@ -10,7 +10,7 @@ import { Button, Card, Chip, Press, Row, Screen, Section, Segmented, Stepper, T,
 import { CARDIO_ACTIVITIES } from '../src/domain/importer';
 import { cardioKcal, formatClock, pace, phaseCue, phasePace, timeline, totalSeconds, type PhaseKind } from '../src/domain/intervals';
 import { cueWords, formatPace, formatPaceRange, tracksDistance } from '../src/domain/track';
-import type { IntervalPlan, PaceRange } from '../src/domain/types';
+import type { IntervalPlan, MachineSettings, PaceRange } from '../src/domain/types';
 import { latestWeight, today, uid, useStore } from '../src/store';
 import { alpha, colors, space } from '../src/theme';
 
@@ -117,7 +117,8 @@ export default function Cardio() {
             </View>
           )}
 
-          <ActivityPicker value={plan.activity} onChange={(activity) => up({ activity })} />
+          <ActivityPicker value={plan.activity} onChange={(activity) => up({ activity, ...(machineById(plan.machine)?.activities.includes(activity) ? {} : NO_MACHINE) })} />
+          <MachinePicker plan={plan} up={up} />
           <Card style={{ gap: space.lg }}>
             <Row>
               <Stepper label="Warm-up" value={plan.warmupSeconds} onChange={(warmupSeconds) => up({ warmupSeconds })} step={60} max={3600} format={formatClock} clock />
@@ -213,6 +214,64 @@ function ActivityPicker({ value, onChange }: { value: string; onChange: (v: stri
   );
 }
 
+const NO_MACHINE: Partial<IntervalPlan> = { machine: undefined, warmupSettings: undefined, workSettings: undefined, recoverySettings: undefined, cooldownSettings: undefined };
+
+/** The machine the session is done on, among those that fit the activity; its settings go per phase in Targets. */
+function MachinePicker({ plan, up }: { plan: IntervalPlan; up: (p: Partial<IntervalPlan>) => void }) {
+  const fits = machinesFor(plan.activity);
+  if (!fits.length) return null;
+  const pick = (id: string | undefined) => up({ ...NO_MACHINE, machine: id });
+  return (
+    <View style={{ gap: 6 }}>
+      <T v="caption" color={colors.faint}>Machine</T>
+      <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+        <Chip label="None" active={!plan.machine} onPress={() => pick(undefined)} />
+        {fits.map((m) => <Chip key={m.id} label={m.name} active={plan.machine === m.id} onPress={() => pick(m.id)} />)}
+      </Row>
+      {!!plan.machine && !usesGps(plan) && <T v="footnote" color={colors.faint}>Indoors: timed, no GPS. Set the machine for each phase under Targets.</T>}
+    </View>
+  );
+}
+
+/** What to set the machine to in one phase: each of its settings, on or off, with a stepper. */
+function MachineSettingsRows({ plan, kind, up }: { plan: IntervalPlan; kind: PhaseKind; up: (p: Partial<IntervalPlan>) => void }) {
+  const m = machineById(plan.machine);
+  if (!m) return null;
+  const key = `${kind}Settings` as const;
+  const cur: MachineSettings = plan[key] ?? {};
+  const set = (k: SettingKey, v: number | null) => {
+    const next = { ...cur };
+    if (v === null) delete next[k];
+    else next[k] = { lo: v, hi: v };
+    up({ [key]: Object.keys(next).length ? next : undefined } as Partial<IntervalPlan>);
+  };
+  return (
+    <View style={{ gap: space.md }}>
+      <T v="caption" color={colors.faint}>{m.name} · shown and spoken</T>
+      {m.settings.map((k) => {
+        const r = cur[k];
+        const s = SETTINGS[k];
+        const e = EDIT[k];
+        return (
+          <View key={k} style={{ gap: space.sm }}>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <T v="callout">{s.label}{s.unit ? ` · ${s.unit}` : ''}</T>
+              <Toggle value={!!r} onChange={(on) => set(k, on ? e.start : null)} />
+            </Row>
+            {r && (
+              <Row>
+                <Stepper label={r.lo === r.hi ? s.label : `${s.label} (was ${settingValueText(k, r.lo)}–${settingValueText(k, r.hi)})`} value={r.lo} step={e.step} min={s.min} max={s.max}
+                  format={(v) => settingValueText(k, v)} clock={k === 'split500'}
+                  onChange={(v) => set(k, Math.round(v * 10) / 10)} />
+              </Row>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 const NAME: Record<PhaseKind, string> = { warmup: 'Warm-up', work: 'Work', recovery: 'Recover', cooldown: 'Cool-down' };
 const CUE_KEY = { warmup: 'warmupCue', work: 'workCue', recovery: 'recoveryCue', cooldown: 'cooldownCue' } as const;
 const PACE_KEY = { warmup: 'warmupPace', work: 'workPace', recovery: 'recoveryPace', cooldown: 'cooldownPace' } as const;
@@ -253,6 +312,7 @@ function Targets({ plan, up }: { plan: IntervalPlan; up: (p: Partial<IntervalPla
     <Card style={{ gap: space.md }}>
       <T v="headline">Targets</T>
       {kinds.length > 1 && <Segmented options={kinds.map((k) => ({ value: k, label: NAME[k] }))} value={kind} onChange={setPicked} />}
+      <MachineSettingsRows plan={plan} kind={kind} up={up} />
       {gps && (
         <>
           <Row style={{ justifyContent: 'space-between' }}>

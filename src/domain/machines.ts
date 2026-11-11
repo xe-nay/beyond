@@ -142,6 +142,33 @@ export function spokenSettings(s: MachineSettings | undefined | null): string {
     .map((k) => SETTINGS[k].spoken(rangeText(k, s[k]!, ' to ').replace(/(\d+):(\d{2})/g, '$1 $2'))).join('. ');
 }
 
+/** In the cardio editor: where a newly turned-on setting starts, and how far one tap moves it. */
+export const EDIT: Record<SettingKey, { start: number; step: number }> = {
+  speedKmh: { start: 9, step: 0.5 }, inclinePct: { start: 1, step: 0.5 }, level: { start: 8, step: 1 },
+  stepsPerMin: { start: 66, step: 5 }, strideRate: { start: 130, step: 5 }, cadenceRpm: { start: 85, step: 5 },
+  powerW: { start: 150, step: 10 }, damper: { start: 4, step: 1 }, strokeRate: { start: 22, step: 1 }, split500: { start: 125, step: 5 },
+};
+/** One setting's value as the editor shows it ("2:05" for a split, "5.5" for a speed). */
+export const settingValueText = (k: SettingKey, v: number) => num(k, v);
+/**
+ * Distance on a treadmill from the speed set in each phase, over the time actually done (the middle of a
+ * range); null when no phase has a speed. Shown at the end to adjust against the console.
+ */
+export function machineKm(phases: { start: number; end: number; settings?: MachineSettings }[], seconds: number): number | null {
+  let km = 0;
+  let any = false;
+  for (const p of phases) {
+    const v = p.settings?.speedKmh;
+    if (!v) continue;
+    any = true;
+    km += (Math.max(0, Math.min(seconds, p.end) - p.start) * ((v.lo + v.hi) / 2)) / 3600;
+  }
+  return any ? km : null;
+}
+
+/** The machines a session of this activity can be done on. */
+export const machinesFor = (activity: string) => MACHINES.filter((m) => m.activities.includes(activity));
+
 /** Whether a session is measured by GPS: outdoor running, walking and cycling, never on a machine indoors. */
 export const indoorPlan = (plan: Pick<IntervalPlan, 'machine'> | null | undefined) => !!machineById(plan?.machine)?.indoor;
 export const usesGps = (plan: Pick<IntervalPlan, 'machine' | 'activity'>) => tracksDistance(plan.activity) && !indoorPlan(plan);

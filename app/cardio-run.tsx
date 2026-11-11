@@ -1,4 +1,4 @@
-import { settingsText, usesGps } from '../src/domain/machines';
+import { machineKm, settingsText, usesGps } from '../src/domain/machines';
 import { useScreenOn } from '../src/keepAwake';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -29,6 +29,7 @@ export default function CardioRun() {
   const [done, setDone] = useState<null | { minutes: number }>(null);
   const [km, setKm] = useState(0);
   const [tracked, setTracked] = useState(false);
+  const [estimated, setEstimated] = useState(false);
   const [gpsMode, setGpsMode] = useState<'background' | 'foreground' | 'off'>('off');
   const synced = useRef(0);
   const [rpe, setRpe] = useState(6);
@@ -51,7 +52,11 @@ export default function CardioRun() {
 
   const end = () => {
     const m = gps().meters;
-    if (m > 0) { setKm(Math.round(m / 10) / 100); setTracked(true); }
+    if (m > 0) { setKm(Math.round(m / 10) / 100); setTracked(true); } else {
+      // Indoors: a treadmill's distance follows from the speeds set, to adjust against its console.
+      const est = machineKm(phases, t);
+      if (est) { setKm(Math.round(est * 100) / 100); setEstimated(true); }
+    }
     stopGps();
     cancelEnd();
     setDone({ minutes: Math.round(t / 60) });
@@ -115,6 +120,8 @@ export default function CardioRun() {
           <View style={{ gap: space.sm }}>
             <Row><Stepper label="Distance km" value={km} onChange={setKm} step={0.1} max={300} format={(v) => v.toFixed(2)} big /></Row>
             {tracked && <T v="footnote" color={colors.faint} style={{ textAlign: 'center' }}>Measured by GPS · adjust if needed</T>}
+            {estimated && <T v="footnote" color={colors.faint} style={{ textAlign: 'center' }}>From the treadmill speeds · adjust to its console</T>}
+            {!tracked && !estimated && !usesGps(run.plan) && <T v="footnote" color={colors.faint} style={{ textAlign: 'center' }}>Optional: the distance the machine shows</T>}
           </View>
           <Row>
             <Stepper label="Effort (RPE)" value={rpe} onChange={setRpe} min={1} max={10} />
