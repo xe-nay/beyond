@@ -1,5 +1,6 @@
 // One dated training file for plans and history. Entries with a "performed" block become history;
 // the rest become scheduled sessions. Also reads the earlier "kinetic-training" v1 files.
+import { findMachine, MACHINES, readSettings } from './machines.ts';
 import { parseAttachment } from './attachments.ts';
 import { defaultImplements } from './equipment.ts';
 import { paceInText, readPace } from './track.ts';
@@ -86,9 +87,13 @@ const PHASES = ['warmup', 'work', 'recovery', 'cooldown'] as const;
 
 /** An "intervals" block as a plan, or a sentence saying what is wrong with it. */
 export function readIntervals(iv: any): IntervalPlan | string {
-  const name = String(iv.activityType ?? iv.activity ?? 'Running');
+  // The machine, when there is one, sets the activity unless one it allows is given.
+  const machine = iv.machine === undefined || iv.machine === null || iv.machine === '' ? undefined : findMachine(iv.machine);
+  if (iv.machine && !machine) return `machine "${iv.machine}" is not one of ${MACHINES.map((m) => m.id).join(', ')}.`;
+  const name = String(iv.activityType ?? iv.activity ?? machine?.activities[0] ?? 'Running');
   const activity = CARDIO_ACTIVITIES.find((a) => a.toLowerCase() === name.toLowerCase()) ?? ACTIVITY_WORDS[slug(name)];
   if (!activity) return `activityType "${name}" is not one of ${CARDIO_ACTIVITIES.join(', ')}.`;
+  if (machine && !machine.activities.includes(activity)) return `a ${machine.name} session is ${machine.activities.join(' or ')}, not ${activity}.`;
   // Seconds, or the same field in minutes ("warmupMinutes": 5).
   const time = (key: string, lo: number, hi: number): number | string => {
     const v = iv[`${key}Seconds`] ?? (iv[`${key}Minutes`] !== undefined ? +iv[`${key}Minutes`] * 60 : undefined);
@@ -115,7 +120,16 @@ export function readIntervals(iv: any): IntervalPlan | string {
     ...(iv.warmupCue ? { warmupCue: String(iv.warmupCue) } : {}), ...(iv.cooldownCue ? { cooldownCue: String(iv.cooldownCue) } : {}),
     countdown: Math.round(+countdown),
     ...(unit === 'mi' ? { paceUnit: 'mi' as const } : {}),
+    ...(machine ? { machine: machine.id } : {}),
   };
+  for (const k of PHASES) {
+    const raw = iv[`${k}Settings`];
+    if (raw === undefined || raw === null) continue;
+    if (!machine) return `${k}Settings needs a "machine" (${MACHINES.map((m) => m.id).join(', ')}).`;
+    const settings = readSettings(machine, raw, `${k}Settings`);
+    if (typeof settings === 'string') return settings;
+    if (Object.keys(settings).length) plan[`${k}Settings`] = settings;
+  }
   for (const k of PHASES) {
     const raw = iv[`${k}Pace`];
     // A number is seconds per km; text without a unit takes the paceUnit.
@@ -124,6 +138,10 @@ export function readIntervals(iv: any): IntervalPlan | string {
     const pace = readPace(text) ?? paceInText(iv[`${k}Cue`]);
     if (readPace(text) === undefined) return `${k}Pace ${JSON.stringify(raw)} is not a pace. Write "7:30", "7:15-8:15" or "7:30 /km".`;
     if (pace) plan[`${k}Pace`] = pace;
+    // On a treadmill a pace is a belt speed: 7:30 /km is 8 km/h (no GPS to coach it indoors).
+    if (pace && machine?.id === 'treadmill' && !plan[`${k}Settings`]?.speedKmh) {
+      plan[`${k}Settings`] = { ...plan[`${k}Settings`], speedKmh: { lo: 3600 / pace.slow, hi: 3600 / pace.fast } };
+    }
   }
   return plan;
 }

@@ -33,13 +33,16 @@ export function e1rmWithRir(loadKg: number, reps: number, rir: number | null) {
  * with its RIR. Reps possible = reps + RIR (the RIR-based RPE scale, Zourdos et al. 2016; Helms et al.
  * 2016), and load scales with reps possible as in Epley, which is how RPE charts such as the RTS table
  * are used: estimate the max from one set, then work back to the next. Trusted up to 15 reps possible on
- * both sides; null otherwise or without an RIR.
+ * both sides. Higher-rep sets (calves, abs: 18 reps at RIR 3 is 21 possible) up to 30, but only to a
+ * target within 6 reps of the set: the formulas disagree more far from the max, and the ratio between
+ * two nearby rep counts is what stays close among them. Null otherwise or without an RIR.
  */
 export function loadForRir(set: { loadKg: number; reps: number; rir: number | null }, targetReps: number, targetRir: number) {
   if (set.rir === null || !(set.loadKg > 0) || set.reps < 1 || targetReps < 1) return null;
   const done = set.reps + set.rir;
   const want = targetReps + targetRir;
-  if (done > 15 || want > 15) return null;
+  if (done > 30 || want > 30) return null;
+  if ((done > 15 || want > 15) && Math.abs(done - want) > 6) return null;
   return (set.loadKg * (1 + done / 30)) / (1 + want / 30);
 }
 

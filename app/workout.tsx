@@ -84,7 +84,8 @@ export default function Workout() {
   const done = p ? session.sets.filter((x) => x.exerciseId === p.exerciseId) : [];
   const doneWork = working(done);
   const prev = p ? previousSets(history, p.exerciseId, session.id) : [];
-  const advice = p ? progression(history, p, 2.5, kind === 'bodyweight') : null;
+  // Last sessions' rule: only before today's first working set; after it, the live suggestion speaks.
+  const advice = p && !working(session.sets.filter((x) => x.exerciseId === p.exerciseId)).length ? progression(history, p, 2.5, kind === 'bodyweight') : null;
   // Snaps a weight to what the equipment allows (plates, dumbbell steps).
   const snap = (kg: number) => {
     const v = toDisplay(kg, unit);

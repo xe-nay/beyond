@@ -132,8 +132,30 @@ export interface Session {
 /** A pace window in seconds per km: `fast` is the quickest allowed, `slow` the slowest (equal for one target). */
 export interface PaceRange { fast: number; slow: number }
 
+/** A setting's value or range, as a cardio machine shows it (split500 in seconds per 500 m). */
+export interface CardioRange { lo: number; hi: number }
+/** What is set on a cardio machine for one phase (see domain/machines.ts for which machine takes which). */
+export interface MachineSettings {
+  speedKmh?: CardioRange;
+  inclinePct?: CardioRange;
+  level?: CardioRange;
+  stepsPerMin?: CardioRange;
+  strideRate?: CardioRange;
+  cadenceRpm?: CardioRange;
+  powerW?: CardioRange;
+  damper?: CardioRange;
+  strokeRate?: CardioRange;
+  split500?: CardioRange;
+}
+
 export interface IntervalPlan {
   activity: string;
+  /** The machine (domain/machines.ts), such as "treadmill" or "stepmill"; indoors means no GPS. */
+  machine?: string;
+  warmupSettings?: MachineSettings;
+  workSettings?: MachineSettings;
+  recoverySettings?: MachineSettings;
+  cooldownSettings?: MachineSettings;
   warmupSeconds: number;
   workSeconds: number;
   recoverySeconds: number;

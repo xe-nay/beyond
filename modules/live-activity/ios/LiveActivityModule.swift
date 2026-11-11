@@ -162,16 +162,27 @@ public class LiveActivityModule: Module {
         await activity.end(nil, dismissalPolicy: .immediate)
       }
       let content = ActivityContent(state: Self.parse(state), staleDate: Self.date(state["staleAt"]), relevanceScore: Self.workoutRelevance)
+      // Requested from the main thread, where ActivityKit expects the app to start activities.
+      let request: () async throws -> String = { try await MainActor.run { try Activity.request(attributes: BeyondActivityAttributes(name: name), content: content, pushType: nil).id } }
       do {
-        // Requested from the main thread, where ActivityKit expects the app to start activities.
-        let id = try await MainActor.run {
-          try Activity.request(attributes: BeyondActivityAttributes(name: name), content: content, pushType: nil).id
-        }
+        let id = try await request()
         beyondLog.notice("start: ok \(id, privacy: .public)")
         return id
       } catch {
-        beyondLog.error("start failed: \(String(describing: error), privacy: .public)")
-        throw error
+        // The app's Live Activity allowance used up (the intake reminders count): the workout matters more.
+        // Close the intake ones (their times fall back to notifications) and ask once more.
+        beyondLog.error("start failed, retrying without intake reminders: \(String(describing: error), privacy: .public)")
+        for activity in Activity<IntakeActivityAttributes>.activities {
+          await activity.end(nil, dismissalPolicy: .immediate)
+        }
+        do {
+          let id = try await request()
+          beyondLog.notice("start: ok on retry \(id, privacy: .public)")
+          return id
+        } catch {
+          beyondLog.error("start failed: \(String(describing: error), privacy: .public)")
+          throw error
+        }
       }
     }
 

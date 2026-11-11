@@ -3,6 +3,7 @@
 // pocket (the app stays awake there for the GPS and the audio). The voice says each phase as it
 // starts (length, round, rounds left, cue, pace), halfway through long phases, and when the GPS pace
 // leaves the phase's pace window.
+import { usesGps } from './domain/machines';
 import { announce, elapsed, position, spokenTime, timeline } from './domain/intervals';
 import { paceVerdict, rollingPace, spokenPace, tracksDistance } from './domain/track';
 import { gps } from './gps';
@@ -64,7 +65,7 @@ function coach(runId: string) {
     const into = pos.phase.seconds - pos.remaining;
     // Quiet while the countdown beeps play.
     const quiet = pos.remaining <= run.plan.countdown + 1.5;
-    const outdoor = tracksDistance(run.plan.activity);
+    const outdoor = usesGps(run.plan);
     // Just after the change tone; not when the app comes back mid-phase.
     if (into >= (pos.index === 0 ? 0.3 : 0.9) && into < 6 && !quiet) speak(`phase${pos.index}`, announce(run.plan, phases, pos.index, outdoor));
     if (pos.phase.seconds >= 240 && into >= pos.phase.seconds / 2 && pos.remaining > 20 && !quiet) speak(`half${pos.index}`, `Halfway. ${spokenTime(pos.remaining)} to go.`);

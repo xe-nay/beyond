@@ -1,3 +1,4 @@
+import { settingsText, usesGps } from '../src/domain/machines';
 import { useScreenOn } from '../src/keepAwake';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -38,7 +39,7 @@ export default function CardioRun() {
   const t = run ? elapsed({ banked: run.banked, resumedAt: run.resumedAt }) : 0;
   const pos = position(phases, t);
   const total = run ? totalSeconds(run.plan) : 0;
-  const outdoor = !!run && tracksDistance(run.plan.activity);
+  const outdoor = !!run && usesGps(run.plan);
   const live = gps();
   const livePace = outdoor ? rollingPace(live.samples, Date.now()) : null;
 
@@ -167,11 +168,18 @@ export default function CardioRun() {
             </Animated.View>
           </PhaseRings>
 
-          {(!!cueWords(pos.phase?.cue) || !!pos.phase?.pace) && (
+          {(!!cueWords(pos.phase?.cue) || (!!pos.phase?.pace && outdoor)) && (
             <Glass round style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, height: 44 }}>
               <Icon name="gauge.with.dots.needle.67percent" size={16} color={look.a} />
               {!!cueWords(pos.phase?.cue) && <T v="headline">{cueWords(pos.phase?.cue)}</T>}
-              {!!pos.phase?.pace && <T v="headline" color={verdict === 'slow' ? colors.amber : verdict === 'fast' ? colors.cyan : look.a} style={type.num}>{formatPaceRange(pos.phase.pace, run.plan.paceUnit ?? 'km')}</T>}
+              {!!pos.phase?.pace && outdoor && <T v="headline" color={verdict === 'slow' ? colors.amber : verdict === 'fast' ? colors.cyan : look.a} style={type.num}>{formatPaceRange(pos.phase.pace, run.plan.paceUnit ?? 'km')}</T>}
+            </Glass>
+          )}
+          {/* On a machine, what to set it to for this phase. */}
+          {!!settingsText(pos.phase?.settings) && (
+            <Glass round style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, height: 44 }}>
+              <Icon name="slider.horizontal.3" size={16} color={look.a} />
+              <T v="headline" style={type.num}>{settingsText(pos.phase?.settings)}</T>
             </Glass>
           )}
           {outdoor && (
@@ -190,7 +198,7 @@ export default function CardioRun() {
           </View>
           <View style={{ flex: 1 }}>
             <T v="footnote" color={colors.dim}>{next ? 'Up next' : 'Last phase'}</T>
-            <T v="headline" numberOfLines={1}>{next ? `${PHASE[next.kind].label} · ${formatClock(next.seconds)}${cueWords(next.cue) ? ` · ${cueWords(next.cue)}` : ''}${next.pace ? ` · ${formatPaceRange(next.pace, run.plan.paceUnit ?? 'km')}` : ''}` : 'Finish strong'}</T>
+            <T v="headline" numberOfLines={1}>{next ? `${PHASE[next.kind].label} · ${formatClock(next.seconds)}${cueWords(next.cue) ? ` · ${cueWords(next.cue)}` : ''}${settingsText(next.settings) ? ` · ${settingsText(next.settings)}` : next.pace && outdoor ? ` · ${formatPaceRange(next.pace, run.plan.paceUnit ?? 'km')}` : ''}` : 'Finish strong'}</T>
           </View>
           <T v="footnote" color={colors.faint} style={type.num}>{formatClock(Math.max(0, total - t))} left</T>
         </Glass>

@@ -2,7 +2,7 @@
 // The daily intake reminder: which time it shows, and answers given on it while the app was closed.
 import { takeIntakeAnswers } from '../modules/live-activity';
 import type { Supplement } from '../src/domain/types';
-import { upcomingSlots } from '../src/intakeLive';
+import { liveSlots, upcomingSlots } from '../src/intakeLive';
 import { today, useStore } from '../src/store';
 
 const supp = (id: string, time: string): Supplement => ({
@@ -34,4 +34,13 @@ test('Taken pressed on the reminder while the app was closed is applied when it 
   const { answerSlot } = require('../src/intakeActions');
   for (const a of takeIntakeAnswers()) answerSlot(a.date, a.time, a.answer);
   expect(useStore.getState().intakes.map((i) => i.supplementId)).toEqual(['creatine']);
+});
+
+test('at most two intake reminders are live: the latest one due and the next one', () => {
+  const at = (h: number) => ({ dueAt: new Date(2026, 9, 27, h).getTime(), h });
+  const now = new Date(2026, 9, 27, 13).getTime();
+  // 08:00 and 12:00 are due, 18:00 and 22:00 coming: 12:00 and 18:00 stay live, the rest are notifications.
+  expect(liveSlots([at(22), at(8), at(18), at(12)], now).map((x) => x.h)).toEqual([12, 18]);
+  // Nothing due yet: the next two.
+  expect(liveSlots([at(18), at(22), at(23)], now).map((x) => x.h)).toEqual([18, 22]);
 });

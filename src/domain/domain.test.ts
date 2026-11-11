@@ -367,7 +367,11 @@ test('weight for a target RIR from a set done with its RIR', async () => {
   // Too easy last time (RIR 5 at 10 reps) for 10 at RIR 2: heavier.
   assert.ok(loadForRir({ loadKg: 25, reps: 10, rir: 5 }, 10, 2)! > 25);
   assert.equal(loadForRir({ loadKg: 25, reps: 10, rir: null }, 10, 2), null);
-  assert.equal(loadForRir({ loadKg: 25, reps: 15, rir: 3 }, 10, 2), null); // 18 possible: past what Epley holds
+  // High reps: 45 kg x 18 at RIR 3 (21 possible) for 15 at RIR 2 (17): heavier, about 48.8 kg (a cable crunch).
+  assert.equal(Math.round(loadForRir({ loadKg: 45, reps: 18, rir: 3 }, 15, 2)! * 10) / 10, 48.8);
+  // But not to a target far from the set: 23 possible down to 12 is past what the formulas agree on.
+  assert.equal(loadForRir({ loadKg: 25, reps: 20, rir: 3 }, 10, 2), null);
+  assert.equal(loadForRir({ loadKg: 25, reps: 30, rir: 3 }, 28, 2), null); // past 30 possible
 });
 
 test('import: rest days, the period, and replacing what is planned in it', async () => {
@@ -608,4 +612,44 @@ test('detailed anatomy: parts of a muscle differ by exercise', async () => {
   assert.ok(!lead('Barbell Back Squat', ['quadriceps', 'gluteal']).includes('rectusFemoris'));
   // Without a rule, the named muscles narrow the group: only the rear delts of "shoulders".
   assert.deepEqual(lead('Band Something', ['deltoids'], undefined, ['posterior deltoid']), ['rearDelts']);
+});
+
+test('cardio machines: settings per phase, spoken and shown; indoor means no GPS', async () => {
+  const { readIntervals } = await import('./importer.ts');
+  const { timeline, announce } = await import('./intervals.ts');
+  const { settingsText, usesGps } = await import('./machines.ts');
+  const { IMPORT_GUIDE } = await import('../importGuide.ts');
+  // Every example in the guide's machine section imports.
+  const blocks = IMPORT_GUIDE.split('The machine (optional)')[1].split('Targets for each phase')[0].split('Example:').slice(1)
+    .map((b: string) => JSON.parse(b.split('\n').filter((l: string) => l.startsWith('    ')).join('\n')));
+  assert.equal(blocks.length, 2);
+  for (const b of blocks) assert.equal(typeof readIntervals(b.intervals), 'object', JSON.stringify(b));
+
+  const walk = readIntervals(blocks[0].intervals) as any;
+  assert.equal(walk.activity, 'Walking');
+  assert.equal(usesGps(walk), false); // a treadmill walk is timed, not measured by GPS
+  assert.equal(settingsText(walk.workSettings), '5.2 km/h · 10% incline');
+  const t = timeline(walk);
+  assert.equal(announce(walk, t, 1), 'Work, 25 minutes. Speed 5.2 kilometres an hour. Incline 10 percent.');
+
+  // The StepMill sets its own activity; a range reads lowest-highest.
+  const stairs = readIntervals({ machine: 'StairMaster', workSeconds: 60, workSettings: { level: 12, stepsPerMin: '95-101' } }) as any;
+  assert.equal(stairs.activity, 'Stairs');
+  assert.equal(settingsText(stairs.workSettings), 'Level 12 · 95–101 steps/min');
+  // Rower split in m:ss, spoken with a pause.
+  const row = readIntervals({ machine: 'concept2', workSeconds: 240, workSettings: { damper: 4, split500: '2:00-2:05' } }) as any;
+  assert.equal(settingsText(row.workSettings), 'Damper 4 · 2:00–2:05 /500 m');
+  assert.match(announce(row, timeline(row), 0), /Damper 4\. Split 2 00 to 2 05 per 500/);
+  // A treadmill pace becomes a belt speed: 7:30 per km = 8 km/h.
+  const run = readIntervals({ machine: 'treadmill', workSeconds: 600, workPace: '7:30' }) as any;
+  assert.equal(settingsText(run.workSettings), '8 km/h');
+  // An outdoor bike keeps GPS.
+  assert.equal(usesGps(readIntervals({ machine: 'road bike', workSeconds: 600 }) as any), true);
+
+  // Wrong settings stop the import with a sentence saying what is wrong.
+  assert.match(readIntervals({ machine: 'treadmill', workSeconds: 60, workSettings: { level: 5 } }) as string, /Treadmill has no level/);
+  assert.match(readIntervals({ machine: 'rower', workSeconds: 60, workSettings: { damper: 12 } }) as string, /damper must be from 1 to 10/);
+  assert.match(readIntervals({ machine: 'rower', activityType: 'Running', workSeconds: 60 }) as string, /Rower session is Rowing/);
+  assert.match(readIntervals({ machine: 'hoverboard', workSeconds: 60 }) as string, /not one of treadmill/);
+  assert.match(readIntervals({ workSeconds: 60, workSettings: { level: 5 } }) as string, /needs a "machine"/);
 });

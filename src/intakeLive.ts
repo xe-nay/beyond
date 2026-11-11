@@ -38,6 +38,20 @@ export function upcomingSlots(
   return out;
 }
 
+/**
+ * iOS lets one app hold only a few Live Activities at once (about five in reports; Apple gives no number)
+ * and scheduled ones count. One for each time of the day filled that up, and the workout's own activity
+ * was then refused: nothing showed in the Dynamic Island. So at most two are live: the latest one due and
+ * the next one coming. The other times get ordinary notifications (reminders.ts skips only covered ones).
+ */
+export const MAX_LIVE_INTAKES = 2;
+export function liveSlots<T extends { dueAt: number }>(slots: T[], now = Date.now()): T[] {
+  const sorted = [...slots].sort((a, b) => a.dueAt - b.dueAt);
+  const due = sorted.filter((x) => x.dueAt <= now);
+  const next = sorted.filter((x) => x.dueAt > now);
+  return [...due.slice(-1), ...next].slice(0, MAX_LIVE_INTAKES);
+}
+
 /** Applies Taken / Skip pressed on the reminder. */
 function applyAnswers() {
   for (const a of takeIntakeAnswers()) answerSlot(a.date, a.time, a.answer);
@@ -49,7 +63,7 @@ async function refresh() {
   running = true;
   try {
     applyAnswers();
-    const plans = upcomingSlots(useStore.getState());
+    const plans = liveSlots(upcomingSlots(useStore.getState()));
     if (AppState.currentState === 'active') {
       // Schedules, starts, updates and ends them all; then notifications skip the times they cover.
       await planIntakes(plans.map(({ slot, items, dueAt }) => ({ slot, items, dueAt })));

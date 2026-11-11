@@ -1,3 +1,4 @@
+import { machineById, settingsText, usesGps } from '../domain/machines';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -34,13 +35,13 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
   const unit = p.paceUnit ?? 'km';
   const phases = timeline(p);
   const total = totalSeconds(p);
-  const km = tracksDistance(c.activity) ? plannedKm(phases) : null;
+  const km = usesGps(p) ? plannedKm(phases) : null;
   const first = (k: PhaseKind) => phases.find((x) => x.kind === k);
   const rows = (['warmup', 'work', 'recovery', 'cooldown'] as PhaseKind[]).flatMap((k) => {
     const x = first(k);
     if (!x) return [];
     const n = phases.filter((y) => y.kind === k).length;
-    return [{ kind: k, label: n > 1 ? `${NAME[k]} × ${n}` : NAME[k], time: formatClock(x.seconds), cue: cueWords(x.cue), pace: x.pace }];
+    return [{ kind: k, label: n > 1 ? `${NAME[k]} × ${n}` : NAME[k], time: formatClock(x.seconds), cue: cueWords(x.cue), pace: usesGps(p) ? x.pace : null, settings: settingsText(x.settings) }];
   });
   const start = () => {
     useStore.getState().set({ cardioRun: { id: c.id, date: today(), plan: p, banked: 0, resumedAt: Date.now() } });
@@ -52,7 +53,7 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
       <Row style={{ alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>
           <Head
-            label={`Planned cardio · ${c.activity}`}
+            label={`Planned cardio · ${machineById(p.machine)?.name ?? c.activity}`}
             title={c.name ?? c.activity}
             sub={`${formatClock(total)}${km !== null ? ` · ≈ ${(unit === 'mi' ? km / 1.609344 : km).toFixed(1)} ${unit}` : ''}${p.rounds > 1 ? ` · ${p.rounds} rounds` : ''}`}
             tint={colors.cyan}
@@ -77,7 +78,7 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
                 <T v="headline">{x.label}</T>
                 <T v="headline" color={colors.dim} style={type.num}>{x.time}</T>
               </Row>
-              <Detail cue={x.cue} pace={x.pace} unit={unit} />
+              <Detail cue={x.cue} pace={x.pace} unit={unit} settings={x.settings} />
             </View>
           </Row>
         ))}
@@ -109,7 +110,7 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
 
       <T v="footnote" color={colors.faint}>
         {p.countdown ? `${p.countdown} s countdown before each change` : 'No countdown beeps'}
-        {tracksDistance(c.activity) ? ' · distance by GPS' : ''}
+        {usesGps(p) ? ' · distance by GPS' : machineById(p.machine) ? ` · ${machineById(p.machine)!.name}, timed` : ''}
         {voice ? ' · voice coach on' : ''}
       </T>
       {!!c.notes && (
@@ -126,10 +127,11 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
   );
 }
 
-function Detail({ cue, pace, unit }: { cue: string; pace: PaceRange | null; unit: 'km' | 'mi' }) {
-  if (!cue && !pace) return null;
+function Detail({ cue, pace, unit, settings }: { cue: string; pace: PaceRange | null; unit: 'km' | 'mi'; settings?: string }) {
+  if (!cue && !pace && !settings) return null;
   return (
     <Row gap={6} style={{ flexWrap: 'wrap' }}>
+      {!!settings && <T v="footnote" color={colors.cyan} style={type.num}>{settings}</T>}
       {!!pace && <T v="footnote" color={colors.cyan} style={type.num}>{formatPaceRange(pace, unit)}</T>}
       {!!cue && <T v="footnote" color={colors.dim}>{cue}</T>}
     </Row>

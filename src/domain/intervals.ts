@@ -1,9 +1,10 @@
 // Cardio interval timeline and the countdown schedule shared by cardio and rest timers.
+import { indoorPlan, spokenSettings } from './machines.ts';
 import { cueWords, paceInText, spokenPace } from './track.ts';
-import type { IntervalPlan, PaceRange } from './types.ts';
+import type { IntervalPlan, MachineSettings, PaceRange } from './types.ts';
 
 export type PhaseKind = 'warmup' | 'work' | 'recovery' | 'cooldown';
-export interface Phase { kind: PhaseKind; round: number; seconds: number; cue: string; pace: PaceRange | null; start: number; end: number }
+export interface Phase { kind: PhaseKind; round: number; seconds: number; cue: string; pace: PaceRange | null; start: number; end: number; settings?: MachineSettings }
 
 /** The cue a phase shows; warm-up and cool-down have a default. */
 export function phaseCue(plan: IntervalPlan, kind: PhaseKind) {
@@ -23,7 +24,8 @@ export function timeline(plan: IntervalPlan): Phase[] {
   let t = 0;
   const add = (kind: PhaseKind, round: number, seconds: number) => {
     if (seconds <= 0) return;
-    out.push({ kind, round, seconds, cue: phaseCue(plan, kind), pace: phasePace(plan, kind), start: t, end: t + seconds });
+    const settings = plan[`${kind}Settings`];
+    out.push({ kind, round, seconds, cue: phaseCue(plan, kind), pace: phasePace(plan, kind), start: t, end: t + seconds, ...(settings ? { settings } : {}) });
     t += seconds;
   };
   add('warmup', 0, plan.warmupSeconds);
@@ -75,7 +77,10 @@ export function announce(plan: IntervalPlan, phases: Phase[], index: number, pac
   }
   if (p.kind === 'cooldown') parts.push(plan.rounds > 1 ? 'All rounds done' : 'Work done', `Cool-down, ${spokenTime(p.seconds)}`);
   if (words) parts.push(words);
-  if (paced && p.pace) parts.push(spokenTarget(p.pace, unit));
+  // On a machine, what to set it to ("Speed 10 kilometres an hour. Incline 2 percent").
+  const set = spokenSettings(p.settings);
+  if (set) parts.push(set);
+  if (paced && p.pace && !indoorPlan(plan)) parts.push(spokenTarget(p.pace, unit));
   return `${parts.join('. ')}.`;
 }
 

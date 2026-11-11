@@ -96,6 +96,7 @@ The planned exercises, in the order they are done:
 - warmupSets: warm-up sets before the working sets, 0 to 5. Default 0.
 - warmups (optional): the warm-up sets written out, each a percentage of the working weight and its reps, lightest first, up to 6, such as [{ "percent": 40, "reps": 6 }, { "percent": 80, "reps": 4 }]. They replace the app's default ramp and set warmupSets. Without them the app ramps up to the working weight by itself: 1 set at 70% x 5; 2 sets at 40% x 6 and 80% x 4; 3 sets at 40% x 8, 60% x 5 and 80% x 3. Compound lifts usually take 1 to 3 warm-ups; isolation exercises later in a session often need none.
 - superset (optional): a letter, "A", "B" or "C". Exercises with the same letter are done back to back.
+- attachment (optional, lat pulldowns and seated cable rows only): the bar or handle on the cable, one of "neutral-wide", "neutral-medium", "neutral-shoulder", "neutral-close", "v-handle" (handles with palms facing each other, from wide to hands almost together), "straight-bar", "lat-bar" (the classic wide bar with angled ends). Give one when the plan asks for a particular grip, such as { "name": "Lat Pulldown", "attachment": "neutral-medium" }; the lifter can change it during the workout.
 
 Values outside a range are brought to the nearest allowed value. The app uses the rep range and RIR for its progression advice: when you reach the top of the range at the target RIR, it suggests adding weight.
 
@@ -226,6 +227,61 @@ The activity:
 - activityType: exactly one of Running, Walking, Cycling, Rowing, Swimming, Elliptical, Stairs, HIIT. Default Running. Run, jog and treadmill are read as Running; walk and hike as Walking; bike and spin as Cycling. Anything else stops the import with an error.
 - Running, Walking and Cycling are measured by GPS outdoors: distance, live pace and pace coaching. The others are timed only, so their paces are ignored; use cues for effort.
 
+The machine (optional): when the session is on a machine, name it and say what to set it to in each phase.
+
+- machine: one of treadmill, stepmill, stepper, elliptical, bike-indoor, bike-outdoor, air-bike, rower, ski-erg. Everyday names work too (StairMaster, spin bike, stationary bike, Assault bike, Concept2, cross-trainer). Without activityType, the machine sets it.
+- Indoor machines (all but bike-outdoor) are timed, not measured by GPS: the phone is not moving. Put the targets in the settings below, not in the pace fields. On a treadmill a pace written in a pace field is turned into the belt speed (7:30 per km = 8 km/h).
+- warmupSettings, workSettings, recoverySettings, cooldownSettings: what to set the machine to in that phase, shown on screen and spoken as the phase starts ("Speed 10 kilometres an hour. Incline 2 percent."). Each value is one number or a range "80-90" (lowest-highest).
+
+What each machine takes, and the values allowed:
+
+    machine        activityType         settings
+    treadmill      Running or Walking   speedKmh (0.5-30; or speedMph), inclinePct (-6 to 40)
+    stepmill       Stairs               level (1-40), stepsPerMin (10-200)
+    stepper        Stairs               level (1-40), stepsPerMin (10-200)
+    elliptical     Elliptical           level (1-40), inclinePct (-6 to 40), strideRate (20-300 strides per minute)
+    bike-indoor    Cycling              level (1-40), cadenceRpm (20-200), powerW (10-2500)
+    bike-outdoor   Cycling              cadenceRpm (20-200), powerW (10-2500); measured by GPS
+    air-bike       Cycling or HIIT      cadenceRpm (20-200), powerW (10-2500)
+    rower          Rowing               damper (1-10), strokeRate (10-60), split500 ("1:00" to "5:00" per 500 m), powerW
+    ski-erg        Rowing               damper (1-10), strokeRate (10-60), split500, powerW
+
+What the numbers mean on real machines, to choose sensible targets:
+
+- Treadmill: commercial ones go about 0.8-25 km/h and 0-15% incline (some -3% decline, incline trainers to 40%). Incline walking: 4.5-6 km/h at 8-15%.
+- StepMill (a revolving staircase, StairMaster type): level 1 is about 24 steps a minute and level 20 about 162, roughly 7 more per level (level 7 = 66, level 9 = 80). Give both level and stepsPerMin when you can.
+- Stair stepper (two pedals): its level is its own resistance scale; give stepsPerMin as the target.
+- Elliptical: resistance levels run 1-10 up to 1-40 depending on the model; 100-150 strides a minute is a typical working pace.
+- Indoor bike: resistance has no common scale (a knob or 1-20/1-100 levels): give level only as a rough guide and lead with cadence. Seated flat 80-110 rpm, seated climb 60-80 rpm with more resistance, sprints 90-120 rpm. powerW only when the bike shows watts.
+- Air bike: air resistance rises with effort, there are no levels: set cadenceRpm or powerW.
+- Rower: Concept2 suggests damper 3-5. Steady work 18-24 strokes a minute, hard intervals 26-32. split500 is the pace per 500 m ("2:05").
+- SkiErg: start at damper 3 or lower.
+
+Example: incline walk on a treadmill.
+
+    {
+      "id": "incline-walk-2026-11-12", "date": "2026-11-12", "type": "cardio", "name": "Incline walk",
+      "intervals": {
+        "machine": "treadmill", "activityType": "Walking",
+        "warmupSeconds": 300, "warmupSettings": { "speedKmh": 4.5, "inclinePct": 2 },
+        "workSeconds": 1500, "workSettings": { "speedKmh": 5.2, "inclinePct": 10 },
+        "cooldownSeconds": 300, "cooldownSettings": { "speedKmh": 4, "inclinePct": 0 }
+      }
+    }
+
+Example: StepMill intervals.
+
+    {
+      "id": "stairs-2026-11-13", "date": "2026-11-13", "type": "cardio", "name": "StepMill 6 x 1 min",
+      "intervals": {
+        "machine": "stepmill",
+        "warmupSeconds": 180, "warmupSettings": { "level": 5, "stepsPerMin": 52 },
+        "workSeconds": 60, "workSettings": { "level": 12, "stepsPerMin": 101 }, "workCue": "Hard",
+        "recoverySeconds": 90, "recoverySettings": { "level": 6, "stepsPerMin": 59 }, "rounds": 6,
+        "cooldownSeconds": 120, "cooldownSettings": { "level": 4 }
+      }
+    }
+
 Targets for each phase (all optional):
 
 - warmupPace, workPace, recoveryPace, cooldownPace: the pace window for that phase, as minutes:seconds per km (or per mile with "paceUnit": "mi"). Write a window "7:15-8:15" (fastest-slowest) or one target "7:30". Also accepted: "7:30 /km", "8:00 min/mi", a number of seconds per km (450), or { "fast": "7:15", "slow": "8:15" }. A pace with any other unit ("/500m", "km/h") stops the import with an error.
@@ -259,6 +315,7 @@ Calories for cardio are estimated from the activity (MET values) and your body w
 
 - "type": "cardio" and an "intervals" object on every cardio entry.
 - activityType is one of the eight names above.
+- On a machine: "machine" is one of the nine names above, and each phase's settings use only that machine's settings, within their ranges. Indoor machines get their targets in the settings, not in pace fields.
 - Lengths are whole seconds (or ...Minutes), workSeconds is ONE work phase, and rounds counts the work phases.
 - Paces are minutes:seconds per km, as "fastest-slowest" or one value, in the ...Pace fields, not only in the cues.
 - Cues are short words; long explanations go in "notes".
@@ -345,6 +402,14 @@ One file with two past workouts, one past run, one planned workout and one plann
             { "name": "Face Pull", "sets": 3, "minReps": 12, "maxReps": 15, "rir": 1, "restSeconds": 60, "superset": "A" },
             { "name": "Hammer Curl", "sets": 3, "minReps": 10, "maxReps": 12, "rir": 1, "restSeconds": 60, "superset": "A" }
           ]
+        },
+        {
+          "id": "row-2026-11-03", "date": "2026-11-03", "type": "cardio", "name": "Rower 4 x 4 min",
+          "intervals": {
+            "machine": "rower", "warmupSeconds": 300, "warmupSettings": { "damper": 4, "strokeRate": 20 },
+            "workSeconds": 240, "rounds": 4, "workSettings": { "damper": 4, "strokeRate": "26-28", "split500": "2:00-2:05" },
+            "recoverySeconds": 120, "recoverySettings": { "strokeRate": 18 }, "cooldownSeconds": 180
+          }
         },
         {
           "id": "intervals-2026-11-04", "date": "2026-11-04", "type": "cardio", "name": "6 x 1 min",

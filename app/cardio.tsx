@@ -1,3 +1,4 @@
+import { usesGps } from '../src/domain/machines';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, ScrollView, View } from 'react-native';
@@ -139,7 +140,7 @@ export default function Cardio() {
             <Icon name="speaker.wave.2.fill" size={18} color={colors.cyan} />
             <View style={{ flex: 1 }}>
               <T v="headline">Voice coach</T>
-              <T v="footnote" color={colors.dim}>Says each phase, the round and rounds left{tracksDistance(plan.activity) ? ', and when you are too slow or too fast' : ''}.</T>
+              <T v="footnote" color={colors.dim}>Says each phase, the round and rounds left{usesGps(plan) ? ', and when you are too slow or too fast' : ''}.</T>
             </View>
             <Toggle value={s.timer.voiceCoach !== false} onChange={(voiceCoach) => s.setTimer({ voiceCoach })} />
           </Card>
@@ -230,7 +231,7 @@ const MILE = 1.609344;
  * when the live pace leaves the window. Paces are kept per km and shown in the chosen unit.
  */
 function Targets({ plan, up }: { plan: IntervalPlan; up: (p: Partial<IntervalPlan>) => void }) {
-  const gps = tracksDistance(plan.activity);
+  const gps = usesGps(plan);
   const kinds = (['warmup', 'work', 'recovery', 'cooldown'] as PhaseKind[]).filter((k) =>
     k === 'work' || (k === 'warmup' ? plan.warmupSeconds > 0 : k === 'cooldown' ? plan.cooldownSeconds > 0 : plan.rounds > 1 && plan.recoverySeconds > 0));
   const [picked, setPicked] = useState<PhaseKind>('work');
