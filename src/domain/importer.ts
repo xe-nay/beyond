@@ -4,7 +4,7 @@ import { findMachine, MACHINES, readSettings } from './machines.ts';
 import { parseAttachment } from './attachments.ts';
 import { defaultImplements } from './equipment.ts';
 import { paceInText, readPace } from './track.ts';
-import type { CardioSession, Exercise, IntervalPlan, Prescription, Session, WorkoutSet } from './types.ts';
+import type { CardioSegment, CardioSession, Exercise, IntervalPlan, MachineSettings, PaceRange, Prescription, Session, WorkoutSet } from './types.ts';
 
 /** Something already in the app on the same date and of the same type as an imported entry. */
 export interface Clash { id: string; name: string; kind: 'plan' | 'history' }
@@ -106,21 +106,66 @@ export function readIntervals(iv: any): IntervalPlan | string {
   const recoverySeconds = time('recovery', 0, 3600);
   const cooldownSeconds = time('cooldown', 0, 3600);
   for (const v of [warmupSeconds, workSeconds, recoverySeconds, cooldownSeconds]) if (typeof v === 'string') return v;
-  if (!workSeconds) return 'cardio needs workSeconds (or workMinutes).';
+  const unit = String(iv.paceUnit ?? 'km').toLowerCase().startsWith('mi') ? 'mi' : 'km';
+  // A pace as written: a number is seconds per km; text without a unit takes the paceUnit. undefined = unreadable.
+  const paceOf = (raw: unknown, cue: unknown) => {
+    const text = typeof raw === 'string' && unit === 'mi' && !/\/|per/i.test(raw) ? `${raw} /mi` : raw;
+    const own = readPace(text);
+    return own === undefined ? undefined : own ?? paceInText(typeof cue === 'string' ? cue : '');
+  };
+  // On a treadmill a pace is a belt speed: 7:30 /km is 8 km/h (no GPS to coach it indoors).
+  const withSpeed = (settings: MachineSettings | undefined, pace: PaceRange | null) =>
+    pace && machine?.id === 'treadmill' && !settings?.speedKmh ? { ...settings, speedKmh: { lo: 3600 / pace.slow, hi: 3600 / pace.fast } } : settings;
+
+  // Segments: the main part as steps in order, each with its own time, effort, pace and machine settings.
+  let segments: CardioSegment[] | undefined;
+  if (iv.segments !== undefined && iv.segments !== null) {
+    if (!Array.isArray(iv.segments) || !iv.segments.length) return 'segments must be a list such as [{ "minutes": 10, "settings": { "inclinePct": 6 } }].';
+    if (iv.segments.length > 40) return 'segments can have at most 40 steps.';
+    segments = [];
+    for (const [i, g] of (iv.segments as any[]).entries()) {
+      const at = `segments[${i + 1}]`;
+      if (!g || typeof g !== 'object' || Array.isArray(g)) return `${at} must be an object such as { "minutes": 10 }.`;
+      const raw = g.seconds ?? (g.minutes !== undefined ? +g.minutes * 60 : undefined);
+      const seconds = Math.round(+raw);
+      if (raw === undefined || !Number.isFinite(seconds) || seconds < 5 || seconds > 14400) return `${at} needs "seconds" (5 to 14400) or "minutes".`;
+      const kind = g.kind ?? g.type;
+      if (kind !== undefined && !['work', 'recovery', 'easy', 'rest'].includes(String(kind).toLowerCase())) return `${at}: kind must be "work" or "recovery".`;
+      let settings: MachineSettings | undefined;
+      if (g.settings !== undefined && g.settings !== null) {
+        if (!machine) return `${at}: settings need a "machine" (${MACHINES.map((m) => m.id).join(', ')}).`;
+        const read = readSettings(machine, g.settings, `${at}.settings`);
+        if (typeof read === 'string') return read;
+        if (Object.keys(read).length) settings = read;
+      }
+      const pace = paceOf(g.pace, g.cue);
+      if (pace === undefined) return `${at}: pace ${JSON.stringify(g.pace)} is not a pace. Write "7:30", "7:15-8:15" or "7:30 /km".`;
+      const cue = g.cue === undefined || g.cue === null ? '' : String(g.cue);
+      settings = withSpeed(settings, pace);
+      segments.push({
+        seconds,
+        ...(['recovery', 'easy', 'rest'].includes(String(kind ?? '').toLowerCase()) ? { kind: 'recovery' as const } : {}),
+        ...(cue ? { cue } : {}), ...(pace ? { pace } : {}), ...(settings ? { settings } : {}),
+      });
+    }
+  }
+  if (!workSeconds && !segments) return 'cardio needs workSeconds (or workMinutes), or segments.';
   const rounds = iv.rounds === undefined ? 1 : Math.round(+iv.rounds);
   if (!Number.isFinite(rounds) || rounds < 1 || rounds > 50) return 'rounds must be a whole number from 1 to 50.';
   const countdown = iv.countdownSeconds ?? iv.countdown ?? 5;
   if (!Number.isFinite(+countdown) || +countdown < 0 || +countdown > 30) return 'countdownSeconds must be 0 to 30.';
-  const unit = String(iv.paceUnit ?? 'km').toLowerCase().startsWith('mi') ? 'mi' : 'km';
 
   const plan: IntervalPlan = {
-    activity, warmupSeconds: warmupSeconds as number, workSeconds: workSeconds as number, recoverySeconds: recoverySeconds as number,
+    activity, warmupSeconds: warmupSeconds as number,
+    // With segments, "work" is their total: what older screens and the history show.
+    workSeconds: segments ? segments.reduce((n, g) => n + g.seconds, 0) : (workSeconds as number), recoverySeconds: recoverySeconds as number,
     rounds, cooldownSeconds: cooldownSeconds as number,
     workCue: String(iv.workCue ?? ''), recoveryCue: String(iv.recoveryCue ?? ''),
     ...(iv.warmupCue ? { warmupCue: String(iv.warmupCue) } : {}), ...(iv.cooldownCue ? { cooldownCue: String(iv.cooldownCue) } : {}),
     countdown: Math.round(+countdown),
     ...(unit === 'mi' ? { paceUnit: 'mi' as const } : {}),
     ...(machine ? { machine: machine.id } : {}),
+    ...(segments ? { segments } : {}),
   };
   for (const k of PHASES) {
     const raw = iv[`${k}Settings`];
@@ -132,16 +177,12 @@ export function readIntervals(iv: any): IntervalPlan | string {
   }
   for (const k of PHASES) {
     const raw = iv[`${k}Pace`];
-    // A number is seconds per km; text without a unit takes the paceUnit.
-    const text = typeof raw === 'string' && unit === 'mi' && !/\/|per/i.test(raw) ? `${raw} /mi` : raw;
     // Without a pace field, a pace written in the cue ("Easy walk 10:00–12:00 min/km") counts.
-    const pace = readPace(text) ?? paceInText(iv[`${k}Cue`]);
-    if (readPace(text) === undefined) return `${k}Pace ${JSON.stringify(raw)} is not a pace. Write "7:30", "7:15-8:15" or "7:30 /km".`;
+    const pace = paceOf(raw, iv[`${k}Cue`]);
+    if (pace === undefined) return `${k}Pace ${JSON.stringify(raw)} is not a pace. Write "7:30", "7:15-8:15" or "7:30 /km".`;
     if (pace) plan[`${k}Pace`] = pace;
-    // On a treadmill a pace is a belt speed: 7:30 /km is 8 km/h (no GPS to coach it indoors).
-    if (pace && machine?.id === 'treadmill' && !plan[`${k}Settings`]?.speedKmh) {
-      plan[`${k}Settings`] = { ...plan[`${k}Settings`], speedKmh: { lo: 3600 / pace.slow, hi: 3600 / pace.fast } };
-    }
+    const settings = withSpeed(plan[`${k}Settings`], pace);
+    if (settings) plan[`${k}Settings`] = settings;
   }
   return plan;
 }

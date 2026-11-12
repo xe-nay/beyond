@@ -8,7 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { exercises } from '../src/catalog';
 import { Icon } from '../src/components/Icon';
-import { Button, Card, Row, Segmented, T, Toggle } from '../src/components/ui';
+import { Button, Card, Press, Row, Segmented, T, Toggle } from '../src/components/ui';
 import { applyChoices, needsChoice, parseTrainingFile, type Choice, type ImportResult, type ImportRow } from '../src/domain/importer';
 import { IMPORT_GUIDE } from '../src/importGuide';
 import { readUri } from '../src/storage';
@@ -36,7 +36,7 @@ export default function Import() {
   const listY = useRef(0);
   const rowY = useRef<Record<string, number>>({});
   const [at, setAt] = useState(-1);
-  const [copied, setCopied] = useState<'guide' | 'names' | null>(null);
+  const [copied, setCopied] = useState<'guide' | 'names' | number | null>(null);
 
   const read = (text: string) => {
     setChoices({});
@@ -54,6 +54,11 @@ export default function Import() {
   const copy = async (what: 'guide' | 'names') => {
     await Clipboard.setStringAsync(what === 'guide' ? IMPORT_GUIDE : `${exercises.map((e) => e.name).join('\n')}\n\n${ATTACHMENT_NOTE}`);
     setCopied(what);
+  };
+  // The guide ends with "from what I tell you below, write the file:", so a request goes right after it.
+  const copyAsk = async (i: number) => {
+    await Clipboard.setStringAsync(`${IMPORT_GUIDE}\n${ASKS[i].text}\n`);
+    setCopied(i);
   };
 
   const plan = result && !result.errors.length ? applyChoices(result, choices, mode) : null;
@@ -175,10 +180,31 @@ export default function Import() {
         <T v="label" color={colors.dim}>Copy the guide into any AI chat, then describe your plan or past workouts with their dates. Copy the reply and tap Paste.</T>
         <Button icon={copied === 'guide' ? 'checkmark' : 'square.on.square'} kind="secondary" title={copied === 'guide' ? 'Guide copied' : 'Copy the guide'} onPress={() => copy('guide')} />
         <Button icon={copied === 'names' ? 'checkmark' : 'list.bullet'} kind="ghost" title={copied === 'names' ? `${exercises.length} names copied` : 'Copy exercise names'} onPress={() => copy('names')} />
+        <View style={{ gap: space.sm }}>
+          <T v="caption" color={colors.faint}>Or start from an example · copies the guide with it</T>
+          {ASKS.map((a, i) => (
+            <Press key={a.title} onPress={() => copyAsk(i)} label={`Copy the guide with: ${a.text}`} style={{ borderRadius: 14, borderWidth: 1, borderColor: copied === i ? alpha(colors.cyan, 0.5) : colors.hairline, padding: space.md, gap: 4 }}>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <T v="headline">{a.title}</T>
+                <Icon name={copied === i ? 'checkmark' : 'square.on.square'} size={14} color={copied === i ? colors.cyan : colors.faint} />
+              </Row>
+              <T v="footnote" color={colors.dim}>{a.text}</T>
+            </Press>
+          ))}
+          <T v="footnote" color={colors.faint}>Paste it in the AI chat, change the words to your own session, send, then copy the reply and tap Paste.</T>
+        </View>
       </Card>
     </ScrollView>
   );
 }
+
+/** Requests to start from, written the way a person would ask; each one is copied after the guide. */
+const ASKS = [
+  { title: 'Treadmill, two hills', text: 'Tomorrow on the treadmill: 5 min easy walk at 1% incline, then 10 min at 6% incline and 10 min at 10% incline, both at 5.5 km/h, then 5 min cool-down.' },
+  { title: 'Incline pyramid', text: 'Saturday, treadmill incline pyramid: 2-4-6-8-10-8-6-4-2% incline, 2 minutes each, walking at 5.5 km/h, with 5 min warm-up and cool-down.' },
+  { title: 'StepMill ladder', text: 'Sunday, StepMill: 4 minutes each at level 6, 8 and 10, twice through with 2 easy minutes between, 3 min warm-up and cool-down.' },
+  { title: 'Week of cardio', text: 'Plan next week (Monday to Sunday): a treadmill walk with two hills, an indoor bike session with climbs, a progression run outdoors and rest days in between.' },
+];
 
 const DECISION: Record<Choice, string> = { mine: 'Keeping yours', import: 'Using the import', both: 'Keeping both' };
 

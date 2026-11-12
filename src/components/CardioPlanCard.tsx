@@ -5,7 +5,7 @@ import { View } from 'react-native';
 import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-native-reanimated';
 
 import { cueWords, formatPaceRange, tracksDistance } from '../domain/track';
-import { formatClock, plannedKm, timeline, totalSeconds, type PhaseKind } from '../domain/intervals';
+import { formatClock, phaseTitle, plannedKm, segmentsOf, timeline, totalSeconds, type Phase, type PhaseKind } from '../domain/intervals';
 import type { CardioSession, PaceRange } from '../domain/types';
 import { today, useStore } from '../store';
 import { alpha, colors, space, type } from '../theme';
@@ -36,12 +36,13 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
   const phases = timeline(p);
   const total = totalSeconds(p);
   const km = usesGps(p) ? plannedKm(phases) : null;
-  const first = (k: PhaseKind) => phases.find((x) => x.kind === k);
+  const row = (key: string, x: Phase, label: string) => ({ key, kind: x.kind, label, time: formatClock(x.seconds), cue: cueWords(x.cue), pace: usesGps(p) ? x.pace : null, settings: settingsText(x.settings) });
+  const segmented = !!segmentsOf(p);
+  // Each kind once with how many times it comes; a session of segments lists every segment of a round.
   const rows = (['warmup', 'work', 'recovery', 'cooldown'] as PhaseKind[]).flatMap((k) => {
-    const x = first(k);
-    if (!x) return [];
-    const n = phases.filter((y) => y.kind === k).length;
-    return [{ kind: k, label: n > 1 ? `${NAME[k]} × ${n}` : NAME[k], time: formatClock(x.seconds), cue: cueWords(x.cue), pace: usesGps(p) ? x.pace : null, settings: settingsText(x.settings) }];
+    const of = phases.filter((y) => y.kind === k && !y.step);
+    if (!of.length) return k === 'work' && segmented ? phases.filter((y) => y.step && y.round === 1).map((y) => row(`s${y.step}`, y, `Segment ${y.step}${p.rounds > 1 ? ` × ${p.rounds}` : ''}`)) : [];
+    return [row(k, of[0], of.length > 1 ? `${NAME[k]} × ${of.length}` : NAME[k])];
   });
   const start = () => {
     useStore.getState().set({ cardioRun: { id: c.id, date: today(), plan: p, banked: 0, resumedAt: Date.now() } });
@@ -55,7 +56,7 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
           <Head
             label={`Planned cardio · ${machineById(p.machine)?.name ?? c.activity}`}
             title={c.name ?? c.activity}
-            sub={`${formatClock(total)}${km !== null ? ` · ≈ ${(unit === 'mi' ? km / 1.609344 : km).toFixed(1)} ${unit}` : ''}${p.rounds > 1 ? ` · ${p.rounds} rounds` : ''}`}
+            sub={`${formatClock(total)}${km !== null ? ` · ≈ ${(unit === 'mi' ? km / 1.609344 : km).toFixed(1)} ${unit}` : ''}${segmented ? ` · ${segmentsOf(p)!.length} segments` : ''}${p.rounds > 1 ? ` · ${p.rounds} rounds` : ''}`}
             tint={colors.cyan}
           />
         </View>
@@ -71,7 +72,7 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
 
       <View style={{ gap: space.sm }}>
         {rows.map((x) => (
-          <Row key={x.kind} style={{ alignItems: 'flex-start' }}>
+          <Row key={x.key} style={{ alignItems: 'flex-start' }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, backgroundColor: PHASE[x.kind].a }} />
             <View style={{ flex: 1 }}>
               <Row style={{ justifyContent: 'space-between' }}>
@@ -98,10 +99,10 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
               <View style={{ width: 6, height: 6, borderRadius: 3, marginTop: 6, backgroundColor: PHASE[x.kind].a }} />
               <View style={{ flex: 1 }}>
                 <Row style={{ justifyContent: 'space-between' }}>
-                  <T v="callout">{NAME[x.kind]}{x.round && p.rounds > 1 ? ` ${x.round}/${p.rounds}` : ''} · {formatClock(x.seconds)}</T>
+                  <T v="callout">{phaseTitle(p, x)} · {formatClock(x.seconds)}</T>
                   <T v="footnote" color={colors.faint} style={type.num}>{formatClock(x.start)}–{formatClock(x.end)}</T>
                 </Row>
-                <Detail cue={cueWords(x.cue)} pace={x.pace} unit={unit} />
+                <Detail cue={cueWords(x.cue)} pace={usesGps(p) ? x.pace : null} unit={unit} settings={settingsText(x.settings)} />
               </View>
             </Row>
           ))}

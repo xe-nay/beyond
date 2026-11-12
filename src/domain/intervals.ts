@@ -1,10 +1,17 @@
 // Cardio interval timeline and the countdown schedule shared by cardio and rest timers.
-import { indoorPlan, spokenSettings } from './machines.ts';
+import { indoorPlan, spokenChange } from './machines.ts';
 import { cueWords, paceInText, spokenPace } from './track.ts';
-import type { IntervalPlan, MachineSettings, PaceRange } from './types.ts';
+import type { CardioSegment, IntervalPlan, MachineSettings, PaceRange } from './types.ts';
 
 export type PhaseKind = 'warmup' | 'work' | 'recovery' | 'cooldown';
-export interface Phase { kind: PhaseKind; round: number; seconds: number; cue: string; pace: PaceRange | null; start: number; end: number; settings?: MachineSettings }
+/** A step of the session. Segments carry their place in the round: step 2 of steps 4. */
+export interface Phase { kind: PhaseKind; round: number; seconds: number; cue: string; pace: PaceRange | null; start: number; end: number; settings?: MachineSettings; step?: number; steps?: number }
+
+/** The segments of a plan that has them (each at least 5 s), else null. */
+export const segmentsOf = (plan: Pick<IntervalPlan, 'segments'>): CardioSegment[] | null => {
+  const list = (plan.segments ?? []).filter((x) => x && x.seconds > 0);
+  return list.length ? list : null;
+};
 
 /** The cue a phase shows; warm-up and cool-down have a default. */
 export function phaseCue(plan: IntervalPlan, kind: PhaseKind) {
@@ -22,19 +29,58 @@ export function phasePace(plan: IntervalPlan, kind: PhaseKind): PaceRange | null
 export function timeline(plan: IntervalPlan): Phase[] {
   const out: Phase[] = [];
   let t = 0;
-  const add = (kind: PhaseKind, round: number, seconds: number) => {
-    if (seconds <= 0) return;
-    const settings = plan[`${kind}Settings`];
-    out.push({ kind, round, seconds, cue: phaseCue(plan, kind), pace: phasePace(plan, kind), start: t, end: t + seconds, ...(settings ? { settings } : {}) });
-    t += seconds;
+  const push = (p: Omit<Phase, 'start' | 'end'>) => {
+    if (p.seconds <= 0) return;
+    out.push({ ...p, start: t, end: t + p.seconds });
+    t += p.seconds;
   };
+  const add = (kind: PhaseKind, round: number, seconds: number) => {
+    const settings = plan[`${kind}Settings`];
+    push({ kind, round, seconds, cue: phaseCue(plan, kind), pace: phasePace(plan, kind), ...(settings ? { settings } : {}) });
+  };
+  const segs = segmentsOf(plan);
   add('warmup', 0, plan.warmupSeconds);
   for (let r = 1; r <= plan.rounds; r++) {
-    add('work', r, plan.workSeconds);
+    if (segs) {
+      segs.forEach((g, i) => push({
+        kind: g.kind === 'recovery' ? 'recovery' : 'work', round: r, seconds: g.seconds, cue: g.cue ?? '',
+        pace: g.pace ?? paceInText(g.cue ?? ''), step: i + 1, steps: segs.length, ...(g.settings && Object.keys(g.settings).length ? { settings: g.settings } : {}),
+      }));
+    } else add('work', r, plan.workSeconds);
     if (r < plan.rounds) add('recovery', r, plan.recoverySeconds);
   }
   add('cooldown', 0, plan.cooldownSeconds);
   return out;
+}
+
+const LABELS: Record<PhaseKind, string> = { warmup: 'Warm-up', work: 'Work', recovery: 'Recover', cooldown: 'Cool-down' };
+
+/**
+ * A phase's name on screen, in the island and in notifications: "Work 2/6", "Recover 2/6",
+ * "Segment 2/4", "Segment 2/4 · round 1/3".
+ */
+export function phaseTitle(plan: Pick<IntervalPlan, 'rounds'>, p: Phase | null | undefined): string {
+  if (!p) return 'Done';
+  if (p.step) return `Segment ${p.step}/${p.steps}${plan.rounds > 1 ? ` · round ${p.round}/${plan.rounds}` : ''}`;
+  return `${LABELS[p.kind]}${p.round && plan.rounds > 1 ? ` ${p.round}/${plan.rounds}` : ''}`;
+}
+
+/**
+ * The progress dots under the clock: one per round, or one per segment when a single round is made of
+ * segments. current is 1-based (0 before the first), done counts the finished ones.
+ */
+export function progressDots(plan: Pick<IntervalPlan, 'rounds'>, phases: Phase[], index: number) {
+  const p = phases[index];
+  const steps = phases.find((x) => x.steps)?.steps ?? 0;
+  if (plan.rounds <= 1 && steps > 1) {
+    return { count: steps, current: p?.step ?? 0, done: phases.slice(0, index).filter((x) => x.step).length };
+  }
+  // A round is done once its last work or segment phase has passed (classic recovery sits between rounds).
+  const last = new Map<number, number>();
+  phases.forEach((x, i) => { if (x.round && (x.kind === 'work' || x.step)) last.set(x.round, i); });
+  const done = [...last.values()].filter((i) => i < index).length;
+  const current = !p || !p.round ? 0 : p.round;
+  return { count: plan.rounds, current: p?.kind === 'cooldown' ? 0 : current, done };
 }
 
 /** A length as the voice says it: "45 seconds", "2 minutes", "2 minutes 30". */
@@ -66,22 +112,39 @@ export function announce(plan: IntervalPlan, phases: Phase[], index: number, pac
   const unit = plan.paceUnit ?? 'km';
   const words = cueWords(p.cue);
   const parts: string[] = [];
+  const round = (r: number) => (r === plan.rounds ? `Last round, ${r} of ${plan.rounds}` : `Round ${r} of ${plan.rounds}`);
   if (p.kind === 'warmup') parts.push(`Warm-up, ${spokenTime(p.seconds)}`);
-  if (p.kind === 'work') {
-    if (plan.rounds > 1) parts.push(p.round === plan.rounds ? `Last round, ${p.round} of ${plan.rounds}` : `Round ${p.round} of ${plan.rounds}`);
+  if (p.step) {
+    if (plan.rounds > 1 && p.step === 1) parts.push(round(p.round));
+    if ((p.steps ?? 1) > 1) parts.push(`${p.step === p.steps ? 'Last segment' : `Segment ${p.step} of ${p.steps}`}, ${spokenTime(p.seconds)}`);
+    else parts.push(`${p.kind === 'recovery' ? 'Easy' : 'Work'}, ${spokenTime(p.seconds)}`);
+  } else if (p.kind === 'work') {
+    if (plan.rounds > 1) parts.push(round(p.round));
     parts.push(`Work, ${spokenTime(p.seconds)}`);
   }
-  if (p.kind === 'recovery') {
+  if (p.kind === 'recovery' && !p.step) {
     const left = plan.rounds - p.round;
     parts.push(`Recover, ${spokenTime(p.seconds)}`, `${left} ${left === 1 ? 'round' : 'rounds'} to go`);
   }
   if (p.kind === 'cooldown') parts.push(plan.rounds > 1 ? 'All rounds done' : 'Work done', `Cool-down, ${spokenTime(p.seconds)}`);
   if (words) parts.push(words);
-  // On a machine, what to set it to ("Speed 10 kilometres an hour. Incline 2 percent").
-  const set = spokenSettings(p.settings);
+  // On a machine, what to set it to: all of it at the start, then what changes ("Incline up to 12 percent").
+  const set = spokenChange(phases[index - 1]?.settings, p.settings);
   if (set) parts.push(set);
   if (paced && p.pace && !indoorPlan(plan)) parts.push(spokenTarget(p.pace, unit));
   return `${parts.join('. ')}.`;
+}
+
+/**
+ * A heads-up before the machine has to change, so there is time to reach the console: "Coming up:
+ * incline up to 12 percent". Null when the next phase changes no setting.
+ */
+export function upNext(phases: Phase[], index: number): string | null {
+  const p = phases[index];
+  const n = phases[index + 1];
+  if (!p || !n?.settings) return null;
+  const change = spokenChange(p.settings, n.settings);
+  return change ? `Coming up: ${change.charAt(0).toLowerCase()}${change.slice(1)}.` : null;
 }
 
 /** Roughly how far a plan goes at the middle of each phase's pace window, in km; null without paces. */

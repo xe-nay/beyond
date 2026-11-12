@@ -45,7 +45,8 @@ export function DoneCardioCard({ c }: { c: CardioSession }) {
           <Row gap={6} style={{ flexWrap: 'wrap' }}>
             {c.rpe ? <Pill text={`Effort ${c.rpe}/10`} strong /> : null}
             {c.avgHr ? <Pill text={`${c.avgHr} bpm`} /> : null}
-            {c.plan && c.plan.rounds > 1 ? <Pill text={`${plural(c.plan.rounds, 'round')} · ${formatClock(c.plan.workSeconds)} on${c.plan.recoverySeconds ? ` / ${formatClock(c.plan.recoverySeconds)} off` : ''}`} /> : null}
+            {c.plan?.segments?.length ? <Pill text={`${plural(c.plan.segments.length, 'segment')}${c.plan.rounds > 1 ? ` × ${c.plan.rounds}` : ''}`} /> : null}
+            {c.plan && c.plan.rounds > 1 && !c.plan.segments?.length ? <Pill text={`${plural(c.plan.rounds, 'round')} · ${formatClock(c.plan.workSeconds)} on${c.plan.recoverySeconds ? ` / ${formatClock(c.plan.recoverySeconds)} off` : ''}`} /> : null}
           </Row>
         </Shell>
       </View>

@@ -6,11 +6,12 @@ import { AppState } from 'react-native';
 import { endLive, liveAvailable, liveLog, startLive, updateLive, type LiveState } from '../modules/live-activity';
 import { exercise } from './catalog';
 import { currentExercise } from './components/WorkoutDock';
-import { elapsed, position, timeline } from './domain/intervals';
+import { elapsed, phaseTitle, position, timeline } from './domain/intervals';
+import { settingsText } from './domain/machines';
+import { cueWords } from './domain/track';
 import { useStore, type State } from './store';
 
 const PHASE_COLOR = { warmup: '#FFB340', work: '#40E0F0', recovery: '#C2F95C', cooldown: '#7D8BFF' } as const;
-const PHASE_LABEL = { warmup: 'Warm-up', work: 'Work', recovery: 'Recover', cooldown: 'Cool-down' } as const;
 const ACTIVITY: Record<string, string> = { Running: 'figure.run', Walking: 'figure.walk', Cycling: 'bicycle', Rowing: 'figure.rower', Swimming: 'figure.pool.swim', HIIT: 'figure.highintensity.intervaltraining' };
 
 export function liveState(s: State): { name: string; state: LiveState } | null {
@@ -25,7 +26,8 @@ export function liveState(s: State): { name: string; state: LiveState } | null {
       state: {
         mode: paused ? 'paused' : 'cardio',
         title: run.plan.activity,
-        subtitle: `${PHASE_LABEL[kind]}${pos.phase.round ? ` ${pos.phase.round}/${run.plan.rounds}` : ''}${pos.phase.cue ? ` · ${pos.phase.cue}` : ''}`,
+        // On a machine, the settings to hold (what a glance at the island is for); otherwise the cue.
+        subtitle: [phaseTitle(run.plan, pos.phase), settingsText(pos.phase.settings) || cueWords(pos.phase.cue)].filter(Boolean).join(' · '),
         symbol: ACTIVITY[run.plan.activity] ?? 'figure.run',
         accent: PHASE_COLOR[kind],
         endsAt: paused ? null : Date.now() + pos.remaining * 1000,

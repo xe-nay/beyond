@@ -16,6 +16,7 @@ This guide explains every part of the file Beyond imports. It is written so you 
 - Make a new file "id" for every file, unless I ask you to correct a file you already gave me: then keep the same file id and entry ids.
 - For a plan, give every date of its period an entry: a workout, a cardio session or a rest day ("type": "rest").
 - For cardio, put every pace in the pace fields (workPace, recoveryPace, warmupPace, cooldownPace) as minutes:seconds per km, a window "7:15-8:15" or one value "7:30". Follow the checklist at the end of section 8.
+- When a cardio session changes as it goes (a treadmill at one incline then another, an incline or level pyramid, a ride with different climbs, a run that speeds up), write it with "segments" (section 8), one segment per change, on any machine or none. Do not split it into several entries or flatten it to one setting.
 
 
 ## 1. How importing works
@@ -182,10 +183,15 @@ A cardio entry is one guided session the phone times and talks you through. Ever
 
 Planned length = warmupSeconds + rounds x workSeconds + (rounds - 1) x recoverySeconds + cooldownSeconds.
 
+Or, for a session that changes as it goes, with segments (see "segments" below):
+
+    warm-up  ->  segment 1, segment 2 ... segment N  ->  cool-down
+                 (each segment with its own time, settings, cue and pace; "rounds" repeats the whole list)
+
 - A steady session (an easy 40-minute run) is ONE round: "rounds": 1, "workSeconds": 2400, no recovery.
 - Run/walk intervals: work = the running part, recovery = the walking part.
 - Phases are timed, not measured by distance. For "6 x 400 m", estimate each repeat's time from its pace (400 m at 5:00 /km = 120 seconds).
-- Every work phase in one session is the same length with the same targets, and so is every recovery. A session that changes inside (a pyramid, or 3 x 1 min then 3 x 2 min) is written as separate cardio entries, or as the nearest even version. Say so in "notes".
+- Without segments, every work phase in one session is the same length with the same targets, and so is every recovery. A session that changes inside (10 minutes at one incline then 10 at another, a pyramid, 3 x 1 min then 3 x 2 min) is written with segments.
 
 Example: run/walk intervals with a pace for every phase.
 
@@ -220,7 +226,7 @@ Example: run/walk intervals with a pace for every phase.
 Lengths (whole seconds). Each one can instead be given in minutes with the same name ending in Minutes ("warmupMinutes": 5 is 300 seconds).
 
 - warmupSeconds: 0 to 3600. Default 0 (no warm-up).
-- workSeconds (required): length of ONE work phase, 5 to 14400.
+- workSeconds (required unless there are segments): length of ONE work phase, 5 to 14400.
 - recoverySeconds: length of ONE recovery between work phases, 0 to 3600. Default 0.
 - rounds: how many work phases, a whole number 1 to 50. Default 1.
 - cooldownSeconds: 0 to 3600. Default 0.
@@ -293,12 +299,120 @@ Targets for each phase (all optional):
 - A pace written inside a cue ("Easy walk 10:00-12:00 min/km") is read as that phase's pace when its pace field is missing, but prefer the pace fields.
 - countdownSeconds: beeps before each phase change, 0 to 30. Default 5. The app plays 3, 5, 10 or 15 seconds of beeps (the nearest length below); 0 plays only the change tone.
 
+### segments: a session that changes as it goes
+
+Use segments whenever the targets change during the session: a treadmill walk at 6% for 10 minutes then 10% for 10 minutes, an incline pyramid, a StepMill that goes up a level every few minutes, an indoor ride with climbs at different cadences, a rower pyramid, a run that gets faster. They work the same on every machine, and without a machine (outdoors, with a pace per segment).
+
+- segments: a list of 1 to 40 steps, done in order. It takes the place of workSeconds, workCue, workPace and workSettings: leave those out.
+- Each segment is an object:
+  - seconds (or minutes): its length, 5 to 14400 seconds. Required.
+  - settings: what to set the machine to in this segment, with the same names and ranges as the phase settings above. Needs "machine".
+  - cue: a few words shown and spoken ("Hill", "Steeper", "Push", "Easy").
+  - pace: a pace window, written like workPace. Coached by GPS outdoors; on a treadmill it becomes the belt speed.
+  - kind: "work" (default) or "recovery" for an easy segment between harder ones. It changes only the colour and how it is named.
+- Give each segment its full settings (speed AND incline, not only the one that changes): the app works out what changed, and the voice says only that.
+- rounds: how many times the whole list is done, default 1. recoverySeconds (with recoverySettings, recoveryCue) is a rest between rounds; leave it out for none.
+- warmupSeconds and cooldownSeconds, with their settings, cues and paces, work as above.
+- Planned length = warmupSeconds + rounds x (all segments) + (rounds - 1) x recoverySeconds + cooldownSeconds.
+
+How requests become segments:
+
+- "Treadmill 10 min at 6% then 10 min at 10%, 5.5 km/h": two segments of 600 seconds, both with speedKmh 5.5, inclinePct 6 then 10.
+- "Incline pyramid 2-4-6-8-6-4-2, 2 minutes each": seven segments of 120 seconds.
+- "StepMill 5 min at level 6, 8, then 10": three segments with level (and stepsPerMin).
+- "3 times: 3 min at 8% incline, 2 min flat": "rounds": 3 and two segments, the flat one "kind": "recovery".
+- "Run 10 min easy, 10 min steady, 5 min fast": three segments, each with its own pace.
+- One setting for the whole session, or the same work and recovery repeated: no segments, use workSeconds and rounds.
+
+Example: two hills on a treadmill (the incline changes after 10 minutes).
+
+    {
+      "id": "treadmill-hills-2026-11-14", "date": "2026-11-14", "type": "cardio", "name": "Treadmill two hills",
+      "intervals": {
+        "machine": "treadmill", "activityType": "Walking", "countdownSeconds": 10,
+        "warmupSeconds": 300, "warmupSettings": { "speedKmh": 5, "inclinePct": 1 }, "warmupCue": "Easy walk",
+        "segments": [
+          { "minutes": 10, "settings": { "speedKmh": 5.5, "inclinePct": 6 }, "cue": "Hill" },
+          { "minutes": 10, "settings": { "speedKmh": 5.5, "inclinePct": 10 }, "cue": "Steeper" }
+        ],
+        "cooldownSeconds": 300, "cooldownSettings": { "speedKmh": 4.5, "inclinePct": 0 }
+      }
+    }
+
+Example: an incline pyramid, the speed easing as it gets steeper.
+
+    {
+      "id": "incline-pyramid-2026-11-15", "date": "2026-11-15", "type": "cardio", "name": "Incline pyramid",
+      "intervals": {
+        "machine": "treadmill", "activityType": "Walking",
+        "warmupMinutes": 5, "warmupSettings": { "speedKmh": 5, "inclinePct": 1 },
+        "segments": [
+          { "minutes": 3, "settings": { "speedKmh": 6, "inclinePct": 4 } },
+          { "minutes": 3, "settings": { "speedKmh": 5.8, "inclinePct": 8 } },
+          { "minutes": 3, "settings": { "speedKmh": 5.4, "inclinePct": 12 }, "cue": "Top" },
+          { "minutes": 3, "settings": { "speedKmh": 5.8, "inclinePct": 8 } },
+          { "minutes": 3, "settings": { "speedKmh": 6, "inclinePct": 4 } }
+        ],
+        "cooldownMinutes": 5, "cooldownSettings": { "speedKmh": 4.5, "inclinePct": 0 }
+      }
+    }
+
+Example: a StepMill climbing a level every 4 minutes, twice through with 2 easy minutes between.
+
+    {
+      "id": "stepmill-ladder-2026-11-16", "date": "2026-11-16", "type": "cardio", "name": "StepMill ladder",
+      "intervals": {
+        "machine": "stepmill", "warmupMinutes": 3, "warmupSettings": { "level": 4 },
+        "segments": [
+          { "minutes": 4, "settings": { "level": 6, "stepsPerMin": 59 } },
+          { "minutes": 4, "settings": { "level": 8, "stepsPerMin": 73 } },
+          { "minutes": 4, "settings": { "level": 10, "stepsPerMin": 87 }, "cue": "Hard" }
+        ],
+        "rounds": 2, "recoveryMinutes": 2, "recoverySettings": { "level": 4 }, "recoveryCue": "Easy",
+        "cooldownMinutes": 3, "cooldownSettings": { "level": 3 }
+      }
+    }
+
+Example: indoor bike climbs, seated then standing.
+
+    {
+      "id": "bike-climbs-2026-11-17", "date": "2026-11-17", "type": "cardio", "name": "Bike climbs",
+      "intervals": {
+        "machine": "bike-indoor", "warmupMinutes": 5, "warmupSettings": { "cadenceRpm": "85-95" },
+        "segments": [
+          { "minutes": 4, "settings": { "level": 8, "cadenceRpm": "70-75" }, "cue": "Seated climb" },
+          { "minutes": 2, "settings": { "level": 4, "cadenceRpm": "90-95" }, "kind": "recovery", "cue": "Spin easy" },
+          { "minutes": 3, "settings": { "level": 11, "cadenceRpm": "60-65" }, "cue": "Standing climb" },
+          { "minutes": 2, "settings": { "level": 4, "cadenceRpm": "90-95" }, "kind": "recovery", "cue": "Spin easy" }
+        ],
+        "rounds": 2, "cooldownMinutes": 5
+      }
+    }
+
+Example: a progression run outdoors (GPS coaches the pace of each segment).
+
+    {
+      "id": "progression-2026-11-18", "date": "2026-11-18", "type": "cardio", "name": "Progression run",
+      "intervals": {
+        "activityType": "Running",
+        "segments": [
+          { "minutes": 10, "pace": "6:00-6:20", "cue": "Easy" },
+          { "minutes": 10, "pace": "5:30-5:45", "cue": "Steady" },
+          { "minutes": 5, "pace": "5:00-5:10", "cue": "Fast" }
+        ],
+        "cooldownMinutes": 5, "cooldownPace": "6:30-7:30"
+      }
+    }
+
 Put explanations, RPE and the talk test in the entry's "notes": they are shown in full on the day and on Today, not spoken.
 
 ### What happens during the session
 
 - Before each change: the countdown beeps, then a tone.
 - As each phase starts, a voice says it, for example: "Round 2 of 6. Work, 90 seconds. Easy jog. Pace 7 15 to 8 15 per kilometre." On recoveries it says how many rounds are left; on the last work phase, "Last round". At the end: "Workout complete".
+- With segments it names each one and says only what changes on the machine: "Segment 2 of 2, 10 minutes. Steeper. Incline up to 10 percent." The last one is "Last segment". With rounds, the first segment of each round also says the round.
+- On a machine, shortly before a change (just before the countdown beeps, in phases of a minute or more), a heads-up gives time to reach the console: "Coming up: incline up to 10 percent."
+- The screen shows the current segment or phase with its settings, the next one with what to set, and dots for the segments (or rounds). The Lock Screen and Dynamic Island show the segment and its settings.
 - Halfway through any phase of 4 minutes or more, it says the time left.
 - With a pace window on a GPS activity, after the first 30 seconds of the phase: "Pick it up" when slower than the window for 8 seconds, "Ease off" when faster, then "Back on pace" when you return, with your live pace and the target. At most once every 40 seconds. A little slack each way (4% slower, 6% faster) keeps GPS wobble from nagging.
 - This also works with the screen locked, as long as the phone's sound is on. The voice can be turned off in the cardio screen or the timer settings.
@@ -320,6 +434,7 @@ Calories for cardio are estimated from the activity (MET values) and your body w
 - activityType is one of the eight names above.
 - On a machine: "machine" is one of the nine names above, and each phase's settings use only that machine's settings, within their ranges. Indoor machines get their targets in the settings, not in pace fields.
 - Lengths are whole seconds (or ...Minutes), workSeconds is ONE work phase, and rounds counts the work phases.
+- A session whose targets change (incline, speed, level, cadence, pace) uses "segments": one segment per change, each with its seconds or minutes and its full settings; no workSeconds then. rounds repeats the whole list.
 - Paces are minutes:seconds per km, as "fastest-slowest" or one value, in the ...Pace fields, not only in the cues.
 - Cues are short words; long explanations go in "notes".
 
@@ -346,7 +461,8 @@ If any entry has a problem, nothing is imported and the first errors are shown:
 - "Entry N: a future date cannot have results." Remove "performed" or fix the date.
 - "Entry N: a workout needs "exercises" or performed "sets"."
 - "Entry N: unknown exercise "X"." / "a performed set names an unknown exercise." Rename it (see section 7).
-- "Entry N: cardio needs workSeconds (or workMinutes)."
+- "Entry N: cardio needs workSeconds (or workMinutes), or segments."
+- "Entry N: segments[K] needs "seconds" (5 to 14400) or "minutes"." / "segments[K]: settings need a "machine"." / "segments[K].settings: Treadmill has no level." Fix that segment (K counts from 1).
 - "Entry N: activityType "X" is not one of ..." Use one of the eight activities in section 8.
 - "Entry N: workPace "X" is not a pace." (or warmupPace, recoveryPace, cooldownPace) Write minutes:seconds per km: "7:30" or "7:15-8:15".
 - "Entry N: rounds must be a whole number from 1 to 50." / "...Seconds must be a number from A to B." / "countdownSeconds must be 0 to 30."
@@ -355,7 +471,7 @@ If any entry has a problem, nothing is imported and the first errors are shown:
 
 ## 11. Complete example
 
-One file with two past workouts, one past run, one planned workout and one planned interval session:
+One file with two past workouts, one past run, one planned workout, a planned rower session, a planned interval run and a planned treadmill walk with two hills:
 
     {
       "format": "beyond-training",
@@ -420,6 +536,17 @@ One file with two past workouts, one past run, one planned workout and one plann
             "activityType": "Running", "warmupSeconds": 600, "workSeconds": 60, "recoverySeconds": 90, "rounds": 6,
             "cooldownSeconds": 300, "workCue": "Hard", "workPace": "4:20-4:40", "recoveryCue": "Easy jog", "recoveryPace": "6:30-7:30",
             "warmupPace": "6:00-6:45", "countdownSeconds": 5
+          }
+        },
+        {
+          "id": "hills-2026-11-05", "date": "2026-11-05", "type": "cardio", "name": "Treadmill two hills",
+          "intervals": {
+            "machine": "treadmill", "activityType": "Walking", "warmupMinutes": 5, "warmupSettings": { "speedKmh": 5, "inclinePct": 1 },
+            "segments": [
+              { "minutes": 10, "settings": { "speedKmh": 5.5, "inclinePct": 6 }, "cue": "Hill" },
+              { "minutes": 10, "settings": { "speedKmh": 5.5, "inclinePct": 10 }, "cue": "Steeper" }
+            ],
+            "cooldownMinutes": 5, "cooldownSettings": { "speedKmh": 4.5, "inclinePct": 0 }
           }
         }
       ]

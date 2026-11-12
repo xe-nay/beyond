@@ -8,7 +8,8 @@ import Animated, { FadeInDown, FadeOutDown, LinearTransition, useReducedMotion }
 
 import { exercise } from '../catalog';
 import { working } from '../domain/calc';
-import { elapsed, formatClock, position, timeline } from '../domain/intervals';
+import { elapsed, formatClock, phaseTitle, position, timeline } from '../domain/intervals';
+import { settingsText } from '../domain/machines';
 import { useStore } from '../store';
 import { alpha, colors, radius, space, type } from '../theme';
 import { PHASE } from './CardioVisuals';
@@ -56,8 +57,8 @@ export function WorkoutDock() {
           <Icon name="figure.run" size={14} color={look.a} />
         </Ring>
         <View style={{ flex: 1 }}>
-          <T v="footnote" color={pos.phase ? look.a : colors.lime}>{!pos.phase ? 'Finished · tap to save' : run.resumedAt === null ? 'Paused' : look.label}{pos.phase?.round ? ` ${pos.phase.round}/${run.plan.rounds}` : ''}</T>
-          <T v="headline" numberOfLines={1}>{run.plan.activity}{pos.phase?.cue ? ` · ${pos.phase.cue}` : ''}</T>
+          <T v="footnote" color={pos.phase ? look.a : colors.lime}>{!pos.phase ? 'Finished · tap to save' : run.resumedAt === null ? 'Paused' : pos.phase.step ? phaseTitle(run.plan, pos.phase) : `${look.label}${pos.phase.round && run.plan.rounds > 1 ? ` ${pos.phase.round}/${run.plan.rounds}` : ''}`}</T>
+          <T v="headline" numberOfLines={1}>{run.plan.activity}{settingsText(pos.phase?.settings) ? ` · ${settingsText(pos.phase?.settings)}` : pos.phase?.cue ? ` · ${pos.phase.cue}` : ''}</T>
         </View>
         {pos.phase ? <T v="title3" style={type.num}>{formatClock(pos.remaining)}</T> : <Icon name="chevron.right" size={14} color={colors.faint} />}
       </Press>

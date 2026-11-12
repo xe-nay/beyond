@@ -1,4 +1,4 @@
-import { EDIT, machineById, machinesFor, SETTINGS, settingValueText, usesGps, type SettingKey } from '../src/domain/machines';
+import { EDIT, machineById, machinesFor, SETTINGS, settingsText, settingValueText, usesGps, type Machine, type SettingKey } from '../src/domain/machines';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, ScrollView, View } from 'react-native';
@@ -8,11 +8,11 @@ import { ACTIVITY_ICON } from '../src/components/CardioPlanCard';
 import { Icon } from '../src/components/Icon';
 import { Button, Card, Chip, Press, Row, Screen, Section, Segmented, Stepper, T, Toggle } from '../src/components/ui';
 import { CARDIO_ACTIVITIES } from '../src/domain/importer';
-import { cardioKcal, formatClock, pace, phaseCue, phasePace, timeline, totalSeconds, type PhaseKind } from '../src/domain/intervals';
+import { cardioKcal, formatClock, pace, phaseCue, phasePace, segmentsOf, timeline, totalSeconds, type PhaseKind } from '../src/domain/intervals';
 import { cueWords, formatPace, formatPaceRange, tracksDistance } from '../src/domain/track';
-import type { IntervalPlan, MachineSettings, PaceRange } from '../src/domain/types';
+import type { CardioSegment, IntervalPlan, MachineSettings, PaceRange } from '../src/domain/types';
 import { latestWeight, today, uid, useStore } from '../src/store';
-import { alpha, colors, space } from '../src/theme';
+import { alpha, colors, space, type } from '../src/theme';
 
 const PRESETS: { name: string; plan: IntervalPlan }[] = [
   { name: 'Intervals 6 × 1′', plan: { activity: 'Running', warmupSeconds: 300, workSeconds: 60, recoverySeconds: 90, rounds: 6, cooldownSeconds: 300, workCue: 'Hard', recoveryCue: 'Easy jog', countdown: 5, workPace: { fast: 260, slow: 280 }, recoveryPace: { fast: 390, slow: 450 } } },
@@ -21,6 +21,17 @@ const PRESETS: { name: string; plan: IntervalPlan }[] = [
   { name: 'HIIT 30/30', plan: { activity: 'HIIT', warmupSeconds: 180, workSeconds: 30, recoverySeconds: 30, rounds: 10, cooldownSeconds: 120, workCue: 'All out', recoveryCue: 'Rest', countdown: 3 } },
   { name: 'Row 4 × 2′', plan: { activity: 'Rowing', warmupSeconds: 300, workSeconds: 120, recoverySeconds: 120, rounds: 4, cooldownSeconds: 180, workCue: 'Hard', recoveryCue: 'Light pace', countdown: 5 } },
   { name: 'Zone 2 · 40′', plan: { activity: 'Cycling', warmupSeconds: 0, workSeconds: 2400, recoverySeconds: 0, rounds: 1, cooldownSeconds: 0, workCue: 'Steady', recoveryCue: '', countdown: 10 } },
+  {
+    name: 'Treadmill hills', plan: {
+      activity: 'Walking', machine: 'treadmill', warmupSeconds: 300, workSeconds: 1800, recoverySeconds: 0, rounds: 1, cooldownSeconds: 300, workCue: '', recoveryCue: '', warmupCue: 'Easy walk', cooldownCue: 'Walk', countdown: 10,
+      warmupSettings: { speedKmh: { lo: 5, hi: 5 }, inclinePct: { lo: 1, hi: 1 } }, cooldownSettings: { speedKmh: { lo: 4.5, hi: 4.5 }, inclinePct: { lo: 0, hi: 0 } },
+      segments: [
+        { seconds: 600, cue: 'Hill', settings: { speedKmh: { lo: 5.5, hi: 5.5 }, inclinePct: { lo: 6, hi: 6 } } },
+        { seconds: 600, cue: 'Steeper', settings: { speedKmh: { lo: 5, hi: 5 }, inclinePct: { lo: 10, hi: 10 } } },
+        { seconds: 600, cue: 'Steepest', settings: { speedKmh: { lo: 4.8, hi: 4.8 }, inclinePct: { lo: 12, hi: 12 } } },
+      ],
+    },
+  },
 ];
 
 type Source = { kind: 'planned' | 'saved'; id: string } | null;
@@ -117,31 +128,44 @@ export default function Cardio() {
             </View>
           )}
 
-          <ActivityPicker value={plan.activity} onChange={(activity) => up({ activity, ...(machineById(plan.machine)?.activities.includes(activity) ? {} : NO_MACHINE) })} />
+          <ActivityPicker value={plan.activity} onChange={(activity) => up({ activity, ...(machineById(plan.machine)?.activities.includes(activity) ? {} : noMachine(plan)) })} />
           <MachinePicker plan={plan} up={up} />
           <Card style={{ gap: space.lg }}>
             <Row>
               <Stepper label="Warm-up" value={plan.warmupSeconds} onChange={(warmupSeconds) => up({ warmupSeconds })} step={60} max={3600} format={formatClock} clock />
               <Stepper label="Cool-down" value={plan.cooldownSeconds} onChange={(cooldownSeconds) => up({ cooldownSeconds })} step={60} max={3600} format={formatClock} clock />
             </Row>
-            <Row>
-              <Stepper label="Work" value={plan.workSeconds} onChange={(workSeconds) => up({ workSeconds })} step={plan.workSeconds >= 300 ? 60 : 15} min={10} max={14400} format={formatClock} clock />
-              <Stepper label="Recover" value={plan.recoverySeconds} onChange={(recoverySeconds) => up({ recoverySeconds })} step={15} max={3600} format={formatClock} clock />
-            </Row>
-            <Row><Stepper label="Rounds" value={plan.rounds} onChange={(rounds) => up({ rounds })} min={1} max={50} big /></Row>
+            {/* Intervals: one work time repeated with recoveries. Segments: steps in order, each with its own settings. */}
+            <Segmented options={[{ value: 'intervals', label: 'Intervals' }, { value: 'segments', label: 'Segments' }]} value={segmentsOf(plan) ? 'segments' : 'intervals'}
+              onChange={(v) => up(v === 'segments' ? toSegments(plan) : toIntervals(plan))} />
+            {segmentsOf(plan) ? (
+              <Row>
+                <Stepper label="Repeat" value={plan.rounds} onChange={(rounds) => up({ rounds })} min={1} max={50} format={(v) => `${v}×`} />
+                {plan.rounds > 1 && <Stepper label="Rest between" value={plan.recoverySeconds} onChange={(recoverySeconds) => up({ recoverySeconds })} step={15} max={3600} format={formatClock} clock />}
+              </Row>
+            ) : (
+              <>
+                <Row>
+                  <Stepper label="Work" value={plan.workSeconds} onChange={(workSeconds) => up({ workSeconds })} step={plan.workSeconds >= 300 ? 60 : 15} min={10} max={14400} format={formatClock} clock />
+                  <Stepper label="Recover" value={plan.recoverySeconds} onChange={(recoverySeconds) => up({ recoverySeconds })} step={15} max={3600} format={formatClock} clock />
+                </Row>
+                <Row><Stepper label="Rounds" value={plan.rounds} onChange={(rounds) => up({ rounds })} min={1} max={50} big /></Row>
+              </>
+            )}
             <View style={{ gap: space.sm }}>
               <T v="caption" color={colors.faint}>Beeps before each change</T>
               <Row gap={space.sm}>{[0, 3, 5, 10, 15].map((n) => <Chip key={n} label={n ? `${n}s` : 'Off'} active={plan.countdown === n} onPress={() => up({ countdown: n })} />)}</Row>
             </View>
           </Card>
 
+          {segmentsOf(plan) && <SegmentsEditor plan={plan} up={up} />}
           <Targets plan={plan} up={up} />
 
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             <Icon name="speaker.wave.2.fill" size={18} color={colors.cyan} />
             <View style={{ flex: 1 }}>
               <T v="headline">Voice coach</T>
-              <T v="footnote" color={colors.dim}>Says each phase, the round and rounds left{usesGps(plan) ? ', and when you are too slow or too fast' : ''}.</T>
+              <T v="footnote" color={colors.dim}>Says each {segmentsOf(plan) ? 'segment' : 'phase'}, the round and rounds left{plan.machine ? ', and what to change on the machine, with a heads-up before' : ''}{usesGps(plan) ? ', and when you are too slow or too fast' : ''}.</T>
             </View>
             <Toggle value={s.timer.voiceCoach !== false} onChange={(voiceCoach) => s.setTimer({ voiceCoach })} />
           </Card>
@@ -182,7 +206,7 @@ export default function Cardio() {
               <Icon name={ACTIVITY_ICON[c.activity] ?? 'figure.run'} size={16} color={colors.cyan} />
               <View style={{ flex: 1 }}>
                 <T v="headline" numberOfLines={1}>{c.name ?? c.activity}</T>
-                <T v="label" color={colors.dim}>{c.date === today() ? 'Today' : c.date} · {formatClock(totalSeconds(c.plan!))}{c.plan!.rounds > 1 ? ` · ${c.plan!.rounds} rounds` : ''}</T>
+                <T v="label" color={colors.dim}>{c.date === today() ? 'Today' : c.date} · {formatClock(totalSeconds(c.plan!))}{c.plan!.segments?.length ? ` · ${c.plan!.segments.length} segments` : ''}{c.plan!.rounds > 1 ? ` · ${c.plan!.rounds} rounds` : ''}</T>
               </View>
               <T v="footnote" color={day?.id === c.id ? colors.cyan : colors.faint}>{day?.id === c.id ? 'Editing' : 'Open'}</T>
             </Card>
@@ -214,13 +238,34 @@ function ActivityPicker({ value, onChange }: { value: string; onChange: (v: stri
   );
 }
 
-const NO_MACHINE: Partial<IntervalPlan> = { machine: undefined, warmupSettings: undefined, workSettings: undefined, recoverySettings: undefined, cooldownSettings: undefined };
+/** No machine: its settings go too, from the phases and from every segment. */
+const noMachine = (plan: IntervalPlan): Partial<IntervalPlan> => ({
+  machine: undefined, warmupSettings: undefined, workSettings: undefined, recoverySettings: undefined, cooldownSettings: undefined,
+  ...(plan.segments ? { segments: plan.segments.map((g) => { const { settings, ...rest } = g; void settings; return rest; }) } : {}),
+});
 
-/** The machine the session is done on, among those that fit the activity; its settings go per phase in Targets. */
+/** The total of the segments is kept as workSeconds, which the history and older screens read. */
+const withSegments = (segments: CardioSegment[]): Partial<IntervalPlan> => ({ segments, workSeconds: segments.reduce((n, g) => n + g.seconds, 0) });
+
+/** From intervals to segments: the work phase becomes the first segment, and a copy of it the second to change. */
+function toSegments(plan: IntervalPlan): Partial<IntervalPlan> {
+  const first: CardioSegment = {
+    seconds: plan.workSeconds,
+    ...(plan.workCue ? { cue: plan.workCue } : {}), ...(plan.workPace ? { pace: plan.workPace } : {}), ...(plan.workSettings ? { settings: plan.workSettings } : {}),
+  };
+  return { ...withSegments([first, { ...first }]), rounds: 1, recoverySeconds: 0 };
+}
+/** Back to intervals: the first segment becomes the work phase. */
+function toIntervals(plan: IntervalPlan): Partial<IntervalPlan> {
+  const g = plan.segments?.[0];
+  return { segments: undefined, ...(g ? { workSeconds: g.seconds, workCue: g.cue ?? '', workPace: g.pace ?? null, workSettings: g.settings } : {}) };
+}
+
+/** The machine the session is done on, among those that fit the activity; its settings go per phase or segment. */
 function MachinePicker({ plan, up }: { plan: IntervalPlan; up: (p: Partial<IntervalPlan>) => void }) {
   const fits = machinesFor(plan.activity);
   if (!fits.length) return null;
-  const pick = (id: string | undefined) => up({ ...NO_MACHINE, machine: id });
+  const pick = (id: string | undefined) => up({ ...noMachine(plan), machine: id });
   return (
     <View style={{ gap: 6 }}>
       <T v="caption" color={colors.faint}>Machine</T>
@@ -228,22 +273,19 @@ function MachinePicker({ plan, up }: { plan: IntervalPlan; up: (p: Partial<Inter
         <Chip label="None" active={!plan.machine} onPress={() => pick(undefined)} />
         {fits.map((m) => <Chip key={m.id} label={m.name} active={plan.machine === m.id} onPress={() => pick(m.id)} />)}
       </Row>
-      {!!plan.machine && !usesGps(plan) && <T v="footnote" color={colors.faint}>Indoors: timed, no GPS. Set the machine for each phase under Targets.</T>}
+      {!!plan.machine && !usesGps(plan) && <T v="footnote" color={colors.faint}>Indoors: timed, no GPS. Set the machine for each {segmentsOf(plan) ? 'segment' : 'phase'} below.</T>}
     </View>
   );
 }
 
-/** What to set the machine to in one phase: each of its settings, on or off, with a stepper. */
-function MachineSettingsRows({ plan, kind, up }: { plan: IntervalPlan; kind: PhaseKind; up: (p: Partial<IntervalPlan>) => void }) {
-  const m = machineById(plan.machine);
-  if (!m) return null;
-  const key = `${kind}Settings` as const;
-  const cur: MachineSettings = plan[key] ?? {};
+/** What to set the machine to: each of its settings, on or off, with a stepper. */
+function SettingsFields({ machine: m, value, onChange }: { machine: Machine; value: MachineSettings | undefined; onChange: (v: MachineSettings | undefined) => void }) {
+  const cur: MachineSettings = value ?? {};
   const set = (k: SettingKey, v: number | null) => {
     const next = { ...cur };
     if (v === null) delete next[k];
     else next[k] = { lo: v, hi: v };
-    up({ [key]: Object.keys(next).length ? next : undefined } as Partial<IntervalPlan>);
+    onChange(Object.keys(next).length ? next : undefined);
   };
   return (
     <View style={{ gap: space.md }}>
@@ -272,6 +314,148 @@ function MachineSettingsRows({ plan, kind, up }: { plan: IntervalPlan; kind: Pha
   );
 }
 
+/** A phase's machine settings in Targets. */
+function MachineSettingsRows({ plan, kind, up }: { plan: IntervalPlan; kind: PhaseKind; up: (p: Partial<IntervalPlan>) => void }) {
+  const m = machineById(plan.machine);
+  if (!m) return null;
+  const key = `${kind}Settings` as const;
+  return <SettingsFields machine={m} value={plan[key]} onChange={(v) => up({ [key]: v } as Partial<IntervalPlan>)} />;
+}
+
+const MAX_SEGMENTS = 40;
+const SEGMENT_CUES = ['Easy', 'Steady', 'Hill', 'Climb', 'Tempo', 'Hard', 'Walk'];
+
+/**
+ * The segments in order. Each folds open to its time, work or easy, machine settings, pace (with GPS)
+ * and effort; it can move up or down, be copied or removed. "Add segment" copies the last one, since the
+ * next hill usually differs only in its incline.
+ */
+function SegmentsEditor({ plan, up }: { plan: IntervalPlan; up: (p: Partial<IntervalPlan>) => void }) {
+  const reduced = useReducedMotion();
+  const segs = plan.segments ?? [];
+  const [open, setOpen] = useState<number | null>(null);
+  const m = machineById(plan.machine);
+  const gps = usesGps(plan);
+  const unit = plan.paceUnit ?? 'km';
+  const put = (list: CardioSegment[]) => up(withSegments(list));
+  const change = (i: number, patch: Partial<CardioSegment>) => put(segs.map((g, j) => {
+    if (j !== i) return g;
+    const next: CardioSegment = { ...g, ...patch };
+    // Empty fields are left out, so an edited plan looks like an imported one.
+    (Object.keys(next) as (keyof CardioSegment)[]).forEach((k) => { if (next[k] === undefined || next[k] === null || next[k] === '') delete next[k]; });
+    return next;
+  }));
+  const add = () => { put([...segs, { ...segs[segs.length - 1] }]); setOpen(segs.length); };
+  const copy = (i: number) => { put([...segs.slice(0, i + 1), { ...segs[i] }, ...segs.slice(i + 1)]); setOpen(i + 1); };
+  const remove = (i: number) => { put(segs.filter((_, j) => j !== i)); setOpen(null); };
+  const move = (i: number, d: number) => {
+    const j = i + d;
+    const list = [...segs];
+    [list[i], list[j]] = [list[j], list[i]];
+    put(list);
+    setOpen(j);
+  };
+  const sum = segs.reduce((n, g) => n + g.seconds, 0);
+  return (
+    <Card style={{ gap: space.md }}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <T v="headline">Segments</T>
+        <T v="footnote" color={colors.dim} style={type.num}>{segs.length} · {formatClock(sum)}{plan.rounds > 1 ? ` × ${plan.rounds}` : ''}</T>
+      </Row>
+      <T v="footnote" color={colors.dim}>In order, each with its own time{m ? ' and machine settings' : ''}. Tap one to change it.</T>
+      {segs.map((g, i) => {
+        const on = open === i;
+        const words = cueWords(g.cue ?? '');
+        const summary = [settingsText(g.settings), g.pace && gps ? formatPaceRange(g.pace, unit) : '', words].filter(Boolean).join(' · ');
+        const cues = [...SEGMENT_CUES, ...(words && !SEGMENT_CUES.includes(words) ? [words] : [])];
+        return (
+          <View key={i} style={{ borderRadius: 14, borderWidth: 1, borderColor: on ? alpha(colors.cyan, 0.5) : colors.hairline, padding: space.md, gap: space.md }}>
+            <Press onPress={() => setOpen(on ? null : i)} haptic={false} label={`Segment ${i + 1}, ${formatClock(g.seconds)}${summary ? `, ${summary}` : ''}`}>
+              <Row style={{ alignItems: 'center' }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: g.kind === 'recovery' ? colors.lime : colors.cyan }} />
+                <View style={{ flex: 1 }}>
+                  <T v="headline" style={type.num}>Segment {i + 1} · {formatClock(g.seconds)}</T>
+                  {!!summary && <T v="footnote" color={colors.cyan} numberOfLines={2} style={type.num}>{summary}</T>}
+                </View>
+                <Icon name={on ? 'chevron.up' : 'chevron.down'} size={12} color={colors.faint} />
+              </Row>
+            </Press>
+            {on && (
+              <Animated.View entering={reduced ? undefined : FadeIn.duration(160)} style={{ gap: space.md }}>
+                <Row><Stepper label="Time" value={g.seconds} onChange={(seconds) => change(i, { seconds })} step={g.seconds >= 300 ? 60 : 15} min={10} max={14400} format={formatClock} clock /></Row>
+                <Row gap={space.sm}>
+                  <Chip label="Work" active={g.kind !== 'recovery'} onPress={() => change(i, { kind: undefined })} />
+                  <Chip label="Easy" active={g.kind === 'recovery'} onPress={() => change(i, { kind: 'recovery' })} />
+                </Row>
+                {m && <SettingsFields machine={m} value={g.settings} onChange={(settings) => change(i, { settings })} />}
+                {gps && <PaceFields plan={plan} up={up} range={g.pace ?? null} name="this segment" factor={g.kind === 'recovery' ? 1.25 : 1} onRange={(r) => change(i, { pace: r })} />}
+                <View style={{ gap: 6 }}>
+                  <T v="caption" color={colors.faint}>Effort · shown and spoken</T>
+                  <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+                    {cues.map((e) => <Chip key={e} label={e} active={words === e} onPress={() => change(i, { cue: words === e ? undefined : e })} />)}
+                  </Row>
+                </View>
+                <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+                  <Button small kind="secondary" icon="chevron.up" onPress={() => move(i, -1)} disabled={i === 0} />
+                  <Button small kind="secondary" icon="chevron.down" onPress={() => move(i, 1)} disabled={i === segs.length - 1} />
+                  <Button small kind="secondary" icon="plus.square.on.square" title="Copy" onPress={() => copy(i)} disabled={segs.length >= MAX_SEGMENTS} />
+                  <Button small kind="danger" icon="trash" title="Remove" onPress={() => remove(i)} disabled={segs.length <= 1} />
+                </Row>
+              </Animated.View>
+            )}
+          </View>
+        );
+      })}
+      <Button kind="secondary" icon="plus" title="Add segment" onPress={add} disabled={segs.length >= MAX_SEGMENTS} />
+    </Card>
+  );
+}
+
+/**
+ * A pace window for a phase or a segment, for GPS activities: on or off, fastest and slowest, unit. The
+ * voice says when the live pace leaves it. Paces are kept per km and shown in the chosen unit.
+ */
+function PaceFields({ plan, up, range, onRange, name, factor }: {
+  plan: IntervalPlan; up: (p: Partial<IntervalPlan>) => void; range: PaceRange | null; onRange: (r: PaceRange | null) => void; name: string; factor: number;
+}) {
+  const unit = plan.paceUnit ?? 'km';
+  const shown = (v: number) => Math.round(unit === 'mi' ? v * MILE : v);
+  const perKm = (v: number) => (unit === 'mi' ? v / MILE : v);
+  const turnOn = () => {
+    const f = Math.round(((BASE[plan.activity] ?? 360) * factor) / 5) * 5;
+    onRange({ fast: f, slow: f + 30 });
+  };
+  return (
+    <>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <View style={{ flex: 1 }}>
+          <T v="callout">Pace target</T>
+          <T v="footnote" color={colors.dim}>{range ? formatPaceRange(range, unit) : `None for ${name}`}</T>
+        </View>
+        <Toggle value={!!range} onChange={(on) => (on ? turnOn() : onRange(null))} />
+      </Row>
+      {range && (
+        <>
+          <Row>
+            <Stepper label="Fastest" value={shown(range.fast)} step={5} min={120} max={1800} clock format={(v) => formatPace(v)}
+              onChange={(v) => { const fast = perKm(v); onRange({ fast, slow: Math.max(fast, range.slow) }); }} />
+            <Stepper label="Slowest" value={shown(range.slow)} step={5} min={120} max={1800} clock format={(v) => formatPace(v)}
+              onChange={(v) => { const slow = perKm(v); onRange({ fast: Math.min(slow, range.fast), slow }); }} />
+          </Row>
+          <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+            <Chip label="per km" active={unit === 'km'} onPress={() => up({ paceUnit: 'km' })} />
+            <Chip label="per mile" active={unit === 'mi'} onPress={() => up({ paceUnit: 'mi' })} />
+            <Chip label="One target" active={range.fast === range.slow} onPress={() => onRange({ fast: range.fast, slow: range.fast })} />
+          </Row>
+          <T v="footnote" color={colors.dim}>
+            The voice says "Pick it up" when you are slower than {formatPace(shown(range.slow))}, "Ease off" when faster than {formatPace(shown(range.fast))}, and "Back on pace" when you return.
+          </T>
+        </>
+      )}
+    </>
+  );
+}
+
 const NAME: Record<PhaseKind, string> = { warmup: 'Warm-up', work: 'Work', recovery: 'Recover', cooldown: 'Cool-down' };
 const CUE_KEY = { warmup: 'warmupCue', work: 'workCue', recovery: 'recoveryCue', cooldown: 'cooldownCue' } as const;
 const PACE_KEY = { warmup: 'warmupPace', work: 'workPace', recovery: 'recoveryPace', cooldown: 'cooldownPace' } as const;
@@ -286,62 +470,32 @@ const BASE: Record<string, number> = { Running: 360, Walking: 630, Cycling: 160 
 const MILE = 1.609344;
 
 /**
- * What each phase aims for: an effort word and, for GPS activities, a pace window. The voice says
- * when the live pace leaves the window. Paces are kept per km and shown in the chosen unit.
+ * What each phase aims for: machine settings, an effort word and, for GPS activities, a pace window.
+ * With segments, "work" is set in each segment, so only the warm-up, rest between rounds and cool-down
+ * are here (and the card is hidden when there are none).
  */
 function Targets({ plan, up }: { plan: IntervalPlan; up: (p: Partial<IntervalPlan>) => void }) {
   const gps = usesGps(plan);
+  const segmented = !!segmentsOf(plan);
   const kinds = (['warmup', 'work', 'recovery', 'cooldown'] as PhaseKind[]).filter((k) =>
-    k === 'work' || (k === 'warmup' ? plan.warmupSeconds > 0 : k === 'cooldown' ? plan.cooldownSeconds > 0 : plan.rounds > 1 && plan.recoverySeconds > 0));
+    k === 'work' ? !segmented : k === 'warmup' ? plan.warmupSeconds > 0 : k === 'cooldown' ? plan.cooldownSeconds > 0 : plan.rounds > 1 && plan.recoverySeconds > 0);
   const [picked, setPicked] = useState<PhaseKind>('work');
-  const kind = kinds.includes(picked) ? picked : 'work';
-  const unit = plan.paceUnit ?? 'km';
+  const kind = kinds.includes(picked) ? picked : kinds[0];
+  if (!kind) return null;
   const words = cueWords(plan[CUE_KEY[kind]] ?? '');
   const range = phasePace(plan, kind);
-  const shown = (v: number) => Math.round(unit === 'mi' ? v * MILE : v);
-  const perKm = (v: number) => (unit === 'mi' ? v / MILE : v);
   // A pace written in the cue becomes the phase's own value, so the cue keeps only its words.
   const setRange = (r: PaceRange | null) => up({ [PACE_KEY[kind]]: r, [CUE_KEY[kind]]: words } as Partial<IntervalPlan>);
   const setCue = (cue: string) => up({ [CUE_KEY[kind]]: cue, [PACE_KEY[kind]]: range } as Partial<IntervalPlan>);
-  const turnOn = () => {
-    const f = Math.round(((BASE[plan.activity] ?? 360) * (kind === 'work' ? 1 : kind === 'recovery' ? 1.25 : 1.3)) / 5) * 5;
-    setRange({ fast: f, slow: f + 30 });
-  };
   const cues = [...CUES[kind], ...(words && !CUES[kind].includes(words) ? [words] : [])];
+  const label = (k: PhaseKind) => (segmented && k === 'recovery' ? 'Rest between' : NAME[k]);
   return (
     <Card style={{ gap: space.md }}>
-      <T v="headline">Targets</T>
-      {kinds.length > 1 && <Segmented options={kinds.map((k) => ({ value: k, label: NAME[k] }))} value={kind} onChange={setPicked} />}
+      <T v="headline">{segmented ? 'Around the segments' : 'Targets'}</T>
+      {kinds.length > 1 && <Segmented options={kinds.map((k) => ({ value: k, label: label(k) }))} value={kind} onChange={setPicked} />}
+      {kinds.length === 1 && segmented && <T v="callout" color={colors.dim}>{label(kind)}</T>}
       <MachineSettingsRows plan={plan} kind={kind} up={up} />
-      {gps && (
-        <>
-          <Row style={{ justifyContent: 'space-between' }}>
-            <View style={{ flex: 1 }}>
-              <T v="callout">Pace target</T>
-              <T v="footnote" color={colors.dim}>{range ? formatPaceRange(range, unit) : `None for ${NAME[kind].toLowerCase()}`}</T>
-            </View>
-            <Toggle value={!!range} onChange={(on) => (on ? turnOn() : setRange(null))} />
-          </Row>
-          {range && (
-            <>
-              <Row>
-                <Stepper label="Fastest" value={shown(range.fast)} step={5} min={120} max={1800} clock format={(v) => formatPace(v)}
-                  onChange={(v) => { const fast = perKm(v); setRange({ fast, slow: Math.max(fast, range.slow) }); }} />
-                <Stepper label="Slowest" value={shown(range.slow)} step={5} min={120} max={1800} clock format={(v) => formatPace(v)}
-                  onChange={(v) => { const slow = perKm(v); setRange({ fast: Math.min(slow, range.fast), slow }); }} />
-              </Row>
-              <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
-                <Chip label="per km" active={unit === 'km'} onPress={() => up({ paceUnit: 'km' })} />
-                <Chip label="per mile" active={unit === 'mi'} onPress={() => up({ paceUnit: 'mi' })} />
-                <Chip label="One target" active={range.fast === range.slow} onPress={() => setRange({ fast: range.fast, slow: range.fast })} />
-              </Row>
-              <T v="footnote" color={colors.dim}>
-                The voice says "Pick it up" when you are slower than {formatPace(shown(range.slow))}, "Ease off" when faster than {formatPace(shown(range.fast))}, and "Back on pace" when you return.
-              </T>
-            </>
-          )}
-        </>
-      )}
+      {gps && <PaceFields plan={plan} up={up} range={range} onRange={setRange} name={label(kind).toLowerCase()} factor={kind === 'work' ? 1 : kind === 'recovery' ? 1.25 : 1.3} />}
       <View style={{ gap: 6 }}>
         <T v="caption" color={colors.faint}>Effort · shown and spoken</T>
         <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>

@@ -630,7 +630,7 @@ test('cardio machines: settings per phase, spoken and shown; indoor means no GPS
   assert.equal(usesGps(walk), false); // a treadmill walk is timed, not measured by GPS
   assert.equal(settingsText(walk.workSettings), '5.2 km/h · 10% incline');
   const t = timeline(walk);
-  assert.equal(announce(walk, t, 1), 'Work, 25 minutes. Speed 5.2 kilometres an hour. Incline 10 percent.');
+  assert.equal(announce(walk, t, 1), 'Work, 25 minutes. Speed up to 5.2 kilometres an hour. Incline up to 10 percent.');
 
   // The StepMill sets its own activity; a range reads lowest-highest.
   const stairs = readIntervals({ machine: 'StairMaster', workSeconds: 60, workSettings: { level: 12, stepsPerMin: '95-101' } }) as any;
@@ -664,4 +664,71 @@ test('treadmill distance from the speeds set, for the time done', async () => {
   // Stopped after 10 minutes: 0.5 + 5 min at 10 km/h.
   assert.equal(Math.round(machineKm(timeline(p), 600)! * 100) / 100, 1.33);
   assert.equal(machineKm(timeline(readIntervals({ machine: 'rower', workSeconds: 60 }) as any), 60), null);
+});
+
+test('cardio segments: changing settings inside one session, on any machine', async () => {
+  const { readIntervals } = await import('./importer.ts');
+  const { announce, phaseTitle, progressDots, timeline, totalSeconds, upNext } = await import('./intervals.ts');
+  const { machineKm, settingsText, usesGps } = await import('./machines.ts');
+  const { IMPORT_GUIDE } = await import('../importGuide.ts');
+  // Every example in the guide's segments section imports.
+  const blocks = IMPORT_GUIDE.split('### segments')[1].split('### What happens')[0].split('Example:').slice(1)
+    .map((b: string) => JSON.parse(b.split('\n').filter((l: string) => l.startsWith('    ')).join('\n')));
+  assert.equal(blocks.length, 5);
+  for (const b of blocks) assert.equal(typeof readIntervals(b.intervals), 'object', JSON.stringify(b));
+
+  // Two hills: 10 minutes at 6% then 10 at 10%, the speed the same.
+  const hills = readIntervals(blocks[0].intervals) as any;
+  const t = timeline(hills);
+  assert.deepEqual(t.map((p) => [p.kind, p.seconds, p.step ?? 0]), [['warmup', 300, 0], ['work', 600, 1], ['work', 600, 2], ['cooldown', 300, 0]]);
+  assert.equal(hills.workSeconds, 1200);
+  assert.equal(totalSeconds(hills), 1800);
+  assert.equal(usesGps(hills), false);
+  assert.equal(settingsText(t[2].settings), '5.5 km/h · 10% incline');
+  assert.equal(phaseTitle(hills, t[2]), 'Segment 2/2');
+  // The voice says what changes, and which way; unchanged speed is left out.
+  assert.equal(announce(hills, t, 1), 'Segment 1 of 2, 10 minutes. Hill. Speed up to 5.5 kilometres an hour. Incline up to 6 percent.');
+  assert.equal(announce(hills, t, 2), 'Last segment, 10 minutes. Steeper. Incline up to 10 percent.');
+  assert.equal(upNext(t, 1), 'Coming up: incline up to 10 percent.');
+  assert.equal(upNext(t, 2), 'Coming up: speed down to 4.5 kilometres an hour. Incline down to 0 percent.');
+  assert.deepEqual(progressDots(hills, t, 2), { count: 2, current: 2, done: 1 });
+  assert.deepEqual(progressDots(hills, t, 3), { count: 2, current: 0, done: 2 });
+  // Distance from each segment's own speed: 5 min at 5, 20 at 5.5, 5 at 4.5 km/h.
+  assert.equal(Math.round(machineKm(t, 1800)! * 1000) / 1000, 2.625);
+
+  // StepMill ladder twice through, 2 easy minutes between the rounds.
+  const ladder = readIntervals(blocks[2].intervals) as any;
+  const l = timeline(ladder);
+  assert.deepEqual(l.map((p) => (p.step ? `${p.round}.${p.step}` : p.kind)), ['warmup', '1.1', '1.2', '1.3', 'recovery', '2.1', '2.2', '2.3', 'cooldown']);
+  assert.equal(announce(ladder, l, 1), 'Round 1 of 2. Segment 1 of 3, 4 minutes. Level up to 6. 59 steps a minute.');
+  assert.equal(announce(ladder, l, 2), 'Segment 2 of 3, 4 minutes. Level up to 8. Up to 73 steps a minute.');
+  assert.equal(announce(ladder, l, 4), 'Recover, 2 minutes. 1 round to go. Easy. Level down to 4.');
+  assert.equal(announce(ladder, l, 5), 'Last round, 2 of 2. Segment 1 of 3, 4 minutes. Level up to 6. 59 steps a minute.');
+  assert.equal(phaseTitle(ladder, l[6]), 'Segment 2/3 · round 2/2');
+  assert.deepEqual(progressDots(ladder, l, 4), { count: 2, current: 1, done: 1 });
+  assert.deepEqual(progressDots(ladder, l, 6), { count: 2, current: 2, done: 1 });
+  assert.equal(totalSeconds(ladder), 180 + 2 * 720 + 120 + 180);
+
+  // Bike: easy segments look like recoveries.
+  const bike = readIntervals(blocks[3].intervals) as any;
+  assert.deepEqual(timeline(bike).filter((p) => p.round === 1).map((p) => p.kind), ['work', 'recovery', 'work', 'recovery']);
+  // Outdoors, each segment's pace is coached by GPS.
+  const prog = readIntervals(blocks[4].intervals) as any;
+  assert.equal(usesGps(prog), true);
+  assert.match(announce(prog, timeline(prog), 0), /^Segment 1 of 3, 10 minutes\. Easy\. Pace /);
+  assert.equal(announce(prog, timeline(prog), 0, false), 'Segment 1 of 3, 10 minutes. Easy.');
+
+  // A treadmill pace in a segment becomes its belt speed; one segment alone is just "Work".
+  const one = readIntervals({ machine: 'treadmill', segments: [{ minutes: 10, pace: '7:30' }] }) as any;
+  assert.equal(settingsText(one.segments[0].settings), '8 km/h');
+  assert.equal(announce(one, timeline(one), 0), 'Work, 10 minutes. Speed 8 kilometres an hour.');
+  assert.equal(progressDots(one, timeline(one), 0).count, 1); // one dot: none are drawn
+
+  // Mistakes say which segment and what is wrong.
+  assert.match(readIntervals({ segments: [] }) as string, /segments must be a list/);
+  assert.match(readIntervals({ machine: 'treadmill', segments: [{ settings: { inclinePct: 5 } }] }) as string, /segments\[1\] needs "seconds"/);
+  assert.match(readIntervals({ segments: [{ minutes: 5, settings: { inclinePct: 5 } }] }) as string, /segments\[1\]: settings need a "machine"/);
+  assert.match(readIntervals({ machine: 'treadmill', segments: [{ minutes: 5 }, { minutes: 5, settings: { level: 3 } }] }) as string, /segments\[2\]\.settings: Treadmill has no level/);
+  assert.match(readIntervals({ machine: 'treadmill', segments: [{ minutes: 5, kind: 'sprint' }] }) as string, /kind must be "work" or "recovery"/);
+  assert.match(readIntervals({}) as string, /or segments/);
 });

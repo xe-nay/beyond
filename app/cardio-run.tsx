@@ -9,14 +9,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ambient, Glass, GlassButton, HoldButton, PHASE, PhaseRings, RoundDots } from '../src/components/CardioVisuals';
 import { Icon, type IconName } from '../src/components/Icon';
 import { Button, Press, Row, Stepper, T } from '../src/components/ui';
-import { elapsed, formatClock, pause, position, resume, skip, timeline, totalSeconds } from '../src/domain/intervals';
+import { elapsed, formatClock, pause, phaseTitle, position, progressDots, resume, skip, timeline, totalSeconds } from '../src/domain/intervals';
 import { cueWords, formatPace, formatPaceRange, paceVerdict, rollingPace, tracksDistance } from '../src/domain/track';
 import { gps, pauseGps, startGps, stopGps } from '../src/gps';
 import { awake, buzz, cancelEnd, prepareAudio, scheduleEnd, stopCue } from '../src/sound';
 import { useStore } from '../src/store';
 import { alpha, colors, space, type } from '../src/theme';
-
-const LABEL = { warmup: 'Warm-up', work: 'Work', recovery: 'Recover', cooldown: 'Cool-down' } as const;
 
 export default function CardioRun() {
   useScreenOn('cardio-run');
@@ -92,7 +90,7 @@ export default function CardioRun() {
   useEffect(() => {
     if (!run || run.resumedAt === null || !pos.phase || gpsMode === 'background' || awake()) return void cancelEnd();
     const next = phases[pos.index + 1];
-    scheduleEnd(Date.now() + pos.remaining * 1000, next ? LABEL[next.kind] : 'Done', next?.cue || run.plan.activity, run.plan.countdown, next ? 'phase' : 'end');
+    scheduleEnd(Date.now() + pos.remaining * 1000, phaseTitle(run.plan, next), [cueWords(next?.cue), settingsText(next?.settings)].filter(Boolean).join(' · ') || run.plan.activity, run.plan.countdown, next ? 'phase' : 'end');
   }, [pos.index, run?.resumedAt, gpsMode]);
 
   if (!run) return <View style={{ flex: 1, backgroundColor: colors.black }} />;
@@ -142,8 +140,8 @@ export default function CardioRun() {
   const next = phases[pos.index + 1];
   const look = PHASE[kind];
   const verdict = livePace && pos.phase?.pace ? paceVerdict(livePace, pos.phase.pace) : 'on';
-  const doneRounds = phases.slice(0, pos.index).filter((x) => x.kind === 'work').length;
-  const current = pos.phase?.kind === 'work' ? pos.phase.round : pos.phase?.kind === 'recovery' ? pos.phase.round + 0.5 : 0;
+  const dots = progressDots(run.plan, phases, pos.index);
+  const title = pos.phase?.step ? phaseTitle(run.plan, pos.phase) : `${look.label}${pos.phase?.round && run.plan.rounds > 1 ? `  ${pos.phase.round}/${run.plan.rounds}` : ''}`;
   const ringSize = Math.min(width - space.xl * 2, 320);
   const togglePause = () => {
     stopCue();
@@ -169,7 +167,7 @@ export default function CardioRun() {
             size={ringSize} kind={kind} phaseKey={pos.index * 2 + (paused ? 1 : 0)} running={!paused}
             phaseLeft={pos.remaining} phaseSeconds={pos.phase?.seconds ?? 1} sessionLeft={Math.max(0, total - t)} sessionSeconds={total}>
             <Animated.View key={pos.index} entering={reduced ? undefined : FadeInDown.duration(320).springify().dampingRatio(0.8)} style={{ alignItems: 'center' }}>
-              <T v="caption" color={look.a} style={{ letterSpacing: 1.5 }}>{look.label}{pos.phase?.round ? `  ${pos.phase.round}/${run.plan.rounds}` : ''}</T>
+              <T v="caption" color={look.a} style={{ letterSpacing: 1.5 }} numberOfLines={1}>{title}</T>
               <Digits value={formatClock(pos.remaining)} final={!!final} second={Math.ceil(pos.remaining)} />
               {paused && <T v="footnote" color={colors.dim}>Paused</T>}
             </Animated.View>
@@ -196,7 +194,7 @@ export default function CardioRun() {
               {gpsMode === 'off' && <T v="footnote" color={colors.faint}>GPS off</T>}
             </Row>
           )}
-          <RoundDots rounds={run.plan.rounds} current={Math.floor(current)} done={doneRounds} tint={look.a} />
+          <RoundDots rounds={dots.count} current={dots.current} done={dots.done} tint={look.a} />
         </View>
 
         <Glass style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, marginBottom: space.lg }}>
@@ -204,8 +202,9 @@ export default function CardioRun() {
             <Icon name={next ? 'forward.fill' : 'checkmark'} size={14} color={next ? PHASE[next.kind].a : colors.lime} />
           </View>
           <View style={{ flex: 1 }}>
-            <T v="footnote" color={colors.dim}>{next ? 'Up next' : 'Last phase'}</T>
-            <T v="headline" numberOfLines={1}>{next ? `${PHASE[next.kind].label} · ${formatClock(next.seconds)}${cueWords(next.cue) ? ` · ${cueWords(next.cue)}` : ''}${settingsText(next.settings) ? ` · ${settingsText(next.settings)}` : next.pace && outdoor ? ` · ${formatPaceRange(next.pace, run.plan.paceUnit ?? 'km')}` : ''}` : 'Finish strong'}</T>
+            <T v="footnote" color={colors.dim} numberOfLines={1}>{next ? `Up next · ${next.step ? phaseTitle(run.plan, next) : PHASE[next.kind].label} · ${formatClock(next.seconds)}${cueWords(next.cue) ? ` · ${cueWords(next.cue)}` : ''}` : 'Last phase'}</T>
+            {/* On a machine the settings get the line to themselves: they are what to change next. */}
+            <T v="headline" numberOfLines={2} style={type.num}>{next ? (settingsText(next.settings) || (next.pace && outdoor ? formatPaceRange(next.pace, run.plan.paceUnit ?? 'km') : cueWords(next.cue) || PHASE[next.kind].label)) : 'Finish strong'}</T>
           </View>
           <T v="footnote" color={colors.faint} style={type.num}>{formatClock(Math.max(0, total - t))} left</T>
         </Glass>

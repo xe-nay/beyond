@@ -59,18 +59,18 @@ export function findMachine(name: unknown): Machine | undefined {
   return machineById(WORDS[slug] ?? slug);
 }
 
-interface Setting { label: string; unit: string; min: number; max: number; step: number; spoken: (r: string) => string }
+interface Setting { label: string; unit: string; min: number; max: number; step: number; spoken: (r: string) => string; word?: string }
 export const SETTINGS: Record<SettingKey, Setting> = {
-  speedKmh: { label: 'Speed', unit: 'km/h', min: 0.5, max: 30, step: 0.1, spoken: (r) => `Speed ${r} kilometres an hour` },
-  inclinePct: { label: 'Incline', unit: '%', min: -6, max: 40, step: 0.5, spoken: (r) => `Incline ${r} percent` },
-  level: { label: 'Level', unit: '', min: 1, max: 40, step: 1, spoken: (r) => `Level ${r}` },
+  speedKmh: { label: 'Speed', unit: 'km/h', min: 0.5, max: 30, step: 0.1, spoken: (r) => `Speed ${r} kilometres an hour`, word: 'Speed' },
+  inclinePct: { label: 'Incline', unit: '%', min: -6, max: 40, step: 0.5, spoken: (r) => `Incline ${r} percent`, word: 'Incline' },
+  level: { label: 'Level', unit: '', min: 1, max: 40, step: 1, spoken: (r) => `Level ${r}`, word: 'Level' },
   stepsPerMin: { label: 'Steps', unit: 'steps/min', min: 10, max: 200, step: 1, spoken: (r) => `${r} steps a minute` },
   strideRate: { label: 'Strides', unit: 'strides/min', min: 20, max: 300, step: 1, spoken: (r) => `${r} strides a minute` },
-  cadenceRpm: { label: 'Cadence', unit: 'rpm', min: 20, max: 200, step: 1, spoken: (r) => `Cadence ${r}` },
+  cadenceRpm: { label: 'Cadence', unit: 'rpm', min: 20, max: 200, step: 1, spoken: (r) => `Cadence ${r}`, word: 'Cadence' },
   powerW: { label: 'Power', unit: 'W', min: 10, max: 2500, step: 1, spoken: (r) => `${r} watts` },
-  damper: { label: 'Damper', unit: '', min: 1, max: 10, step: 1, spoken: (r) => `Damper ${r}` },
-  strokeRate: { label: 'Stroke rate', unit: 'spm', min: 10, max: 60, step: 1, spoken: (r) => `Stroke rate ${r}` },
-  split500: { label: 'Split', unit: '/500 m', min: 60, max: 300, step: 1, spoken: (r) => `Split ${r} per 500` },
+  damper: { label: 'Damper', unit: '', min: 1, max: 10, step: 1, spoken: (r) => `Damper ${r}`, word: 'Damper' },
+  strokeRate: { label: 'Stroke rate', unit: 'spm', min: 10, max: 60, step: 1, spoken: (r) => `Stroke rate ${r}`, word: 'Stroke rate' },
+  split500: { label: 'Split', unit: '/500 m', min: 60, max: 300, step: 1, spoken: (r) => `Split ${r} per 500`, word: 'Split' },
 };
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
@@ -140,6 +140,28 @@ export function spokenSettings(s: MachineSettings | undefined | null): string {
   if (!s) return '';
   return (Object.keys(SETTINGS) as SettingKey[]).filter((k) => s[k])
     .map((k) => SETTINGS[k].spoken(rangeText(k, s[k]!, ' to ').replace(/(\d+):(\d{2})/g, '$1 $2'))).join('. ');
+}
+
+/**
+ * What the voice says moving from one phase's settings to the next: every setting at first, then only
+ * what changes and which way ("Incline up to 12 percent. Speed down to 5 kilometres an hour"). Unchanged
+ * settings are left out; nothing to say gives "".
+ */
+export function spokenChange(prev: MachineSettings | undefined | null, cur: MachineSettings | undefined | null): string {
+  if (!cur) return '';
+  const say = (k: SettingKey, r: CardioRange) => rangeText(k, r, ' to ').replace(/(\d+):(\d{2})/g, '$1 $2');
+  const mid = (r: CardioRange) => (r.lo + r.hi) / 2;
+  return (Object.keys(SETTINGS) as SettingKey[]).filter((k) => cur[k]).flatMap((k) => {
+    const a = prev?.[k];
+    const b = cur[k]!;
+    if (a && a.lo === b.lo && a.hi === b.hi) return [];
+    const full = SETTINGS[k].spoken(say(k, b));
+    if (!a || mid(a) === mid(b)) return [full];
+    const dir = mid(b) > mid(a) ? 'up' : 'down';
+    // "Incline 12 percent" becomes "Incline up to 12 percent"; "150 watts" becomes "Up to 150 watts".
+    const name = SETTINGS[k].word;
+    return [name ? full.replace(`${name} `, `${name} ${dir} to `) : `${dir === 'up' ? 'Up' : 'Down'} to ${full}`];
+  }).join('. ');
 }
 
 /** In the cardio editor: where a newly turned-on setting starts, and how far one tap moves it. */

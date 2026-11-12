@@ -148,8 +148,25 @@ export interface MachineSettings {
   split500?: CardioRange;
 }
 
+/**
+ * One part of a session made of segments: its own time and, optionally, effort, pace and machine
+ * settings, such as 10 minutes at 6% incline then 10 minutes at 10%. "recovery" only changes how it looks.
+ */
+export interface CardioSegment {
+  seconds: number;
+  kind?: 'work' | 'recovery';
+  cue?: string;
+  pace?: PaceRange | null;
+  settings?: MachineSettings;
+}
+
 export interface IntervalPlan {
   activity: string;
+  /**
+   * When set, the main part of the session is these segments in order (repeated for each round, with
+   * recoverySeconds between rounds) instead of work/recovery; workSeconds is then their total.
+   */
+  segments?: CardioSegment[];
   /** The machine (domain/machines.ts), such as "treadmill" or "stepmill"; indoors means no GPS. */
   machine?: string;
   warmupSettings?: MachineSettings;

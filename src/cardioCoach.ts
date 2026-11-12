@@ -4,7 +4,7 @@
 // starts (length, round, rounds left, cue, pace), halfway through long phases, and when the GPS pace
 // leaves the phase's pace window.
 import { usesGps } from './domain/machines';
-import { announce, elapsed, position, spokenTime, timeline } from './domain/intervals';
+import { announce, elapsed, position, spokenTime, timeline, upNext } from './domain/intervals';
 import { paceVerdict, rollingPace, spokenPace, tracksDistance } from './domain/track';
 import { gps } from './gps';
 import { play, playCountdown, say } from './sound';
@@ -69,6 +69,10 @@ function coach(runId: string) {
     // Just after the change tone; not when the app comes back mid-phase.
     if (into >= (pos.index === 0 ? 0.3 : 0.9) && into < 6 && !quiet) speak(`phase${pos.index}`, announce(run.plan, phases, pos.index, outdoor));
     if (pos.phase.seconds >= 240 && into >= pos.phase.seconds / 2 && pos.remaining > 20 && !quiet) speak(`half${pos.index}`, `Halfway. ${spokenTime(pos.remaining)} to go.`);
+    // Before a machine change (a new incline, speed or level), a heads-up with time to reach the
+    // console; in phases long enough that it does not run into the phase's own announcement.
+    const ahead = upNext(phases, pos.index);
+    if (ahead && pos.phase.seconds >= 60 && into >= 10 && pos.remaining <= run.plan.countdown + 9 && !quiet) speak(`next${pos.index}`, ahead);
 
     const range = outdoor ? pos.phase.pace : null;
     // The rolling pace looks 30 s back, so it waits until that is all this phase.
