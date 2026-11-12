@@ -1,0 +1,33 @@
+{
+  "name": "Beyond",
+  "identifier": "app.beyond.source",
+  "sourceURL": "https://github.com/xe-nay/beyond/releases/latest/download/source.json",
+  "apps": [
+    {
+      "name": "Beyond",
+      "bundleIdentifier": "app.beyond.fitness",
+      "developerName": "Beyond",
+      "version": "1.0.54",
+      "versionDate": "2026-11-12T06:33:38.703Z",
+      "versionDescription": "Build 1.0.54",
+      "beta": false,
+      "size": 19609523,
+      "localizedDescription": "Training, nutrition and progress in one minimal app. Your data stays on the iPhone.",
+      "iconURL": "https://raw.githubusercontent.com/xe-nay/beyond/main/assets/icon.png",
+      "tintColor": "37E5F3",
+      "downloadURL": "https://raw.githubusercontent.com/xe-nay/beyond/store/Beyond.ipa",
+      "screenshotURLs": [],
+      "versions": [
+        {
+          "version": "1.0.54",
+          "date": "2026-11-12T06:33:38.703Z",
+          "localizedDescription": "Build 1.0.54",
+          "downloadURL": "https://raw.githubusercontent.com/xe-nay/beyond/store/Beyond.ipa",
+          "size": 19609523
+        }
+      ],
+      "permissions": []
+    }
+  ],
+  "news": []
+}
