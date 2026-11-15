@@ -232,7 +232,13 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
     if (type === 'rest') {
       if (done) return out.errors.push(`${where}: a rest day has no results.`);
       out.rest.push(entry.date);
-      out.rows.push({ id, date: entry.date, name: entry.name ?? 'Rest day', type: 'rest', kind: 'plan', status: 'new', clashes: [] });
+      // A rest day replaces what is only planned that day (never what was done), including an entry this
+      // file imported before under the same id as a workout or a run.
+      const clashes = [
+        ...existing.sessions.filter((x) => !x.startedAt && (x.date === entry.date || x.id === id)).map((x) => ({ id: x.id, name: x.name, kind: 'plan' as const })),
+        ...existing.cardio.filter((c) => !c.completed && (c.date === entry.date || c.id === id)).map((c) => ({ id: c.id, name: c.name ?? c.activity, kind: 'plan' as const })),
+      ];
+      out.rows.push({ id, date: entry.date, name: entry.name ?? 'Rest day', type: 'rest', kind: 'plan', status: 'new', clashes });
       return;
     }
 
@@ -307,11 +313,15 @@ export function parseTrainingFile(text: string, all: Exercise[], existing: { ses
   });
 
   out.rows.sort((a, b) => a.date.localeCompare(b.date));
+  // A workout this same file brings is not something its rest days replace.
+  const brought = new Set(out.rows.filter((r) => r.type !== 'rest').map((r) => r.id));
+  for (const r of out.rows) if (r.type === 'rest') r.clashes = r.clashes.filter((c) => !brought.has(c.id));
   if (out.rows.length) {
     const from = out.rows[0].date;
     const until = out.rows[out.rows.length - 1].date;
     out.period = { from, until };
-    const ids = new Set(out.rows.map((r) => r.id));
+    // An id the file now uses for a rest day does not protect the workout it named before.
+    const ids = new Set(out.rows.filter((r) => r.type !== 'rest').map((r) => r.id));
     const inside = (d: string) => d >= from && d <= until;
     out.plannedInPeriod = [
       ...existing.sessions.filter((x) => inside(x.date) && !x.startedAt && !ids.has(x.id)).map((x) => ({ id: x.id, date: x.date, name: x.name, type: 'strength' as const })),
@@ -331,7 +341,7 @@ export function datesBetween(from: string, until: string) {
 
 export type Choice = 'mine' | 'import' | 'both';
 /** A row needs a decision when it would overwrite or sit next to something already logged. */
-export const needsChoice = (r: ImportRow) => r.type !== 'rest' && (r.status === 'changed' || (r.status === 'new' && r.clashes.length > 0));
+export const needsChoice = (r: ImportRow) => (r.type === 'rest' ? r.clashes.length > 0 : r.status === 'changed' || (r.status === 'new' && r.clashes.length > 0));
 
 /**
  * What to add and what to remove.
@@ -351,8 +361,17 @@ export function applyChoices(result: ImportResult, choices: Record<string, Choic
   }
   const take = new Set<string>();
   const remove = new Set<string>();
+  const rest: string[] = [];
   for (const r of result.rows) {
-    if (r.type === 'rest') continue;
+    if (r.type === 'rest') {
+      // "Import" (the default when nothing clashes) makes the day a rest day and removes what was planned
+      // there; "Mine" keeps the planned workout ("Both" means the same for a rest day).
+      const c = needsChoice(r) ? choices[r.id] ?? 'mine' : 'import';
+      if (c !== 'import') continue;
+      rest.push(r.date);
+      r.clashes.forEach((x) => remove.add(x.id));
+      continue;
+    }
     if (r.status === 'same') continue;
     const c = needsChoice(r) ? choices[r.id] ?? 'mine' : 'import';
     if (c === 'mine') continue;
@@ -363,7 +382,7 @@ export function applyChoices(result: ImportResult, choices: Record<string, Choic
     sessions: result.sessions.filter((x) => take.has(x.id)),
     cardio: result.cardio.filter((x) => take.has(x.id)),
     remove: [...remove],
-    rest: { from: null, until: null, days: result.rest },
+    rest: { from: null, until: null, days: rest },
   };
 }
 

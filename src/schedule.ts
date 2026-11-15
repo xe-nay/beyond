@@ -36,11 +36,12 @@ export function plannedFor(s: State, date: string, today: string) {
   const program = activeProgram(s);
   const sessions = s.sessions.filter((x) => !x.startedAt && x.date === date);
   const done = s.sessions.filter((x) => x.finishedAt && x.date === date);
-  // A rest day from an imported plan keeps the program off that date.
+  // A rest day from an imported plan, or a day cleared by hand, keeps the program off that date.
   const rest = s.restDays.includes(date);
-  const programDay = date >= today && !sessions.length && !rest && programCovers(s, date)
+  const off = (s.offDays ?? []).includes(date);
+  const programDay = date >= today && !sessions.length && !rest && !off && programCovers(s, date)
     ? program?.days.find((d) => d.weekday === weekdayOf(date) && !done.some((x) => x.dayId === d.id))
     : undefined;
   const cardio = s.cardio.filter((c) => !c.completed && c.plan && c.date === date);
-  return { sessions, programDay, program, cardio, done, rest, cardioDone: s.cardio.filter((c) => c.completed && c.date === date) };
+  return { sessions, programDay, program, cardio, done, rest, off, cardioDone: s.cardio.filter((c) => c.completed && c.date === date) };
 }

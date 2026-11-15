@@ -4,6 +4,7 @@ import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated'
 
 import { formatWeight } from '../domain/plates';
 import { MEALS } from '../meals';
+import { confirmRemove } from '../confirm';
 import { plannedFor } from '../schedule';
 import { eatenOn, intakeNutrients, today, useStore } from '../store';
 import { alpha, colors, plural, space, type } from '../theme';
@@ -39,7 +40,7 @@ export function DayDetail({ date }: { date: string }) {
   const now = today();
   const past = date < now;
   const isToday = date === now;
-  const { sessions: imported, programDay, program, cardio: cardioPlanned, done, cardioDone, rest } = plannedFor(s, date, now);
+  const { sessions: imported, programDay, program, cardio: cardioPlanned, done, cardioDone, rest, off } = plannedFor(s, date, now);
   const open = isToday ? s.sessions.find((x) => x.id === s.activeSession && !x.finishedAt) : undefined;
   const entries = s.entries.filter((e) => e.date === date);
   const taken = s.intakes.filter((i) => i.date === date);
@@ -69,10 +70,12 @@ export function DayDetail({ date }: { date: string }) {
       ))}
       {cardioDone.map((c) => <DoneCardioCard key={c.id} c={c} />)}
       {imported.map((x) => (
-        <PlanCard key={x.id} title={x.name} label={isToday ? 'Planned today' : 'Planned'} plan={x.plan} notes={x.notes} unit={s.profile.unit} onStart={isToday && !open ? () => start({ sessionId: x.id }) : undefined} />
+        <PlanCard key={x.id} title={x.name} label={isToday ? 'Planned today' : 'Planned'} plan={x.plan} notes={x.notes} unit={s.profile.unit} onStart={isToday && !open ? () => start({ sessionId: x.id }) : undefined}
+          onRemove={() => confirmRemove(`Remove ${x.name}?`, `It is taken off ${longDate(date)}. Your logged workouts are not touched.`, 'Remove', () => s.removePlanned(x.id))} />
       ))}
       {programDay && (
-        <PlanCard title={programDay.name} label={`${program!.name}${isToday ? ' · today' : ''}`} plan={programDay.exercises} unit={s.profile.unit} onStart={isToday && !open ? () => start({ dayId: programDay.id }) : undefined} />
+        <PlanCard title={programDay.name} label={`${program!.name}${isToday ? ' · today' : ''}`} plan={programDay.exercises} unit={s.profile.unit} onStart={isToday && !open ? () => start({ dayId: programDay.id }) : undefined}
+          removeLabel="Skip this day" onRemove={() => confirmRemove(`Skip ${programDay.name}?`, `${longDate(date)} becomes a day off. The program itself does not change.`, 'Skip', () => s.setOffDay(date, true))} />
       )}
       {cardioPlanned.map((c) => <CardioPlanCard key={c.id} c={c} canStart={isToday && !s.cardioRun} />)}
 
@@ -80,11 +83,14 @@ export function DayDetail({ date }: { date: string }) {
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
           <Icon name="bed.double.fill" size={22} color={colors.dim} />
           <View style={{ flex: 1 }}>
-            <T v="headline">{past || rest ? 'Rest day' : 'Nothing planned'}</T>
-            {rest && <T v="footnote" color={colors.dim}>A rest day in your plan</T>}
+            <T v="headline">{past || rest || off ? 'Rest day' : 'Nothing planned'}</T>
+            {rest ? <T v="footnote" color={colors.dim}>A rest day in your plan</T> : off ? <T v="footnote" color={colors.dim}>Cleared by you</T> : null}
           </View>
+          {off && !rest && !past && program && <Press onPress={() => s.setOffDay(date, false)} haptic={false}><T v="label" color={colors.cyan}>Undo</T></Press>}
         </Card>
       )}
+      {/* Any day from today on: add a workout or a cardio session to it. */}
+      {!past && <Button kind="secondary" icon="plus" title={nothing ? 'Plan a workout' : 'Plan another'} onPress={() => router.push({ pathname: '/plan-day', params: { date } })} />}
 
       {/* Food and intake, for days that have happened */}
       {(past || isToday) && (

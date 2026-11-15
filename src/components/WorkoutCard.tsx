@@ -118,7 +118,9 @@ export function Head({ label, title, sub, tint, hint }: { label: string; title: 
  * A planned workout (today or ahead): the body it works, then each exercise with its warm-ups, sets,
  * reps, RIR and rest. Start when it is today's.
  */
-export function PlanCard({ title, label, plan, unit, onStart, notes }: { title: string; label: string; plan: Prescription[]; unit: 'kg' | 'lb'; onStart?: () => void; notes?: string }) {
+export function PlanCard({ title, label, plan, unit, onStart, notes, onRemove, removeLabel = 'Remove' }: {
+  title: string; label: string; plan: Prescription[]; unit: 'kg' | 'lb'; onStart?: () => void; notes?: string; onRemove?: () => void; removeLabel?: string;
+}) {
   const router = useRouter();
   const sets = plan.reduce((n, x) => n + x.sets, 0);
   const minutes = Math.round(plan.reduce((n, x) => n + (x.sets + (x.warmupSets ?? 0)) * (45 + x.restSeconds), 0) / 60);
@@ -153,6 +155,7 @@ export function PlanCard({ title, label, plan, unit, onStart, notes }: { title: 
       </View>
       {!!notes && <T v="footnote" color={colors.dim}>{notes}</T>}
       {onStart && <Button title="Start workout" icon="play.fill" onPress={onStart} />}
+      {onRemove && <Button kind="ghost" small icon="trash" title={removeLabel} onPress={onRemove} />}
     </Shell>
   );
 }

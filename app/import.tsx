@@ -40,11 +40,14 @@ export default function Import() {
 
   const read = (text: string) => {
     setChoices({});
-    setMode('keep');
     setHow('all');
     setOnlyClashes(false);
     setAt(-1);
-    setResult(parseTrainingFile(text, exercises, { sessions: s.sessions, cardio: s.cardio }));
+    const r = parseTrainingFile(text, exercises, { sessions: s.sessions, cardio: s.cardio });
+    // A new version of a file imported before (its entries are already in the app) replaces its period;
+    // anything else keeps what is there unless chosen otherwise.
+    setMode(!r.errors.length && r.rows.some((x) => x.status !== 'new') ? 'replace' : 'keep');
+    setResult(r);
   };
   const pick = async () => {
     const r = await DocumentPicker.getDocumentAsync({ type: ['application/json', 'text/plain', '*/*'], copyToCacheDirectory: true });
@@ -69,7 +72,8 @@ export default function Import() {
   const nice = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   const removing = result?.plannedInPeriod ?? [];
   // A day imported before can only be kept or replaced, so "both" updates it.
-  const fit = (r: ImportRow, c: Choice): Choice => (r.status === 'changed' && c === 'both' ? 'import' : c);
+  // A rest day cannot sit next to a workout, so "both" keeps the workout.
+  const fit = (r: ImportRow, c: Choice): Choice => (c !== 'both' ? c : r.type === 'rest' ? 'mine' : r.status === 'changed' ? 'import' : c);
   /** Scrolls to the clash after the one last shown (wraps to the first). */
   const nextClash = () => {
     if (!conflicts.length) return;
@@ -207,6 +211,7 @@ const ASKS = [
 ];
 
 const DECISION: Record<Choice, string> = { mine: 'Keeping yours', import: 'Using the import', both: 'Keeping both' };
+const REST_DECISION: Record<Choice, string> = { mine: 'Keeping the workout', import: 'Rest day', both: 'Keeping the workout' };
 
 function Entry({ row: r, first, choice, onChoose, ask: asking, clash, current }: { row: ImportRow; first: boolean; choice: Choice; onChoose: (c: Choice) => void; ask: boolean; clash?: boolean; current?: boolean }) {
   const ask = asking && needsChoice(r);
@@ -222,17 +227,19 @@ function Entry({ row: r, first, choice, onChoose, ask: asking, clash, current }:
           <T v="footnote" color={colors.dim}>{r.date} · {r.type === 'rest' ? 'Rest day' : r.kind === 'history' ? 'History' : 'Planned'}</T>
         </View>
         {r.status === 'same' && <T v="footnote" color={colors.faint}>Already in</T>}
-        {clash && !ask && <T v="footnote" color={colors.amber}>{DECISION[choice]}</T>}
+        {clash && !ask && <T v="footnote" color={colors.amber}>{(r.type === 'rest' ? REST_DECISION : DECISION)[choice]}</T>}
       </Row>
       {ask && (
         <>
           <T v="footnote" color={colors.amber}>
-            {r.status === 'changed' ? 'Imported before with different data' : `In the app: ${r.clashes.map((c) => c.name).join(', ')}`}
+            {r.type === 'rest' ? `Planned in the app: ${r.clashes.map((c) => c.name).join(', ')}. "Rest day" removes it.` : r.status === 'changed' ? 'Imported before with different data' : `In the app: ${r.clashes.map((c) => c.name).join(', ')}`}
           </T>
           <Segmented<Choice>
             value={choice}
             onChange={onChoose}
-            options={r.status === 'changed'
+            options={r.type === 'rest'
+              ? [{ value: 'mine', label: 'Keep workout' }, { value: 'import', label: 'Rest day' }]
+              : r.status === 'changed'
               ? [{ value: 'mine', label: 'Keep mine' }, { value: 'import', label: 'Use import' }]
               : [{ value: 'mine', label: 'Mine' }, { value: 'import', label: 'Import' }, { value: 'both', label: 'Both' }]}
           />

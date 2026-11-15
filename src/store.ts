@@ -49,6 +49,7 @@ interface Data {
   skipped: { supplementId: string; date: string }[]; // doses answered "Skip" in a reminder
   inbox: InboxItem[];
   restDays: string[]; // dates an imported plan leaves empty on purpose: no program workout there
+  offDays: string[]; // dates cleared by hand (a planned workout removed, a program day skipped): no program workout there
   mealPick: { date: string; meal: Meal } | null; // the meal chosen by hand: new foods that day go there until another is chosen
 }
 
@@ -80,6 +81,7 @@ const initial: Data = {
   skipped: [],
   inbox: [],
   restDays: [],
+  offDays: [],
   mealPick: null,
 };
 
@@ -126,6 +128,12 @@ interface Actions {
   saveCheck(c: RecoveryCheck): void;
   /** Adds imported entries next to everything else; only same ids and the ids in remove are replaced. */
   importData(sessions: Session[], cardio: CardioSession[], remove?: string[], rest?: { from: string | null; until: string | null; days: string[] }): void;
+  /** Plans a workout or a cardio session on its date. */
+  planOn(item: { session?: Session; cardio?: CardioSession }): void;
+  /** Removes a planned (not started) workout or cardio session; the program does not fill the day back in. */
+  removePlanned(id: string): void;
+  /** Skips the program's workout on a date, or plans it again. */
+  setOffDay(date: string, off: boolean): void;
   replaceAll(data: Partial<Data>): void;
   reset(): void;
 }
@@ -354,6 +362,28 @@ export const useStore = create<State>((set, get) => ({
         restDays: [...new Set([...kept, ...(rest?.days ?? [])])].sort(),
       };
     });
+  },
+  planOn({ session, cardio }) {
+    const date = session?.date ?? cardio?.date;
+    set((s) => ({
+      sessions: session ? [...s.sessions, session] : s.sessions,
+      cardio: cardio ? [...s.cardio, cardio] : s.cardio,
+      offDays: s.offDays.filter((d) => d !== date),
+    }));
+  },
+  removePlanned(id) {
+    set((s) => {
+      const x = s.sessions.find((y) => y.id === id && !y.startedAt) ?? s.cardio.find((c) => c.id === id && !c.completed);
+      if (!x) return {};
+      return {
+        sessions: s.sessions.filter((y) => y.id !== id || y.startedAt),
+        cardio: s.cardio.filter((c) => c.id !== id || c.completed),
+        offDays: [...new Set([...s.offDays, x.date])].sort(),
+      };
+    });
+  },
+  setOffDay(date, off) {
+    set((s) => ({ offDays: off ? [...new Set([...s.offDays, date])].sort() : s.offDays.filter((d) => d !== date) }));
   },
   replaceAll(data) { set({ ...initial, ...data, ready: true }); },
   reset() { set({ ...initial, ready: true }); },

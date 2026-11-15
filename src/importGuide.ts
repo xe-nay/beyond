@@ -443,6 +443,7 @@ Calories for cardio are estimated from the activity (MET values) and your body w
 
 - To fix a file: change it, keep the same file "id" and entry "id"s, import again, and choose "Use import" for the entries you changed.
 - To add more history later: write a NEW file with a new id. Earlier imports stay as they are.
+- A rest entry replaces what is only planned on that day (a workout or a run imported before, or planned in the app), never what was done. To move a workout to another day, give its old day a rest entry and put the workout on its new day. When the file is a new version of one imported before, Beyond offers "Replace this period": the whole period then follows the file.
 - Two workouts of the same type on one day are possible: give them different entry ids; if the app already has one that day, choose "Both".
 - Program > Share exports your current program as a one-week file in this format, ready to edit and import as plans.
 

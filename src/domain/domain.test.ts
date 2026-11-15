@@ -732,3 +732,44 @@ test('cardio segments: changing settings inside one session, on any machine', as
   assert.match(readIntervals({ machine: 'treadmill', segments: [{ minutes: 5, kind: 'sprint' }] }) as string, /kind must be "work" or "recovery"/);
   assert.match(readIntervals({}) as string, /or segments/);
 });
+
+test('a rest day in an import replaces what was only planned that day, even under a reused id', async () => {
+  const { applyChoices, needsChoice } = await import('./importer.ts');
+  const all = [{ id: 'squat', name: 'Smith Machine Squat' }] as Exercise[];
+  // From the first version of the file: Lower B on the 14th and a run on the 16th, both still planned,
+  // and a workout already done on the 22nd.
+  const lowerB = { ...session('2030-11-14', []), id: 'imp-plan-lower-b-14', name: 'Lower B', plan: [{ exerciseId: 'squat', sets: 3, minReps: 8, maxReps: 12, rir: 2, restSeconds: 180, loadKg: null }], startedAt: null, finishedAt: null } as Session;
+  const run = { id: 'imp-plan-run-16', date: '2030-11-16', activity: 'Running', minutes: 30, distanceKm: null, rpe: null, avgHr: null, plan: null, completed: false, notes: '' } as CardioSession;
+  const done = session('2030-11-22', [set(8, 60)], { id: 'logged' });
+  // The new version reuses those ids for rest days, and moves Lower B to the 15th.
+  const file = {
+    format: 'beyond-training', version: 1, id: 'plan',
+    entries: [
+      { id: 'lower-b-14', date: '2030-11-14', type: 'rest' },
+      { id: 'rest-15', date: '2030-11-15', type: 'strength', name: 'Lower B', exercises: [{ name: 'Smith Machine Squat', sets: 3 }] },
+      { id: 'run-16', date: '2030-11-16', type: 'rest' },
+      { id: 'rest-22', date: '2030-11-22', type: 'rest' },
+    ],
+  };
+  const r = parseTrainingFile(JSON.stringify(file), all, { sessions: [lowerB, done], cardio: [run] });
+  assert.deepEqual(r.errors, []);
+  const rest = (d: string) => r.rows.find((x) => x.date === d)!;
+  assert.deepEqual(rest('2030-11-14').clashes.map((c) => c.id), ['imp-plan-lower-b-14']);
+  assert.deepEqual(rest('2030-11-16').clashes.map((c) => c.id), ['imp-plan-run-16']);
+  // A day already trained is not something a rest day replaces.
+  assert.deepEqual(rest('2030-11-22').clashes, []);
+  assert.deepEqual(r.rows.map(needsChoice), [true, false, true, false]);
+
+  // Replace this period: both old plans go, the done workout stays, the rest days are set.
+  const replace = applyChoices(r, {}, 'replace');
+  assert.deepEqual(replace.remove.sort(), ['imp-plan-lower-b-14', 'imp-plan-run-16']);
+  assert.ok(replace.rest.days.includes('2030-11-14') && replace.rest.days.includes('2030-11-16'));
+  assert.ok(!replace.rest.days.includes('2030-11-15'));
+  // Keep what is there: each rest day asks; "Rest day" removes the plan, "Keep workout" keeps it.
+  const keep = applyChoices(r, {});
+  assert.deepEqual(keep.remove, []);
+  assert.deepEqual(keep.rest.days, ['2030-11-22']);
+  const chosen = applyChoices(r, { 'imp-plan-lower-b-14': 'import', 'imp-plan-run-16': 'mine' });
+  assert.deepEqual(chosen.remove, ['imp-plan-lower-b-14']);
+  assert.deepEqual(chosen.rest.days, ['2030-11-14', '2030-11-22']);
+});

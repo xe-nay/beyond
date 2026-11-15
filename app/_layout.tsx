@@ -68,6 +68,7 @@ export default function RootLayout() {
           <Stack.Screen name="food-new" options={{ ...sheet, sheetAllowedDetents: [0.92] }} />
           <Stack.Screen name="program" options={{ title: 'Program', headerLargeTitle: true }} />
           <Stack.Screen name="templates" options={{ ...sheet, sheetAllowedDetents: [0.75, 1] }} />
+          <Stack.Screen name="plan-day" options={{ ...sheet, sheetAllowedDetents: [0.75, 1] }} />
           <Stack.Screen name="prescription" options={{ ...sheet, sheetAllowedDetents: [0.7] }} />
           <Stack.Screen name="cardio" options={{ title: 'Cardio', headerLargeTitle: true }} />
           <Stack.Screen name="cardio-run" options={{ presentation: 'fullScreenModal', headerShown: false, gestureEnabled: false }} />

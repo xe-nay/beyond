@@ -15,6 +15,7 @@ import { Icon } from '../../../src/components/Icon';
 import { WeekCalendar } from '../../../src/components/WeekCalendar';
 import { Button, Card, Press, Ring, Row, Screen, Section, T } from '../../../src/components/ui';
 import { fatigueReport, progression, weekStart } from '../../../src/domain/calc';
+import { confirmRemove } from '../../../src/confirm';
 import { plannedFor } from '../../../src/schedule';
 import { eatenOn, today, useStore } from '../../../src/store';
 import { alpha, colors, plural, space, type } from '../../../src/theme';
@@ -81,7 +82,11 @@ export default function Today() {
           <PlanCard title={todays.name} label={todays.label} plan={todays.exercises} notes={planned?.notes} unit={s.profile.unit} onStart={() => {
             s.startSession(planned ? { sessionId: planned.id } : { dayId: plan.programDay!.id });
             router.push('/workout');
-          }} />
+          }}
+          removeLabel={planned ? 'Remove' : 'Skip today'}
+          onRemove={() => (planned
+            ? confirmRemove(`Remove ${planned.name}?`, 'It is taken off today. Your logged workouts are not touched.', 'Remove', () => s.removePlanned(planned.id))
+            : confirmRemove(`Skip ${todays.name}?`, 'Today becomes a day off. The program itself does not change.', 'Skip', () => s.setOffDay(date, true)))} />
         )}
         {!open && !todays && !doneToday.length && !plan.cardioDone.length && !cardioToday && (!plan.program && !s.sessions.some((x) => x.source === 'import') ? (
           <Card>
@@ -98,6 +103,7 @@ export default function Today() {
           </Card>
         ))}
         {cardioToday && <CardioPlanCard c={cardioToday} canStart={!s.cardioRun} />}
+        {!open && <Button kind="secondary" icon="plus" title={todays || cardioToday ? 'Plan another' : 'Plan a workout'} onPress={() => router.push({ pathname: '/plan-day', params: { date } })} />}
 
         {/* Fuel */}
         <Card onPress={() => router.navigate('/(tabs)/food')}>

@@ -7,6 +7,7 @@ import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-nati
 import { cueWords, formatPaceRange, tracksDistance } from '../domain/track';
 import { formatClock, phaseTitle, plannedKm, segmentsOf, timeline, totalSeconds, type Phase, type PhaseKind } from '../domain/intervals';
 import type { CardioSession, PaceRange } from '../domain/types';
+import { confirmRemove } from '../confirm';
 import { today, useStore } from '../store';
 import { alpha, colors, space, type } from '../theme';
 import { PHASE } from './CardioVisuals';
@@ -124,6 +125,7 @@ export function CardioPlanCard({ c, canStart }: { c: CardioSession; canStart: bo
         <Button kind="secondary" icon="slider.horizontal.3" title="Edit" onPress={() => router.push({ pathname: '/cardio', params: { id: c.id } })} style={{ flex: 1 }} />
         {canStart && <Button title="Start" icon="play.fill" onPress={start} style={{ flex: 1 }} />}
       </Row>
+      <Button kind="ghost" small icon="trash" title="Remove" onPress={() => confirmRemove(`Remove ${c.name ?? c.activity}?`, `It is taken off ${c.date === today() ? 'today' : c.date}.`, 'Remove', () => useStore.getState().removePlanned(c.id))} />
     </Shell>
   );
 }
